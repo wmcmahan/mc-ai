@@ -177,7 +177,7 @@ export async function executeEvolutionNode(
           task.stateView,
           tools,
           attempt,
-          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken },
+          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, executeToolCall: ctx.deps.executeToolCall },
         );
       },
       { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy },

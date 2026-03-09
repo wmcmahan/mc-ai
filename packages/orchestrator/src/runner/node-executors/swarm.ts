@@ -68,6 +68,7 @@ export async function executeSwarmAgentNode(
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,
+    executeToolCall: ctx.deps.executeToolCall,
   });
 
   const updates = action.payload.updates as Record<string, unknown>;

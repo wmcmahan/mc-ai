@@ -49,6 +49,7 @@ export async function executeWorkerWithStateView(
         node_id: node.id,
         abortSignal: ctx.abortSignal,
         onToken,
+        executeToolCall: ctx.deps.executeToolCall,
       });
     }
     case 'tool': {

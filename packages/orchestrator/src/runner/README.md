@@ -346,7 +346,7 @@ interface NodeExecutorContext {
 | `executeSupervisor` | `supervisor-executor/executor.ts` | supervisor |
 | `evaluateQualityExecutor` | `evaluator-executor/executor.ts` | annealing, voting (LLM judge), evolution |
 | `loadAgentTools` | `mcp/tool-adapter.ts` | agent, annealing, map, synthesizer, voting, swarm, evolution |
-| `executeToolCall` | `mcp/tool-adapter.ts` | tool, map |
+| `executeToolCall` | `mcp/tool-adapter.ts` | tool, map, + all agent-calling executors (via `executeAgent` options) |
 | `loadAgent` | `agent-factory` | agent, annealing, map, synthesizer, voting, swarm, evolution |
 | `getTaintRegistry` | `utils/taint.ts` | tool |
 

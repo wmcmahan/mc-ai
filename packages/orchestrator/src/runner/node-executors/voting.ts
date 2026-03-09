@@ -84,7 +84,7 @@ export async function executeVotingNode(
       const agentConfig = await ctx.deps.loadAgent(task.node.agent_id!);
       const tools = await ctx.deps.loadAgentTools(agentConfig.tools);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
-      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken });
+      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, executeToolCall: ctx.deps.executeToolCall });
     },
     { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort' },
   );

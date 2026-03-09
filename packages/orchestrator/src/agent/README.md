@@ -267,6 +267,9 @@ export async function executeAgent(
     temperature_override?: number;
     node_id?: string;
     timeout_ms?: number;
+    abortSignal?: AbortSignal;
+    onToken?: (token: string) => void;
+    executeToolCall?: (toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>;
   }
 ): Promise<Action>
 ```
@@ -282,6 +285,9 @@ export async function executeAgent(
 | `options.temperature_override` | `number?` | Overrides `config.temperature` — used by self-annealing loops to reduce temperature on each iteration |
 | `options.node_id` | `string?` | Graph node ID; used to construct the fallback memory key (e.g. `"research_output"` instead of generic `"agent_response"`) |
 | `options.timeout_ms` | `number?` | Per-call timeout override; defaults to `DEFAULT_AGENT_TIMEOUT_MS` (120s) |
+| `options.abortSignal` | `AbortSignal?` | Cancellation signal — propagated to `streamText()` |
+| `options.onToken` | `((token: string) => void)?` | Callback for real-time token streaming |
+| `options.executeToolCall` | `((toolName, args, agentId?) => Promise<unknown>)?` | Injected by node executors; routes tool calls to the MCP gateway. When omitted, tools echo args back (test mode) |
 
 **Returns:** `Action` with `type: 'update_memory'`
 
@@ -289,19 +295,23 @@ export async function executeAgent(
 
 ### Tool Wrapping
 
-Raw tool definitions arrive as `{ description, parameters }` where `parameters` can be either a Zod schema or a plain JSON schema object. The executor wraps them for the AI SDK:
+Raw tool definitions arrive as `{ description, parameters }` where `parameters` can be either a Zod schema or a plain JSON schema object. The executor wraps them for the AI SDK via `buildToolSet()`:
 
 ```typescript
 tools[name] = tool({
   description: def.description,
   inputSchema: jsonSchema(def.parameters as any),
-  execute: async (args: any) => args, // passthrough — actual execution handled elsewhere
+  execute: executeToolCall
+    ? async (args) => executeToolCall(name, args, agentId)
+    : async (args) => args, // fallback for tests
 });
 ```
 
 **Why `jsonSchema()` wrapper:** The AI SDK v6 `tool()` function requires `inputSchema` to be either a Zod schema or a `jsonSchema()`-wrapped object. Raw `Record<string, unknown>` objects are rejected by the type system. The `jsonSchema()` helper creates an SDK-compatible wrapper around arbitrary JSON Schema definitions.
 
-**Why the execute function is a passthrough:** Tool execution is deferred — the results come back through `result.steps[].toolResults`. The executor only cares about `save_to_memory` calls; other tool results are stored in `action.metadata.tool_executions`.
+**How tool execution works:** When `executeToolCall` is provided (the production path — all node executors inject it from `ctx.deps.executeToolCall`), the `execute` callback delegates to the tool adapter, which routes to the MCP gateway for external tools, handles `save_to_memory` as a passthrough, and wraps results with taint metadata. The LLM sees real tool results and can chain multi-step tool calls.
+
+**Test mode:** When `executeToolCall` is not provided, tools echo their arguments back as results. This allows unit tests to verify executor internals without requiring an MCP gateway connection.
 
 ---
 

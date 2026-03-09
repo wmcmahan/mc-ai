@@ -106,6 +106,7 @@ export async function executeAgent(
     timeout_ms?: number;
     abortSignal?: AbortSignal;
     onToken?: (token: string) => void;
+    executeToolCall?: (toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -123,7 +124,7 @@ export async function executeAgent(
     const taskPrompt = buildTaskPrompt(stateView, attempt);
 
     // Raw tool definitions built for AI SDK v6 tool() format
-    const tools = buildToolSet(rawTools);
+    const tools = buildToolSet(rawTools, options?.executeToolCall, agent_id);
 
     logger.info('executing', {
       agent_id,
@@ -316,20 +317,28 @@ function createAbortControllerWithTimeout(timeoutMs: number) {
 /**
  * Wrap raw tool definitions into the AI SDK v6 `tool()` format.
  *
- * Each tool's `execute` callback returns the input arguments as-is because
- * actual tool execution is handled by the orchestrator layer (via
- * `executeToolCall`). The LLM sees the result and can chain further calls.
+ * Each tool's `execute` callback delegates to the injected `executeToolCall`
+ * function, which routes to the MCP gateway for external tools and handles
+ * built-in tools (save_to_memory, architect_*) internally.
  *
  * @param rawTools - Raw tool definitions from the orchestrator.
+ * @param executeToolCall - Callback that executes a tool via the MCP gateway.
+ * @param agentId - The agent ID, passed through for taint tracking.
  * @returns A {@link ToolSet} compatible with `streamText`.
  */
-function buildToolSet(rawTools: Record<string, RawToolDefinition>): ToolSet {
+function buildToolSet(
+  rawTools: Record<string, RawToolDefinition>,
+  executeToolCall: ((toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>) | undefined,
+  agentId: string,
+): ToolSet {
   const tools: ToolSet = {};
   for (const [name, def] of Object.entries(rawTools)) {
     tools[name] = tool({
       description: def.description,
       inputSchema: def.parameters as Parameters<typeof tool>[0]['inputSchema'],
-      execute: async (args: Record<string, unknown>) => args,
+      execute: executeToolCall
+        ? async (args: Record<string, unknown>) => executeToolCall(name, args, agentId)
+        : async (args: Record<string, unknown>) => args,
     });
   }
   return tools;

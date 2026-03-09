@@ -78,6 +78,7 @@ export async function executeAnnealingLoop(
       node_id: node.id,
       abortSignal: ctx.abortSignal,
       onToken,
+      executeToolCall: ctx.deps.executeToolCall,
     });
 
     // Evaluate quality via evaluator agent or JSONPath extraction

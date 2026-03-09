@@ -58,7 +58,13 @@ export interface ExecutorDependencies {
     stateView: StateView,
     tools: Record<string, RawToolDefinition>,
     attempt: number,
-    options?: { temperature_override?: number; node_id?: string; abortSignal?: AbortSignal; onToken?: (token: string) => void },
+    options?: {
+      temperature_override?: number;
+      node_id?: string;
+      abortSignal?: AbortSignal;
+      onToken?: (token: string) => void;
+      executeToolCall?: (toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>;
+    },
   ) => Promise<Action>;
 
   /** Execute a supervisor routing decision. */
