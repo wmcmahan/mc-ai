@@ -46,7 +46,7 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build --workspace=packages/orchestrator-postgres
+      - run: npm run build --workspace=packages/orchestrator
 
       - name: Run orchestrator tests
         run: npx vitest run
