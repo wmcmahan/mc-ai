@@ -1,0 +1,91 @@
+{
+  "name": "@mcai/orchestrator",
+  "version": "1.0.0",
+  "description": "Graph-based workflow orchestrator with durable execution, multi-agent coordination, and human-in-the-loop approval gates.",
+  "keywords": [
+    "orchestrator",
+    "workflow",
+    "graph-runner",
+    "multi-agent",
+    "durable-execution",
+    "event-sourcing",
+    "human-in-the-loop"
+  ],
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/wmcmahan/mc-ai.git",
+    "directory": "packages/orchestrator"
+  },
+  "homepage": "https://gitlab.com/wmcmahan/mc-ai/tree/main/packages/orchestrator#readme",
+  "bugs": {
+    "url": "https://gitlab.com/wmcmahan/mc-ai/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "filtrex": "^3.1.0",
+    "jsonpath": "^1.2.1",
+    "uuid": "^10.0.0"
+  },
+  "peerDependencies": {
+    "ai": "^6.0.86",
+    "zod": "^3.23.0",
+    "@ai-sdk/anthropic": "^3.0.44",
+    "@ai-sdk/openai": "^3.0.29",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-prometheus": "^0.212.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.212.0",
+    "@opentelemetry/semantic-conventions": "^1.39.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": { "optional": true },
+    "@ai-sdk/openai": { "optional": true },
+    "@opentelemetry/api": { "optional": true },
+    "@opentelemetry/exporter-prometheus": { "optional": true },
+    "@opentelemetry/exporter-trace-otlp-http": { "optional": true },
+    "@opentelemetry/resources": { "optional": true },
+    "@opentelemetry/sdk-metrics": { "optional": true },
+    "@opentelemetry/sdk-node": { "optional": true },
+    "@opentelemetry/semantic-conventions": { "optional": true }
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.44",
+    "@ai-sdk/openai": "^3.0.29",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-prometheus": "^0.212.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.212.0",
+    "@opentelemetry/semantic-conventions": "^1.39.0",
+    "ai": "^6.0.86",
+    "zod": "^3.23.0",
+    "@types/node": "^22.10.2",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

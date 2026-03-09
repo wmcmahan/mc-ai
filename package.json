@@ -1,0 +1,22 @@
+{
+  "name": "mc-ai",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Will McMahan",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/wmcmahan/mc-ai"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

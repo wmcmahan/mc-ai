@@ -1,0 +1,327 @@
+/**
+ * Human-in-the-Loop — Runnable Example
+ *
+ * A 3-node linear workflow with an approval gate: a Writer agent
+ * produces a draft, a human reviewer approves or rejects it, and
+ * a Publisher agent finalizes the output.
+ *
+ * Demonstrates: approval gates, workflow pausing/resuming,
+ * human review data, rejection routing, and the HITL resume flow.
+ *
+ * Usage:
+ *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loop.ts
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import * as readline from 'node:readline/promises';
+import {
+  GraphRunner,
+  InMemoryPersistenceProvider,
+  InMemoryAgentRegistry,
+  configureAgentFactory,
+  ProviderRegistry,
+  registerBuiltInProviders,
+  configureProviderRegistry,
+  createLogger,
+  type Graph,
+  type WorkflowState,
+  type AgentRegistryEntry,
+  type HumanResponse,
+} from '@mcai/orchestrator';
+
+// ─── 0. Fail fast if no API key ──────────────────────────────────────────
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('Error: ANTHROPIC_API_KEY environment variable is required');
+  console.error('Usage: ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loop.ts');
+  process.exit(1);
+}
+
+const logger = createLogger('example');
+
+// ─── 1. Register agents ──────────────────────────────────────────────────
+// Agent IDs must be UUIDs (the factory validates this before registry lookup).
+
+const WRITER_ID = uuidv4();
+const PUBLISHER_ID = uuidv4();
+
+const writer: AgentRegistryEntry = {
+  id: WRITER_ID,
+  name: 'Writer Agent',
+  description: 'Produces a draft article on a given topic',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: [
+    'You are a professional writer.',
+    'Given a goal, produce a clear and engaging draft article.',
+    'Keep it under 300 words. Use plain language.',
+    'You MUST save your output by calling save_to_memory with key "draft".',
+  ].join(' '),
+  temperature: 0.7,
+  max_steps: 3,
+  tools: [],
+  permissions: {
+    read_keys: ['goal', 'constraints'],
+    write_keys: ['draft'],
+  },
+};
+
+const publisher: AgentRegistryEntry = {
+  id: PUBLISHER_ID,
+  name: 'Publisher Agent',
+  description: 'Finalizes and formats an approved draft for publication',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: [
+    'You are a publishing editor.',
+    'Take the approved draft and produce a final version with a headline,',
+    'proper formatting, and a brief author attribution.',
+    'Incorporate any feedback from the human reviewer if provided.',
+    'You MUST save your output by calling save_to_memory with key "published".',
+  ].join(' '),
+  temperature: 0.4,
+  max_steps: 3,
+  tools: [],
+  permissions: {
+    read_keys: ['goal', 'draft', 'human_response', 'human_decision'],
+    write_keys: ['published'],
+  },
+};
+
+const registry = new InMemoryAgentRegistry();
+registry.register(writer);
+registry.register(publisher);
+configureAgentFactory(registry);
+
+// Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
+// Add custom providers here (e.g., Groq, Ollama) via providers.register().
+const providers = new ProviderRegistry();
+registerBuiltInProviders(providers);
+configureProviderRegistry(providers);
+
+// ─── 2. Define the graph ─────────────────────────────────────────────────
+// Linear: write → review (approval gate) → publish
+// The approval gate pauses the workflow until a human approves or rejects.
+
+const now = new Date();
+
+const graph: Graph = {
+  id: uuidv4(),
+  name: 'Human-in-the-Loop',
+  description: 'Write → Human Review → Publish with approval gate',
+  version: '1.0.0',
+  created_at: now,
+  updated_at: now,
+
+  nodes: [
+    {
+      id: 'write',
+      type: 'agent',
+      agent_id: WRITER_ID,
+      read_keys: ['goal', 'constraints'],
+      write_keys: ['draft'],
+      failure_policy: { max_retries: 2, backoff_strategy: 'exponential', initial_backoff_ms: 1000, max_backoff_ms: 60000 },
+      requires_compensation: false,
+    },
+    {
+      id: 'review',
+      type: 'approval',
+      approval_config: {
+        approval_type: 'human_review',
+        prompt_message: 'Please review the draft before publication.',
+        review_keys: ['draft'],
+        timeout_ms: 300_000, // 5 minutes
+      },
+      read_keys: ['*'],
+      write_keys: ['*', 'control_flow'],
+      failure_policy: { max_retries: 1, backoff_strategy: 'fixed', initial_backoff_ms: 1000, max_backoff_ms: 1000 },
+      requires_compensation: false,
+    },
+    {
+      id: 'publish',
+      type: 'agent',
+      agent_id: PUBLISHER_ID,
+      read_keys: ['goal', 'draft', 'human_response', 'human_decision'],
+      write_keys: ['published'],
+      failure_policy: { max_retries: 2, backoff_strategy: 'exponential', initial_backoff_ms: 1000, max_backoff_ms: 60000 },
+      requires_compensation: false,
+    },
+  ],
+
+  edges: [
+    { id: 'write-to-review', source: 'write', target: 'review', condition: { type: 'always' } },
+    { id: 'review-to-publish', source: 'review', target: 'publish', condition: { type: 'always' } },
+  ],
+
+  start_node: 'write',
+  end_nodes: ['publish'],
+};
+
+// ─── 3. Create initial state ─────────────────────────────────────────────
+
+const initialState: WorkflowState = {
+  workflow_id: graph.id,
+  run_id: uuidv4(),
+  created_at: now,
+  updated_at: now,
+  goal: 'Write a short article explaining why open-source software matters for innovation.',
+  constraints: ['Keep the draft under 300 words', 'Use plain language suitable for a general audience'],
+  status: 'pending',
+  iteration_count: 0,
+  retry_count: 0,
+  max_retries: 3,
+  memory: {},
+  total_tokens_used: 0,
+  total_cost_usd: 0,
+  _cost_alert_thresholds_fired: [],
+  visited_nodes: [],
+  max_iterations: 50,
+  compensation_stack: [],
+  supervisor_history: [],
+  max_execution_time_ms: 600_000,
+};
+
+// ─── 4. Set up persistence + runner ──────────────────────────────────────
+
+const persistence = new InMemoryPersistenceProvider();
+
+function createRunner(state: WorkflowState): GraphRunner {
+  const runner = new GraphRunner(graph, state, {
+    persistStateFn: async (s) => {
+      await persistence.saveWorkflowState(s);
+      await persistence.saveWorkflowRun(s);
+    },
+  });
+
+  runner.on('workflow:start', ({ run_id }) => {
+    logger.info(`Workflow started: ${run_id}`);
+  });
+
+  runner.on('node:start', ({ node_id, type }) => {
+    logger.info(`  Node started: ${node_id} (${type})`);
+  });
+
+  runner.on('node:complete', ({ node_id, duration_ms }) => {
+    logger.info(`  Node complete: ${node_id} (${duration_ms}ms)`);
+  });
+
+  runner.on('workflow:waiting', ({ waiting_for }) => {
+    logger.info(`Workflow paused — waiting for: ${waiting_for}`);
+  });
+
+  runner.on('workflow:complete', ({ run_id, duration_ms }) => {
+    logger.info(`Workflow complete: ${run_id} (${duration_ms}ms)`);
+  });
+
+  runner.on('workflow:failed', ({ run_id, error }) => {
+    logger.error(`Workflow failed: ${run_id} — ${error}`);
+  });
+
+  return runner;
+}
+
+// ─── 5. Interactive prompt ───────────────────────────────────────────────
+
+async function promptHuman(draft: string): Promise<HumanResponse> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  try {
+    console.log('\n╔══════════════════════════════════════════╗');
+    console.log('║     HUMAN REVIEW REQUIRED                ║');
+    console.log('╚══════════════════════════════════════════╝\n');
+    console.log('Draft for review:\n');
+    console.log(draft);
+    console.log('\n──────────────────────────────────────────');
+
+    const answer = await rl.question('\nApprove this draft? (yes/no): ');
+    const approved = answer.trim().toLowerCase().startsWith('y');
+
+    if (approved) {
+      const feedback = await rl.question('Any feedback for the publisher? (press Enter to skip): ');
+      return {
+        decision: 'approved',
+        data: feedback || 'Approved without changes.',
+      };
+    } else {
+      const reason = await rl.question('Reason for rejection: ');
+      return {
+        decision: 'rejected',
+        data: reason || 'Rejected by reviewer.',
+      };
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+// ─── 6. Run ──────────────────────────────────────────────────────────────
+
+async function main() {
+  logger.info('Starting human-in-the-loop workflow...\n');
+
+  try {
+    // Phase 1: Run until the approval gate pauses the workflow
+    const runner1 = createRunner(initialState);
+    const pausedState = await runner1.run();
+
+    if (pausedState.status !== 'waiting') {
+      console.error(`Expected workflow to pause, but got status: ${pausedState.status}`);
+      process.exit(1);
+    }
+
+    // Show the pending approval details
+    const pending = pausedState.memory._pending_approval as {
+      prompt_message: string;
+      review_data: Record<string, unknown>;
+    };
+    console.log(`\nApproval gate prompt: "${pending.prompt_message}"`);
+
+    // Phase 2: Human reviews the draft interactively
+    const draft = (pending.review_data.draft as string) ?? '(no draft)';
+    const humanResponse = await promptHuman(draft);
+
+    console.log(`\nReviewer decision: ${humanResponse.decision}`);
+
+    if (humanResponse.decision === 'rejected') {
+      console.log('\n═══ Workflow Rejected ═══');
+      console.log(`Reason: ${humanResponse.data}`);
+      console.log('In production, this would route to a revision node.');
+      console.log('\n═══ Stats ═══');
+      console.log(`  Nodes visited:  ${pausedState.visited_nodes.join(' → ')}`);
+      console.log(`  Tokens used:    ${pausedState.total_tokens_used}`);
+      console.log(`  Cost (USD):     $${(pausedState.total_cost_usd ?? 0).toFixed(4)}`);
+      return;
+    }
+
+    // Phase 3: Resume the workflow with the human's approval
+    const runner2 = createRunner({ ...pausedState });
+    runner2.applyHumanResponse(humanResponse);
+
+    const finalState = await runner2.run();
+
+    if (finalState.status === 'completed') {
+      console.log('\n═══ Draft (pre-review) ═══');
+      console.log(finalState.memory.draft ?? '(none)');
+      console.log('\n═══ Human Decision ═══');
+      console.log(finalState.memory.human_decision ?? '(none)');
+      console.log(`Feedback: ${finalState.memory.human_response ?? '(none)'}`);
+      console.log('\n═══ Published Article ═══');
+      console.log(finalState.memory.published ?? '(none)');
+      console.log('\n═══ Stats ═══');
+      console.log(`  Nodes visited:  ${finalState.visited_nodes.join(' → ')}`);
+      console.log(`  Tokens used:    ${finalState.total_tokens_used}`);
+      console.log(`  Cost (USD):     $${finalState.total_cost_usd.toFixed(4)}`);
+    } else {
+      console.error(`Workflow ended with status: ${finalState.status}`);
+      if (finalState.last_error) {
+        console.error(`Error: ${finalState.last_error}`);
+      }
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  }
+}
+
+main();

@@ -1,0 +1,263 @@
+/**
+ * Drizzle Persistence Provider
+ *
+ * Implements PersistenceProvider using Drizzle ORM + PostgreSQL.
+ * Moved from libs/orchestrator/src/db/persistence.ts.
+ */
+
+import { db } from './connection.js';
+import { graphs, workflow_runs, workflow_states, workflow_events } from './schema.js';
+import type { GraphDefinitionJson, WorkflowStateJson } from './schema.js';
+import { eq, desc, sql, and } from 'drizzle-orm';
+import type {
+  PersistenceProvider,
+  GraphRow,
+  WorkflowRunRow,
+  WorkflowEventRow as IWorkflowEventRow,
+  WorkflowStateJson as IWorkflowStateJson,
+} from '@mcai/orchestrator';
+import type { Graph } from '@mcai/orchestrator';
+import type { WorkflowState } from '@mcai/orchestrator';
+
+type WorkflowStatus = 'pending' | 'scheduled' | 'running' | 'waiting' | 'retrying' | 'completed' | 'failed' | 'cancelled' | 'timeout';
+
+const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled', 'timeout'];
+
+// ─── Type Conversion Helpers ─────────────────────────────────────────
+
+function toGraphDefinitionJson(graph: Graph): GraphDefinitionJson {
+  return {
+    id: graph.id,
+    name: graph.name,
+    nodes: graph.nodes as unknown[],
+    edges: graph.edges as unknown[],
+    start_node: graph.start_node,
+    end_nodes: graph.end_nodes,
+    description: graph.description,
+    version: graph.version,
+  };
+}
+
+function fromGraphDefinitionJson(def: GraphDefinitionJson): Graph {
+  return def as unknown as Graph;
+}
+
+export function toWorkflowStateJson(state: WorkflowState): WorkflowStateJson {
+  return {
+    workflow_id: state.workflow_id,
+    run_id: state.run_id,
+    status: state.status,
+    current_node: state.current_node,
+    memory: state.memory,
+    goal: state.goal,
+    constraints: state.constraints,
+    iteration_count: state.iteration_count,
+    visited_nodes: state.visited_nodes,
+    supervisor_history: state.supervisor_history,
+    total_tokens_used: state.total_tokens_used,
+    max_token_budget: state.max_token_budget,
+    started_at: state.started_at,
+    created_at: state.created_at,
+    updated_at: state.updated_at,
+    retry_count: state.retry_count,
+    max_retries: state.max_retries,
+    last_error: state.last_error,
+    waiting_for: state.waiting_for,
+    waiting_since: state.waiting_since,
+    waiting_timeout_at: state.waiting_timeout_at,
+    max_execution_time_ms: state.max_execution_time_ms,
+    max_iterations: state.max_iterations,
+    compensation_stack: state.compensation_stack,
+  };
+}
+
+// ─── DrizzlePersistenceProvider ──────────────────────────────────────
+
+export class DrizzlePersistenceProvider implements PersistenceProvider {
+
+  // ── Graph Operations ──
+
+  async saveGraph(graph: Graph): Promise<void> {
+    const now = new Date();
+    const definition = toGraphDefinitionJson(graph);
+
+    await db.insert(graphs).values({
+      id: graph.id,
+      name: graph.name,
+      description: graph.description,
+      definition,
+      version: graph.version || '1.0.0',
+      created_at: now,
+      updated_at: now,
+    }).onConflictDoUpdate({
+      target: graphs.id,
+      set: {
+        name: graph.name,
+        description: graph.description,
+        definition,
+        version: graph.version || '1.0.0',
+        updated_at: now,
+      },
+    });
+  }
+
+  async loadGraph(graph_id: string): Promise<Graph | null> {
+    const result = await db
+      .select()
+      .from(graphs)
+      .where(eq(graphs.id, graph_id))
+      .limit(1);
+
+    const definition = result[0]?.definition ?? null;
+    return definition ? fromGraphDefinitionJson(definition) : null;
+  }
+
+  async listGraphs(opts: { limit?: number; offset?: number } = {}): Promise<GraphRow[]> {
+    const { limit = 100, offset = 0 } = opts;
+    return db
+      .select()
+      .from(graphs)
+      .orderBy(desc(graphs.updated_at))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  // ── Workflow Run Operations ──
+
+  async saveWorkflowRun(state: WorkflowState): Promise<void> {
+    const isTerminal = TERMINAL_STATUSES.includes(state.status);
+    const status = state.status as WorkflowStatus;
+
+    await db.insert(workflow_runs).values({
+      id: state.run_id,
+      graph_id: state.workflow_id,
+      status,
+      created_at: state.created_at ?? new Date(),
+      completed_at: isTerminal ? new Date() : null,
+    }).onConflictDoUpdate({
+      target: workflow_runs.id,
+      set: {
+        status,
+        completed_at: isTerminal ? new Date() : null,
+      },
+    });
+  }
+
+  async loadWorkflowRun(run_id: string): Promise<WorkflowRunRow | null> {
+    const result = await db
+      .select()
+      .from(workflow_runs)
+      .where(eq(workflow_runs.id, run_id))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
+
+  async listWorkflowRuns(opts: { limit?: number; offset?: number } = {}): Promise<WorkflowRunRow[]> {
+    const { limit = 100, offset = 0 } = opts;
+    return db
+      .select()
+      .from(workflow_runs)
+      .orderBy(desc(workflow_runs.created_at))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async updateRunStatus(runId: string, status: string): Promise<number> {
+    const isTerminal = TERMINAL_STATUSES.includes(status);
+    const result = await db
+      .update(workflow_runs)
+      .set({
+        status: status as WorkflowStatus,
+        completed_at: isTerminal ? new Date() : null,
+      })
+      .where(eq(workflow_runs.id, runId))
+      .returning({ id: workflow_runs.id });
+
+    return result.length;
+  }
+
+  // ── Workflow State Operations ──
+
+  async saveWorkflowState(state: WorkflowState): Promise<void> {
+    const stateJson = toWorkflowStateJson(state);
+
+    await db.transaction(async (tx) => {
+      const maxVersionResult = await tx
+        .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
+        .from(workflow_states)
+        .where(eq(workflow_states.run_id, state.run_id));
+      const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
+
+      await tx.insert(workflow_states).values({
+        run_id: state.run_id,
+        version: nextVersion,
+        state: stateJson,
+        current_node: state.current_node,
+        status: state.status as WorkflowStatus,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    });
+  }
+
+  async loadLatestWorkflowState(run_id: string): Promise<WorkflowState | null> {
+    const result = await db
+      .select()
+      .from(workflow_states)
+      .where(eq(workflow_states.run_id, run_id))
+      .orderBy(desc(workflow_states.created_at))
+      .limit(1);
+
+    const state = result[0]?.state ?? null;
+    return state as unknown as WorkflowState | null;
+  }
+
+  async loadWorkflowStateHistory(
+    run_id: string,
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<{ version: number; status: string; current_node: string | null; created_at: Date; total_tokens_used: number | null }[]> {
+    const { limit = 50, offset = 0 } = opts;
+    return db
+      .select({
+        version: workflow_states.version,
+        status: workflow_states.status,
+        current_node: workflow_states.current_node,
+        created_at: workflow_states.created_at,
+        total_tokens_used: sql<number | null>`(${workflow_states.state}->>'total_tokens_used')::integer`,
+      })
+      .from(workflow_states)
+      .where(eq(workflow_states.run_id, run_id))
+      .orderBy(workflow_states.version)
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async loadWorkflowStateAtVersion(
+    run_id: string,
+    version: number,
+  ): Promise<IWorkflowStateJson | null> {
+    const result = await db
+      .select()
+      .from(workflow_states)
+      .where(
+        and(
+          eq(workflow_states.run_id, run_id),
+          eq(workflow_states.version, version),
+        ),
+      )
+      .limit(1);
+    return (result[0]?.state as unknown as IWorkflowStateJson) ?? null;
+  }
+
+  // ── Event Queries ──
+
+  async loadEvents(run_id: string): Promise<IWorkflowEventRow[]> {
+    const rows = await db
+      .select()
+      .from(workflow_events)
+      .where(eq(workflow_events.run_id, run_id))
+      .orderBy(workflow_events.sequence_id);
+    return rows;
+  }
+}

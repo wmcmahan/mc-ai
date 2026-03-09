@@ -1,0 +1,58 @@
+---
+title: MC-AI
+description: Production-grade Agentic Orchestration System built on a Cyclic State Graph architecture.
+template: splash
+hero:
+  tagline: Build complex, multi-step AI workflows with a graph-based architecture — config-driven, fault-tolerant, and production-ready.
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://gitlab.com/wmcmahan/mc-ai
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What can you build with MC-AI?
+
+<CardGrid stagger>
+  <Card title="Supervisor Workflows" icon="seti:pipeline">
+    An LLM-powered router dynamically delegates work across specialized agents until the goal is complete — no hardcoded paths.
+  </Card>
+  <Card title="Evolution & Selection" icon="random">
+    Run N candidate solutions in parallel, score them with a fitness evaluator, and breed the next generation from the winner. Inspired by Darwin Godel Machines.
+  </Card>
+  <Card title="Human-in-the-Loop" icon="approve-check-circle">
+    Pause a workflow mid-execution for human review. The state persists, and the workflow resumes exactly where it left off.
+  </Card>
+  <Card title="Workflow Architect" icon="pencil">
+    Describe a workflow in plain English. The Architect generates a valid graph definition automatically, with self-correction via LLM retry.
+  </Card>
+</CardGrid>
+
+## Key features
+
+<CardGrid>
+  <Card title="Config-driven agents" icon="document">
+    Agents are JSON configs, not classes. Define model, prompt, tools, and permissions declaratively — no boilerplate.
+  </Card>
+  <Card title="Cyclic State Graph" icon="setting">
+    Unlike DAG-only frameworks, MC-AI supports cycles, loops, and self-correction at the graph level.
+  </Card>
+  <Card title="Reducer-based state" icon="puzzle">
+    Shared blackboard state with pure reducer functions. No direct mutation, no race conditions — even in parallel swarms.
+  </Card>
+  <Card title="MCP tool integration" icon="open-book">
+    Sandboxed tool execution via the Model Context Protocol gateway. Agents get tools without touching host resources.
+  </Card>
+  <Card title="Budget controls" icon="warning">
+    Token and cost limits per workflow run. Workflows that exceed budget throw a typed error and mark state as failed.
+  </Card>
+  <Card title="OpenTelemetry tracing" icon="magnifier">
+    Opt-in distributed tracing with Jaeger. See every routing decision, tool call, and token count across the full execution tree.
+  </Card>
+</CardGrid>

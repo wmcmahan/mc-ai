@@ -1,0 +1,217 @@
+/**
+ * Supervisor Executor
+ *
+ * Executes a supervisor node that uses an LLM to dynamically route work
+ * between managed sub-nodes. Uses the AI SDK's structured output to
+ * produce type-safe routing decisions.
+ *
+ * Flow:
+ * 1. Validate supervisor config and check max iteration guard
+ * 2. Load the supervisor's agent config and model
+ * 3. Build context-aware routing prompt (with injection guards)
+ * 4. Get structured routing decision via `generateText` + `Output.object`
+ * 5. Validate the decision against the `managed_nodes` allowlist
+ * 6. Return a `handoff` or `set_status` action
+ *
+ * @module supervisor-executor/executor
+ */
+
+import { generateText, Output } from 'ai';
+import { z } from 'zod';
+import { agentFactory } from '../agent-factory/index.js';
+import type { GraphNode } from '../../types/graph.js';
+import type { StateView, Action, WorkflowState } from '../../types/state.js';
+import { createLogger } from '../../utils/logger.js';
+import { getTracer, withSpan } from '../../utils/tracing.js';
+import { v4 as uuidv4 } from 'uuid';
+import { SUPERVISOR_DONE } from './constants.js';
+import { buildSupervisorSystemPrompt } from './prompt.js';
+import { SupervisorConfigError, SupervisorRoutingError } from './errors.js';
+
+const logger = createLogger('agent.supervisor');
+const tracer = getTracer('orchestrator.supervisor');
+
+/**
+ * Zod schema for the structured routing decision returned by the LLM.
+ *
+ * Used with `Output.object` to enforce type-safe extraction — no
+ * free-form text parsing required.
+ */
+export const SupervisorDecisionSchema = z.object({
+  /** Node ID to delegate to, or `'__done__'` to signal completion. */
+  next_node: z.string(),
+  /** Reasoning for why this node was chosen. */
+  reasoning: z.string(),
+});
+
+/** Inferred type of a supervisor routing decision. */
+export type SupervisorDecision = z.infer<typeof SupervisorDecisionSchema>;
+
+/**
+ * Execute a supervisor node to produce a routing decision.
+ *
+ * @param node - The supervisor graph node to execute.
+ * @param stateView - The current workflow state scoped to this supervisor.
+ * @param supervisorHistory - The accumulated routing decision history.
+ * @param attempt - The current attempt number (1-based, increments on retry).
+ * @param options - Optional execution configuration.
+ * @param options.abortSignal - External cancellation signal.
+ * @returns A `handoff` action (delegate to a worker) or a `set_status` action (workflow complete).
+ * @throws {SupervisorConfigError} If the node is missing `supervisor_config`.
+ * @throws {SupervisorRoutingError} If the LLM routes to a node not in `managed_nodes`.
+ */
+export async function executeSupervisor(
+  node: GraphNode,
+  stateView: StateView,
+  supervisorHistory: WorkflowState['supervisor_history'],
+  attempt: number,
+  options?: { abortSignal?: AbortSignal },
+): Promise<Action> {
+  return withSpan(tracer, 'supervisor.route', async (span) => {
+    span.setAttribute('supervisor.id', node.id);
+    span.setAttribute('supervisor.attempt', attempt);
+
+    const startTime = Date.now();
+    const config = node.supervisor_config;
+
+    if (!config) {
+      throw new SupervisorConfigError(node.id, 'supervisor_config is required for supervisor nodes');
+    }
+
+    // Max iterations guard — prevents infinite routing loops
+    const supervisorIterations = supervisorHistory.filter(h => h.supervisor_id === node.id).length;
+    if (supervisorIterations >= config.max_iterations) {
+      logger.warn('max_iterations_reached', {
+        supervisor_id: node.id,
+        iterations: supervisorIterations,
+        max: config.max_iterations,
+      });
+
+      return createCompletionAction(node.id, attempt, Date.now() - startTime, 'Max supervisor iterations reached', supervisorIterations);
+    }
+
+    // Load agent config for the supervisor LLM (cached)
+    const agentConfig = await agentFactory.loadAgent(config.agent_id);
+    const model = agentFactory.getModel(agentConfig);
+
+    const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory);
+
+    logger.info('routing', {
+      supervisor_id: node.id,
+      agent_id: config.agent_id,
+      managed_nodes: config.managed_nodes,
+      iteration: supervisorIterations + 1,
+    });
+
+    const { output: decision, usage } = await generateText({
+      model,
+      output: Output.object({ schema: SupervisorDecisionSchema }),
+      system: systemPrompt,
+      prompt: `Based on the current workflow state, decide which node should execute next. Choose from the available nodes or select '${SUPERVISOR_DONE}' if the goal is fully achieved.`,
+      ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
+    });
+
+    const duration = Date.now() - startTime;
+
+    logger.info('decision', {
+      supervisor_id: node.id,
+      next_node: decision.next_node,
+      reasoning: decision.reasoning,
+      duration_ms: duration,
+      input_tokens: usage?.inputTokens ?? 0,
+      output_tokens: usage?.outputTokens ?? 0,
+    });
+
+    // Handle completion
+    if (decision.next_node === SUPERVISOR_DONE) {
+      return createCompletionAction(node.id, attempt, duration, decision.reasoning, supervisorIterations);
+    }
+
+    // Validate routing against managed_nodes allowlist
+    if (!config.managed_nodes.includes(decision.next_node)) {
+      throw new SupervisorRoutingError(
+        node.id,
+        decision.next_node,
+        config.managed_nodes,
+      );
+    }
+
+    span.setAttribute('supervisor.decision', decision.next_node);
+    span.setAttribute('supervisor.reasoning', decision.reasoning);
+    span.setAttribute('supervisor.iteration', supervisorIterations + 1);
+    span.setAttribute('supervisor.input_tokens', usage?.inputTokens ?? 0);
+    span.setAttribute('supervisor.output_tokens', usage?.outputTokens ?? 0);
+
+    return createHandoffAction(node, attempt, duration, decision, supervisorIterations);
+  });
+}
+
+/**
+ * Create a handoff action — supervisor delegates to another node.
+ *
+ * @param node - The supervisor graph node.
+ * @param attempt - Current attempt number.
+ * @param duration - Execution duration in milliseconds.
+ * @param decision - The LLM's routing decision.
+ * @param iteration - Current supervisor iteration count.
+ * @returns A `handoff` {@link Action}.
+ */
+function createHandoffAction(
+  node: GraphNode,
+  attempt: number,
+  duration: number,
+  decision: SupervisorDecision,
+  iteration: number,
+): Action {
+  return {
+    id: uuidv4(),
+    idempotency_key: `${node.id}:handoff:${iteration}:${attempt}`,
+    type: 'handoff',
+    payload: {
+      node_id: decision.next_node,
+      supervisor_id: node.id,
+      reasoning: decision.reasoning,
+    },
+    metadata: {
+      node_id: node.id,
+      agent_id: node.supervisor_config?.agent_id,
+      timestamp: new Date(),
+      attempt,
+      duration_ms: duration,
+    },
+  };
+}
+
+/**
+ * Create a completion action — supervisor signals the workflow is done.
+ *
+ * @param supervisorId - The supervisor node ID.
+ * @param attempt - Current attempt number.
+ * @param duration - Execution duration in milliseconds.
+ * @param reasoning - The LLM's reasoning for completion.
+ * @param iteration - Current supervisor iteration count.
+ * @returns A `set_status` {@link Action} with `status: 'completed'`.
+ */
+function createCompletionAction(
+  supervisorId: string,
+  attempt: number,
+  duration: number,
+  reasoning: string,
+  iteration: number,
+): Action {
+  return {
+    id: uuidv4(),
+    idempotency_key: `${supervisorId}:complete:${iteration}:${attempt}`,
+    type: 'set_status',
+    payload: {
+      status: 'completed',
+      supervisor_completion_reason: reasoning,
+    },
+    metadata: {
+      node_id: supervisorId,
+      timestamp: new Date(),
+      attempt,
+      duration_ms: duration,
+    },
+  };
+}

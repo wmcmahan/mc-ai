@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.env
+.env.local
+*.log
+.DS_Store
+drizzle
+docker-compose.override.yml
+.agents/
+.claude/

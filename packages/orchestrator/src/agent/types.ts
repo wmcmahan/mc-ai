@@ -1,0 +1,86 @@
+/**
+ * Agent Type Definitions
+ *
+ * Defines the Zod schema and inferred type for agent configurations.
+ * Agents are pure config records (not classes) — the factory loads them,
+ * the executor consumes them.
+ *
+ * Security: Both `read_keys` and `write_keys` default to `[]` (deny-all).
+ * Permissions must be explicitly granted in the agent registry.
+ *
+ * @module agent/types
+ */
+
+import { z } from 'zod';
+
+/**
+ * Zod schema for agent configuration records.
+ *
+ * Validated by the {@link AgentFactory} on every load via `AgentConfigSchema.parse()`.
+ * Defaults are applied when fields are missing from the registry entry.
+ */
+export const AgentConfigSchema = z.object({
+  /** Unique agent identifier (typically a UUID from the registry). */
+  id: z.string(),
+  /** Human-readable agent name. */
+  name: z.string(),
+  /** Optional description of the agent's purpose. */
+  description: z.string().optional(),
+
+  // ── AI SDK Core Properties ──
+
+  /** Model identifier (e.g. `'claude-sonnet-4-20250514'`, `'gpt-4-turbo'`). */
+  model: z.string(),
+  /** LLM provider — determines which AI SDK factory is used. */
+  provider: z.string(),
+  /** System prompt — defines the agent's behaviour and constraints. */
+  system: z.string(),
+  /** Sampling temperature (0 = deterministic, 1 = creative). */
+  temperature: z.number().min(0).max(1).default(0.7),
+  /** Maximum tool-call steps before the agent is forced to stop. */
+  maxSteps: z.number().min(1).max(50).default(10),
+
+  // ── Capabilities ──
+
+  /** Tool IDs this agent is allowed to invoke. */
+  tools: z.array(z.string()).default([]),
+
+  // ── Zero Trust Permissions (deny-all by default) ──
+
+  /** Memory keys the agent may read. `['*']` = wildcard. */
+  read_keys: z.array(z.string()).default([]),
+  /** Memory keys the agent may write. `['*']` = wildcard. */
+  write_keys: z.array(z.string()).default([]),
+});
+
+/** Inferred TypeScript type for a validated agent config. */
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+
+/**
+ * Metadata attached to every agent execution action.
+ *
+ * Captured by the executor and stored on the `Action.metadata` field
+ * for observability, debugging, and cost tracking.
+ */
+export interface AgentExecutionMetadata {
+  /** ID of the agent that was executed. */
+  agent_id: string;
+  /** Graph node that triggered the execution. */
+  node_id: string;
+  /** Retry attempt number (1-based). */
+  attempt: number;
+  /** When the execution completed. */
+  timestamp: Date;
+  /** Wall-clock duration in milliseconds. */
+  duration_ms: number;
+  /** LLM finish reason (e.g. `'stop'`, `'length'`, `'tool-calls'`). */
+  finish_reason?: string;
+  /** Names of tools invoked during execution. */
+  tool_calls: string[];
+  /** Token usage breakdown for cost tracking. */
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}

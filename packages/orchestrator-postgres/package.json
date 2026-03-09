@@ -1,0 +1,71 @@
+{
+  "name": "@mcai/orchestrator-postgres",
+  "version": "1.0.0",
+  "description": "PostgreSQL persistence adapter for @mcai/orchestrator with Drizzle ORM, pgvector, and event sourcing.",
+  "keywords": [
+    "orchestrator",
+    "postgres",
+    "persistence",
+    "drizzle",
+    "pgvector",
+    "event-sourcing",
+    "workflow"
+  ],
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/wmcmahan/mc-ai.git",
+    "directory": "packages/orchestrator-postgres"
+  },
+  "homepage": "https://gitlab.com/wmcmahan/mc-ai/tree/main/packages/orchestrator-postgres#readme",
+  "bugs": {
+    "url": "https://gitlab.com/wmcmahan/mc-ai/issues"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    }
+  },
+  "files": [
+    "dist",
+    "drizzle"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "generate": "drizzle-kit generate",
+    "studio": "drizzle-kit studio"
+  },
+  "peerDependencies": {
+    "@mcai/orchestrator": "*"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.3",
+    "pg": "^8.13.1",
+    "pgvector": "^0.2.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@mcai/orchestrator": "*",
+    "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.30.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "zod": "^3.24.1"
+  }
+}

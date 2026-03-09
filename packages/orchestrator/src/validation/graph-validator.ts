@@ -1,0 +1,391 @@
+/**
+ * Graph Validator
+ *
+ * Validates graph structure before execution: correctness, completeness,
+ * and common misconfigurations. Run at graph load time to fail fast on
+ * invalid definitions.
+ *
+ * Checks performed:
+ * - Start/end node existence
+ * - Duplicate node/edge IDs
+ * - Edge source/target existence
+ * - Type-specific config requirements (agent, tool, supervisor, etc.)
+ * - Reachability from start node (BFS)
+ * - Dead-end detection (non-end nodes with no outgoing edges)
+ * - Cycle detection (iterative DFS with three-colour marking)
+ *
+ * Performance: All lookups use pre-built maps for O(1) access.
+ * Total complexity is O(N + E) where N = nodes, E = edges.
+ *
+ * @module validation/graph-validator
+ */
+
+import type { Graph, GraphNode, GraphEdge } from '../types/graph.js';
+
+/**
+ * Result of a graph validation pass.
+ *
+ * A graph is considered valid only when `errors` is empty. Warnings
+ * indicate suspicious-but-valid configurations (e.g. unreachable nodes).
+ */
+export interface ValidationResult {
+  /** `true` if the graph has no errors and is safe to execute. */
+  valid: boolean;
+  /** Fatal issues that prevent execution. */
+  errors: string[];
+  /** Suspicious configurations that may indicate mistakes. */
+  warnings: string[];
+}
+
+/**
+ * Validate graph structure: correctness, completeness, and common issues.
+ *
+ * @param graph - The graph definition to validate.
+ * @returns Validation result with errors (invalid graph) and warnings (suspicious but valid).
+ */
+export function validateGraph(graph: Graph): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // ── Build lookup structures (used by all subsequent checks) ──────────
+
+  const nodeMap = new Map<string, GraphNode>();
+  const outgoingEdges = new Map<string, GraphEdge[]>();
+  const endNodeSet = new Set<string>(graph.end_nodes);
+
+  for (const node of graph.nodes) {
+    if (nodeMap.has(node.id)) {
+      errors.push(`Duplicate node ID: '${node.id}'`);
+    }
+    nodeMap.set(node.id, node);
+    if (!outgoingEdges.has(node.id)) {
+      outgoingEdges.set(node.id, []);
+    }
+  }
+
+  // ── Start & end node existence ───────────────────────────────────────
+
+  if (!nodeMap.has(graph.start_node)) {
+    errors.push(`Start node '${graph.start_node}' not found in graph nodes`);
+  }
+
+  const hasSupervisorNode = graph.nodes.some(n => n.type === 'supervisor');
+
+  if (graph.end_nodes.length === 0 && !hasSupervisorNode) {
+    warnings.push('Graph has no end nodes — execution may only terminate via max_iterations or timeout');
+  }
+
+  for (const endNodeId of graph.end_nodes) {
+    if (!nodeMap.has(endNodeId)) {
+      errors.push(`End node '${endNodeId}' not found in graph nodes`);
+    }
+  }
+
+  // ── Edge validation ──────────────────────────────────────────────────
+
+  const edgeIds = new Set<string>();
+
+  for (const edge of graph.edges) {
+    if (edgeIds.has(edge.id)) {
+      errors.push(`Duplicate edge ID: '${edge.id}'`);
+    }
+    edgeIds.add(edge.id);
+
+    if (!nodeMap.has(edge.source)) {
+      errors.push(`Edge '${edge.id}': source node '${edge.source}' not found`);
+    }
+    if (!nodeMap.has(edge.target)) {
+      errors.push(`Edge '${edge.id}': target node '${edge.target}' not found`);
+    }
+
+    if (edge.source === edge.target) {
+      warnings.push(`Edge '${edge.id}': self-referencing edge on node '${edge.source}' (potential tight loop)`);
+    }
+
+    if (edge.condition?.type === 'conditional' && !edge.condition.condition) {
+      warnings.push(`Edge '${edge.id}': conditional edge is missing a condition expression (will always evaluate to false)`);
+    }
+
+    if (nodeMap.has(edge.source)) {
+      outgoingEdges.get(edge.source)!.push(edge);
+    }
+  }
+
+  // ── Type-specific node validation (single pass) ──────────────────────
+
+  for (const node of graph.nodes) {
+    validateNodeByType(node, nodeMap, outgoingEdges, errors, warnings);
+  }
+
+  // ── Reachability (BFS with index pointer for O(1) dequeue) ───────────
+
+  const reachable = new Set<string>();
+  const queue: string[] = [graph.start_node];
+  let queueIdx = 0;
+
+  while (queueIdx < queue.length) {
+    const current = queue[queueIdx++];
+    if (reachable.has(current)) continue;
+    reachable.add(current);
+
+    const edges = outgoingEdges.get(current);
+    if (edges) {
+      for (const edge of edges) {
+        if (!reachable.has(edge.target)) {
+          queue.push(edge.target);
+        }
+      }
+    }
+  }
+
+  for (const node of graph.nodes) {
+    if (!reachable.has(node.id)) {
+      warnings.push(`Node '${node.id}' is unreachable from start node`);
+    }
+  }
+
+  // ── Dead-end detection ───────────────────────────────────────────────
+
+  for (const node of graph.nodes) {
+    if (endNodeSet.has(node.id)) continue;
+    const edges = outgoingEdges.get(node.id);
+    if (!edges || edges.length === 0) {
+      warnings.push(`Node '${node.id}' has no outgoing edges and is not an end node (potential dead end)`);
+    }
+  }
+
+  // ── Cycle detection ──────────────────────────────────────────────────
+
+  const hasCycles = detectCycles(graph.nodes, outgoingEdges);
+  if (hasCycles && graph.end_nodes.length === 0 && !hasSupervisorNode) {
+    warnings.push('Graph contains cycles but has no end nodes (potential infinite loop)');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+// ─── Type-specific Node Validation ──────────────────────────────────
+
+/**
+ * Validate a single node based on its `type`.
+ *
+ * Pushes errors (fatal) and warnings (suspicious) into the
+ * provided arrays. Extracted from `validateGraph` for readability.
+ */
+function validateNodeByType(
+  node: GraphNode,
+  nodeMap: Map<string, GraphNode>,
+  outgoingEdges: Map<string, GraphEdge[]>,
+  errors: string[],
+  warnings: string[],
+): void {
+  switch (node.type) {
+    case 'agent': {
+      if (!node.agent_id) {
+        errors.push(`Agent node '${node.id}' is missing agent_id`);
+      }
+      if (node.annealing_config) {
+        if (node.annealing_config.initial_temperature < node.annealing_config.final_temperature) {
+          warnings.push(
+            `Agent node '${node.id}': annealing initial_temperature (${node.annealing_config.initial_temperature}) ` +
+            `is less than final_temperature (${node.annealing_config.final_temperature}) — temperature will increase instead of decrease`,
+          );
+        }
+      }
+      if (node.swarm_config) {
+        for (const peerId of node.swarm_config.peer_nodes) {
+          if (!nodeMap.has(peerId)) {
+            errors.push(`Swarm node '${node.id}': peer node '${peerId}' not found in graph`);
+          }
+        }
+        for (const peerId of node.swarm_config.peer_nodes) {
+          const peerOutgoing = outgoingEdges.get(peerId);
+          const hasReturnEdge = peerOutgoing?.some(e => e.target === node.id) ?? false;
+          if (!hasReturnEdge) {
+            warnings.push(`Swarm node '${node.id}': no return edge from peer '${peerId}' (handoff back may not be possible)`);
+          }
+        }
+      }
+      break;
+    }
+
+    case 'tool': {
+      if (!node.tool_id) {
+        errors.push(`Tool node '${node.id}' is missing tool_id`);
+      }
+      break;
+    }
+
+    case 'subgraph': {
+      if (!node.subgraph_config) {
+        errors.push(`Subgraph node '${node.id}' is missing subgraph_config`);
+      } else if (!node.subgraph_config.subgraph_id) {
+        errors.push(`Subgraph node '${node.id}' is missing subgraph_config.subgraph_id`);
+      }
+      break;
+    }
+
+    case 'approval': {
+      if (!node.approval_config) {
+        errors.push(`Approval node '${node.id}' is missing approval_config`);
+      } else if (node.approval_config.rejection_node_id && !nodeMap.has(node.approval_config.rejection_node_id)) {
+        errors.push(
+          `Approval node '${node.id}': rejection_node_id '${node.approval_config.rejection_node_id}' not found in graph`,
+        );
+      }
+      break;
+    }
+
+    case 'map': {
+      if (!node.map_reduce_config) {
+        errors.push(`Map node '${node.id}' is missing map_reduce_config`);
+      } else {
+        const { worker_node_id, synthesizer_node_id } = node.map_reduce_config;
+        if (!nodeMap.has(worker_node_id)) {
+          errors.push(`Map node '${node.id}': worker node '${worker_node_id}' not found in graph`);
+        }
+        if (synthesizer_node_id && !nodeMap.has(synthesizer_node_id)) {
+          errors.push(`Map node '${node.id}': synthesizer node '${synthesizer_node_id}' not found in graph`);
+        }
+      }
+      break;
+    }
+
+    case 'voting': {
+      if (!node.voting_config) {
+        errors.push(`Voting node '${node.id}' is missing voting_config`);
+      } else {
+        if (node.voting_config.voter_agent_ids.length === 0) {
+          errors.push(`Voting node '${node.id}': voter_agent_ids must not be empty`);
+        }
+        if (node.voting_config.strategy === 'llm_judge' && !node.voting_config.judge_agent_id) {
+          errors.push(`Voting node '${node.id}': llm_judge strategy requires judge_agent_id`);
+        }
+      }
+      break;
+    }
+
+    case 'supervisor': {
+      if (!node.supervisor_config) {
+        errors.push(`Supervisor node '${node.id}' is missing supervisor_config`);
+      } else {
+        const { managed_nodes } = node.supervisor_config;
+
+        for (const managedId of managed_nodes) {
+          if (!nodeMap.has(managedId)) {
+            errors.push(`Supervisor '${node.id}': managed node '${managedId}' not found in graph`);
+          }
+        }
+
+        const supervisorOutgoing = outgoingEdges.get(node.id) ?? [];
+        for (const managedId of managed_nodes) {
+          if (!supervisorOutgoing.some(e => e.target === managedId)) {
+            warnings.push(`Supervisor '${node.id}' has no edge to managed node '${managedId}'`);
+          }
+        }
+
+        if (managed_nodes.includes(node.id)) {
+          warnings.push(`Supervisor '${node.id}' manages itself (potential infinite loop)`);
+        }
+      }
+      break;
+    }
+
+    case 'evolution': {
+      if (!node.evolution_config) {
+        errors.push(`Evolution node '${node.id}' is missing evolution_config`);
+      } else {
+        const evoConfig = node.evolution_config;
+        if (evoConfig.elite_count >= evoConfig.population_size) {
+          errors.push(`Evolution node '${node.id}': elite_count must be less than population_size`);
+        }
+        if (evoConfig.selection_strategy === 'tournament' &&
+          evoConfig.tournament_size > evoConfig.population_size) {
+          errors.push(`Evolution node '${node.id}': tournament_size exceeds population_size`);
+        }
+        if (evoConfig.initial_temperature < evoConfig.final_temperature) {
+          warnings.push(`Evolution node '${node.id}': temperature increases over generations (exploration grows)`);
+        }
+      }
+      break;
+    }
+
+    // router, synthesizer — no type-specific config required
+    default:
+      break;
+  }
+}
+
+// ─── Cycle Detection ────────────────────────────────────────────────
+
+/** DFS node states for three-colour cycle detection. */
+const enum DFSColor {
+  /** Unvisited. */
+  WHITE = 0,
+  /** In the current DFS path (on the recursion stack). */
+  GRAY = 1,
+  /** Fully explored (all descendants processed). */
+  BLACK = 2,
+}
+
+/**
+ * Detect if the graph contains at least one cycle.
+ *
+ * Uses iterative DFS with three-colour marking (White/Gray/Black)
+ * to avoid stack overflow on large/deep graphs. A back-edge to a
+ * GRAY node indicates a cycle.
+ *
+ * @param nodes - All graph nodes.
+ * @param outgoingEdges - Pre-built adjacency map (`node_id → edges[]`).
+ * @returns `true` if the graph contains at least one cycle.
+ */
+function detectCycles(
+  nodes: readonly GraphNode[],
+  outgoingEdges: Map<string, GraphEdge[]>,
+): boolean {
+  const color = new Map<string, DFSColor>();
+  for (const node of nodes) {
+    color.set(node.id, DFSColor.WHITE);
+  }
+
+  for (const node of nodes) {
+    if (color.get(node.id) !== DFSColor.WHITE) continue;
+
+    // Stack entries: [nodeId, edgeIndex]
+    const stack: Array<[string, number]> = [[node.id, 0]];
+    color.set(node.id, DFSColor.GRAY);
+
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      const [currentId, edgeIdx] = top;
+      const edges = outgoingEdges.get(currentId) ?? [];
+
+      if (edgeIdx >= edges.length) {
+        color.set(currentId, DFSColor.BLACK);
+        stack.pop();
+        continue;
+      }
+
+      // Advance to next edge for when we return to this node
+      top[1]++;
+
+      const neighbor = edges[edgeIdx].target;
+      const neighborColor = color.get(neighbor);
+
+      if (neighborColor === DFSColor.GRAY) {
+        return true; // Back edge → cycle
+      }
+
+      if (neighborColor === DFSColor.WHITE) {
+        color.set(neighbor, DFSColor.GRAY);
+        stack.push([neighbor, 0]);
+      }
+    }
+  }
+
+  return false;
+}

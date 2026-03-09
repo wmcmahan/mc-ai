@@ -1,0 +1,166 @@
+/**
+ * Stream Event Types
+ *
+ * Discriminated union of all events yielded by {@link GraphRunner.stream()}.
+ * Terminal events carry the full `WorkflowState`; non-terminal events are
+ * lightweight and avoid state cloning overhead.
+ *
+ * @module runner/stream-events
+ */
+
+import type { WorkflowState } from '../types/state.js';
+
+// ─── Non-terminal Events ────────────────────────────────────────────
+
+export interface WorkflowStartEvent {
+  type: 'workflow:start';
+  workflow_id: string;
+  run_id: string;
+  timestamp: number;
+}
+
+export interface WorkflowRollbackEvent {
+  type: 'workflow:rollback';
+  workflow_id: string;
+  run_id: string;
+  timestamp: number;
+}
+
+export interface NodeStartEvent {
+  type: 'node:start';
+  node_id: string;
+  node_type: string;
+  timestamp: number;
+}
+
+export interface NodeCompleteEvent {
+  type: 'node:complete';
+  node_id: string;
+  node_type: string;
+  duration_ms: number;
+  timestamp: number;
+}
+
+export interface NodeFailedEvent {
+  type: 'node:failed';
+  node_id: string;
+  node_type: string;
+  error: string;
+  attempt: number;
+  timestamp: number;
+}
+
+export interface NodeRetryEvent {
+  type: 'node:retry';
+  node_id: string;
+  attempt: number;
+  backoff_ms: number;
+  timestamp: number;
+}
+
+export interface ActionAppliedEvent {
+  type: 'action:applied';
+  action_id: string;
+  action_type: string;
+  node_id: string;
+  timestamp: number;
+}
+
+export interface StatePersistedEvent {
+  type: 'state:persisted';
+  run_id: string;
+  iteration: number;
+  timestamp: number;
+}
+
+export interface AgentTokenDeltaEvent {
+  type: 'agent:token_delta';
+  run_id: string;
+  node_id: string;
+  token: string;
+  timestamp: number;
+}
+
+export interface BudgetThresholdReachedEvent {
+  type: 'budget:threshold_reached';
+  run_id: string;
+  workflow_id: string;
+  threshold_pct: number;
+  cost_usd: number;
+  budget_usd: number;
+  timestamp: number;
+}
+
+// ─── Terminal Events (carry WorkflowState) ──────────────────────────
+
+export interface WorkflowCompleteEvent {
+  type: 'workflow:complete';
+  workflow_id: string;
+  run_id: string;
+  duration_ms: number;
+  state: WorkflowState;
+  timestamp: number;
+}
+
+export interface WorkflowFailedEvent {
+  type: 'workflow:failed';
+  workflow_id: string;
+  run_id: string;
+  error: string;
+  state: WorkflowState;
+  timestamp: number;
+}
+
+export interface WorkflowTimeoutEvent {
+  type: 'workflow:timeout';
+  workflow_id: string;
+  run_id: string;
+  elapsed_ms: number;
+  state: WorkflowState;
+  timestamp: number;
+}
+
+export interface WorkflowWaitingEvent {
+  type: 'workflow:waiting';
+  workflow_id: string;
+  run_id: string;
+  waiting_for: string;
+  state: WorkflowState;
+  timestamp: number;
+}
+
+// ─── Union ──────────────────────────────────────────────────────────
+
+export type TerminalStreamEvent =
+  | WorkflowCompleteEvent
+  | WorkflowFailedEvent
+  | WorkflowTimeoutEvent
+  | WorkflowWaitingEvent;
+
+export type StreamEvent =
+  | WorkflowStartEvent
+  | WorkflowCompleteEvent
+  | WorkflowFailedEvent
+  | WorkflowTimeoutEvent
+  | WorkflowWaitingEvent
+  | WorkflowRollbackEvent
+  | NodeStartEvent
+  | NodeCompleteEvent
+  | NodeFailedEvent
+  | NodeRetryEvent
+  | ActionAppliedEvent
+  | StatePersistedEvent
+  | AgentTokenDeltaEvent
+  | BudgetThresholdReachedEvent;
+
+/**
+ * Type guard: narrows to terminal events that carry `state: WorkflowState`.
+ */
+export function isTerminalEvent(event: StreamEvent): event is TerminalStreamEvent {
+  return (
+    event.type === 'workflow:complete' ||
+    event.type === 'workflow:failed' ||
+    event.type === 'workflow:timeout' ||
+    event.type === 'workflow:waiting'
+  );
+}
