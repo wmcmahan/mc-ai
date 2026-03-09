@@ -73,8 +73,8 @@ describe('Helper Utilities', () => {
       await sleep(100);
       const elapsed = Date.now() - start;
 
-      // Allow 50ms tolerance
-      expect(elapsed).toBeGreaterThanOrEqual(100);
+      // Allow tolerance for timer imprecision (timers may fire 1-2ms early)
+      expect(elapsed).toBeGreaterThanOrEqual(95);
       expect(elapsed).toBeLessThan(150);
     });
 

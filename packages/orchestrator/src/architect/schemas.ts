@@ -29,7 +29,12 @@ const LLMFailurePolicySchema = z.object({
   initial_backoff_ms: z.number().default(1000),
   /** Maximum backoff duration in milliseconds. */
   max_backoff_ms: z.number().default(60000),
-}).default({});
+}).default({
+  max_retries: 3,
+  backoff_strategy: 'exponential' as const,
+  initial_backoff_ms: 1000,
+  max_backoff_ms: 60000,
+});
 
 /** Supervisor configuration for hierarchical routing nodes. */
 const LLMSupervisorConfigSchema = z.object({

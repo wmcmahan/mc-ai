@@ -40,19 +40,17 @@ npm install
 ### Run an Example
 
 ```bash
-cd packages/orchestrator
-
 # 2-node linear: Researcher → Writer
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/research-and-write/research-and-write.ts
+ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/research-and-write/research-and-write.ts
 
 # Supervisor routing between specialists
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/supervisor-routing/supervisor-routing.ts
+ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/supervisor-routing/supervisor-routing.ts
 
 # Map-Reduce fan-out with parallel workers
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/map-reduce/map-reduce.ts
+ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/map-reduce/map-reduce.ts
 
 # Human-in-the-loop approval gate
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loop.ts
+ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/human-in-the-loop/human-in-the-loop.ts
 ```
 
 See [packages/orchestrator/examples/](packages/orchestrator/examples/) for the full list.

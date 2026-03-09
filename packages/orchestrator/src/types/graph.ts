@@ -64,7 +64,7 @@ export const GraphEdgeSchema = z.object({
   /** Routing condition (defaults to `always`). */
   condition: EdgeConditionSchema.default({ type: 'always' }),
   /** Arbitrary metadata for tooling and debugging. */
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
@@ -217,7 +217,7 @@ export const VotingConfigSchema = z.object({
   /** Agent ID for the `llm_judge` strategy. */
   judge_agent_id: z.string().optional(),
   /** Per-agent weights for the `weighted_vote` strategy. */
-  weights: z.record(z.number()).optional(),
+  weights: z.record(z.string(), z.number()).optional(),
 });
 
 export type VotingConfig = z.infer<typeof VotingConfigSchema>;
@@ -293,9 +293,9 @@ export const SubgraphConfigSchema = z.object({
   /** ID of the graph to embed. */
   subgraph_id: z.string(),
   /** Parent → child memory key mapping. */
-  input_mapping: z.record(z.string()).default({}),
+  input_mapping: z.record(z.string(), z.string()).default({}),
   /** Child → parent memory key mapping. */
-  output_mapping: z.record(z.string()).default({}),
+  output_mapping: z.record(z.string(), z.string()).default({}),
   /** Maximum iterations for the sub-workflow. */
   max_iterations: z.number().min(1).default(50),
 });
@@ -349,13 +349,18 @@ export const GraphNodeSchema = z.object({
 
   // ── Resilience ──
   /** Retry and backoff configuration. */
-  failure_policy: FailurePolicySchema.default({}),
+  failure_policy: FailurePolicySchema.default({
+    max_retries: 3,
+    backoff_strategy: 'exponential' as const,
+    initial_backoff_ms: 1000,
+    max_backoff_ms: 60000,
+  }),
   /** Whether this node pushes a compensating action for saga rollback. */
   requires_compensation: z.boolean().default(false),
 
   // ── Metadata ──
   /** Arbitrary metadata for tooling and debugging. */
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type GraphNode = z.infer<typeof GraphNodeSchema>;

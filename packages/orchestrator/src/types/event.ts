@@ -54,7 +54,7 @@ export const WorkflowEventSchema = z.object({
   /** Internal event type (for `internal_dispatched` events). */
   internal_type: z.string().optional(),
   /** Internal payload (for `internal_dispatched` events). */
-  internal_payload: z.record(z.unknown()).optional(),
+  internal_payload: z.record(z.string(), z.unknown()).optional(),
   /** When the event was recorded. */
   created_at: z.date(),
 });

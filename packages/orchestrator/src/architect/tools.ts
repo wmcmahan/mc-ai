@@ -26,11 +26,11 @@ const logger = createLogger('architect.tools');
 
 const DraftWorkflowArgsSchema = z.object({
   prompt: z.string(),
-  current_graph: z.record(z.unknown()).optional(),
+  current_graph: z.record(z.string(), z.unknown()).optional(),
 });
 
 const PublishWorkflowArgsSchema = z.object({
-  graph: z.record(z.unknown()),
+  graph: z.record(z.string(), z.unknown()),
   overwrite: z.boolean().default(false),
 });
 
@@ -48,7 +48,7 @@ export const architectToolDefinitions: Record<string, ToolDefinition> = {
       'Returns a Graph JSON for review. Pass current_graph to modify an existing workflow.',
     parameters: z.object({
       prompt: z.string().describe('Natural language description of the workflow to create or change to make'),
-      current_graph: z.record(z.unknown()).optional().describe('Optional: existing graph JSON to modify'),
+      current_graph: z.record(z.string(), z.unknown()).optional().describe('Optional: existing graph JSON to modify'),
     }),
   },
 
@@ -57,7 +57,7 @@ export const architectToolDefinitions: Record<string, ToolDefinition> = {
       'Save a workflow graph to the registry so it can be triggered via the Workflow API. ' +
       'Set overwrite to true to update an existing published workflow.',
     parameters: z.object({
-      graph: z.record(z.unknown()).describe('The complete graph JSON to publish'),
+      graph: z.record(z.string(), z.unknown()).describe('The complete graph JSON to publish'),
       overwrite: z.boolean().default(false).describe('Whether to overwrite an existing graph with the same ID'),
     }),
   },

@@ -114,7 +114,7 @@ export const WorkflowStateSchema = z.object({
 
   // ── Working memory ──
   /** Dynamic key-value store shared between nodes. */
-  memory: z.record(z.unknown()).default({}),
+  memory: z.record(z.string(), z.unknown()).default({}),
 
   // ── Token budget ──
   /** Cumulative tokens consumed across all LLM calls. */
@@ -193,7 +193,7 @@ export const ActionSchema = z.object({
   /** Action type (e.g. `"update_memory"`, `"set_status"`, `"goto_node"`). */
   type: z.string(),
   /** Action payload — shape depends on `type`. */
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 
   // ── Idempotency ──
   /** Deduplication key — prevents re-execution on retry/resume. */
@@ -203,7 +203,7 @@ export const ActionSchema = z.object({
   /** Compensating action for rollback on downstream failure. */
   compensation: z.object({
     type: z.string(),
-    payload: z.record(z.unknown()),
+    payload: z.record(z.string(), z.unknown()),
   }).optional(),
 
   // ── Metadata ──
