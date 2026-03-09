@@ -7,5 +7,6 @@ dist
 .DS_Store
 drizzle
 docker-compose.override.yml
+.vercel
 .agents/
 .claude/
