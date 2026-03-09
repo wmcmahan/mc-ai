@@ -3,123 +3,78 @@ title: Self-Annealing
 description: Iterative refinement — a single output improves through a generate → evaluate → refine loop.
 ---
 
-The Self-Annealing (Evaluator-Optimizer) pattern runs a single agent through a loop of generation and evaluation until the output meets a quality threshold. Unlike [Evolution](/patterns/evolution/), there's no population — just one candidate that gets refined iteration by iteration.
+The **Self-Annealing (Evaluator-Optimizer)** pattern runs a single agent through a continuous loop of generation and evaluation until the output meets a strict quality threshold. 
+
+Unlike [Evolution](/patterns/evolution/), there is no "population" of candidates — just one piece of work that gets refined, iteration by iteration, steadily improving its score.
 
 ## How it works
 
-```
-Generator → Draft → Evaluator → Score < threshold → Generator (with feedback)
-                               Score ≥ threshold → Done
-```
-
-1. The Generator agent produces a draft
-2. The Evaluator agent scores it and provides feedback
-3. If the score is below the threshold, the feedback is fed back to the Generator
-4. The Generator refines the draft
-5. Repeat until threshold met or max iterations reached
-
-## Graph definition
-
-```typescript
-const selfAnnealingGraph: Graph = {
-  id: 'refine-content-v1',
-  nodes: [
-    {
-      id: 'generator',
-      type: 'agent',
-      agent_id: 'writer-agent',
-      read_keys: ['topic', 'evaluation_feedback'],
-      write_keys: ['draft'],
-      failure_policy: { max_retries: 2 },
-    },
-    {
-      id: 'evaluator',
-      type: 'agent',
-      agent_id: 'critic-agent',
-      read_keys: ['draft', 'evaluation_criteria'],
-      write_keys: ['quality_score', 'evaluation_feedback'],
-      failure_policy: { max_retries: 1 },
-    },
-  ],
-  edges: [
-    // Generator → Evaluator (always)
-    {
-      id: 'e1',
-      source: 'generator',
-      target: 'evaluator',
-      condition: { type: 'always' },
-    },
-    // Evaluator → Generator (if score below threshold)
-    {
-      id: 'e2',
-      source: 'evaluator',
-      target: 'generator',
-      condition: {
-        type: 'expression',
-        expression: 'state.memory.quality_score < 0.85',
-      },
-    },
-    // Evaluator → Done (if score meets threshold)
-    {
-      id: 'e3',
-      source: 'evaluator',
-      target: 'done',
-      condition: {
-        type: 'expression',
-        expression: 'state.memory.quality_score >= 0.85',
-      },
-    },
-  ],
-  start_node: 'generator',
-  end_nodes: ['done'],
-  max_iterations: 8,   // Safety limit on the graph level
-};
+```mermaid
+flowchart TB
+    Gen["Generator Agent"] --> Draft["Draft Output"]
+    Draft --> Eval["Evaluator Agent"]
+    Eval --> Check{"Score ≥ threshold?"}
+    Check --> |"No — refine"| Feedback["Feedback injected"] --> Gen
+    Check --> |"Yes"| Done(["✓ Done"])
 ```
 
-## The evaluator agent
+1. A **Generator** agent produces an initial draft.
+2. An **Evaluator** agent (often using a smarter, stricter model) scores the draft against a rubric and generates actionable feedback.
+3. If the score is below the required threshold, the feedback is injected back into the Generator's prompt.
+4. The Generator produces a new, refined draft.
+5. This cycle repeats until the threshold is met or a safety limit (max iterations) is reached.
 
-The evaluator agent scores the draft and writes structured feedback:
+## When to use this pattern
+
+- **Code generation & review**: An agent writes code, and an evaluator agent runs static analysis or reviews the logic. If bugs are found, the generator tries again.
+- **Content refinement**: Writing, editing, and translation where the output must meet a strict brand voice or formatting standard.
+- **Data extraction validation**: Extracting unstructured data into strict JSON, where an evaluator checks for missing fields or hallucinations and forces a retry.
+- **Any task where one output must meet a rigid quality bar**. (If you want to explore multiple distinct creative approaches simultaneously, use [Evolution](/patterns/evolution/) instead.)
+
+## Configuration
+
+The pattern relies on two complementary agents paired together in a routing loop.
+
+### 1. The Evaluator Agent
+The evaluator needs explicit instructions on how to score the output and what feedback to provide.
 
 ```json
 {
   "id": "critic-agent",
   "model": "claude-sonnet-4-20250514",
   "temperature": 0.1,
-  "system": "You are a quality evaluator. Assess the given draft and output a JSON object with: score (0.0-1.0), feedback (string explaining what to improve). Be specific and actionable. Only give a score above 0.85 if the draft is genuinely ready for publication."
+  "system": "Assess the draft and output a JSON object with: score (0.0-1.0) and feedback. Be specific. Only give a score > 0.85 if the draft is genuinely ready."
 }
 ```
 
-The agent writes to `quality_score` and `evaluation_feedback`. The edge condition checks `quality_score` to decide whether to loop back.
-
-## The generator agent
-
-The generator should incorporate feedback from previous iterations:
+### 2. The Generator Agent
+The generator must be instructed to listen to previous feedback.
 
 ```json
 {
   "id": "writer-agent",
   "model": "claude-sonnet-4-20250514",
   "temperature": 0.7,
-  "system": "You are an expert content writer. Write a blog post on the given topic. If evaluation_feedback is provided, this is a revision — incorporate all the feedback to improve the draft."
+  "system": "Write a blog post. If evaluation_feedback is present in the context, this is a revision loop — incorporate all feedback to improve the draft."
 }
 ```
 
-## Iteration tracking
+### 3. The Routing Logic
+The magic happens in the graph edges. You simply route back to the generator if the score is too low:
 
-The `iteration_count` in `WorkflowState` increments on every node execution. Combined with `max_iterations` on the graph, this is your safety limit against infinite loops.
+```yaml
+# Edge: Evaluator → Generator (Loop back)
+condition:
+  type: expression
+  expression: state.memory.quality_score < 0.85
 
-You can also check `visited_nodes` to see how many times the generator was invoked:
-
-```typescript
-const generatorRuns = finalState.visited_nodes.filter(n => n === 'generator').length;
+# Edge: Evaluator → Done (Success)
+condition:
+  type: expression
+  expression: state.memory.quality_score >= 0.85
 ```
 
-## When to use this pattern
+## Core concepts
 
-Self-Annealing is best for:
-- **Content refinement** — writing, editing, translation
-- **Code review loops** — write, review, fix, review again
-- **Data validation** — extract, validate, re-extract if invalid
-- **Any task where one output needs to meet a quality bar**
-
-If you need to explore multiple approaches simultaneously, use [Evolution](/patterns/evolution/) instead.
+### Breaking infinite loops
+Because LLMs can get stuck failing to fix a problem, the Self-Annealing loop needs a safety valve. The `iteration_count` in the workflow's state increments on every node execution. Combined with a `max_iterations` limit on the graph definition, you ensure that the graph will eventually halt and throw an error if the agent simply cannot meet the threshold, preventing runaway API costs.

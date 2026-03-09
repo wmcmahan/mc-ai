@@ -3,103 +3,67 @@ title: Map-Reduce
 description: Process large datasets by mapping work across parallel agents and reducing results.
 ---
 
-The Map-Reduce pattern processes a collection of items by distributing work across parallel worker nodes and then aggregating the results with a synthesizer node.
+The **Map-Reduce** pattern is built for scale. It processes a massive collection of items by distributing the workload across a fleet of parallel worker nodes, and then aggregates their individual results with a final synthesizer node.
+
+This cleanly bypasses the context window limits and slow latency of trying to process large lists sequentially.
 
 ## How it works
 
-```
-Input: [item1, item2, item3, ..., itemN]
-         ↓         ↓         ↓
-      Map(1)    Map(2)    Map(3)      (parallel)
-         ↓         ↓         ↓
-                Reduce                (aggregation)
-                   ↓
-                Output
-```
+```mermaid
+flowchart TB
+    Input["Input: items[]"] --> Split{Fan Out}
 
-## Configuration
+    Split --> W1["Map Worker 1"]
+    Split --> W2["Map Worker 2"]
+    Split --> W3["Map Worker 3"]
+    Split --> WN["Map Worker N"]
 
-```typescript
-{
-  id: 'process',
-  type: 'map',
-  map_reduce_config: {
-    worker_node_id: 'analyzer',          // Node ID to fan out to for each item
-    items_path: 'documents',             // Memory key holding the array to map over
-    synthesizer_node_id: 'summarizer',   // Node to pass collected results to (optional)
-    error_strategy: 'best_effort',       // 'fail_fast' | 'best_effort'
-    max_concurrency: 5,                  // Max parallel worker executions
-  },
-  read_keys: ['documents'],
-  write_keys: ['analysis_results'],
-  failure_policy: { max_retries: 2 },
-}
+    W1 --> Reduce
+    W2 --> Reduce
+    W3 --> Reduce
+    WN --> Reduce
+
+    Reduce["Synthesizer (Reduce)"] --> Output(["Output"])
 ```
 
-## Example: Document analysis pipeline
-
-```typescript
-// Initial state
-const initialState = {
-  goal: 'Analyze quarterly reports',
-  memory: {
-    documents: [
-      { id: 'q1', content: 'Q1 2025 earnings...' },
-      { id: 'q2', content: 'Q2 2025 earnings...' },
-      { id: 'q3', content: 'Q3 2025 earnings...' },
-      { id: 'q4', content: 'Q4 2025 earnings...' },
-    ],
-  },
-};
-
-// Each document is processed by analyzer-agent in parallel
-// Results are collected and passed to summarizer-agent
-// Final output: analysis_results = { summary: '...', trends: [...] }
-```
-
-## The worker agent
-
-The worker node receives a single item from the collection in `_map_item`:
-
-```json
-{
-  "id": "analyzer-agent",
-  "model": "claude-haiku-4-5-20251001",
-  "system": "Analyze the document in _map_item. Extract key metrics, sentiment, and notable events. Return structured JSON."
-}
-```
-
-Using a faster, cheaper model (like Haiku) for map workers is often the right call — they're doing focused, parallel work, not complex reasoning.
-
-## The synthesizer node
-
-The synthesizer node receives the full array of worker outputs in `_map_results`:
-
-```json
-{
-  "id": "summarizer-agent",
-  "model": "claude-sonnet-4-20250514",
-  "system": "You receive an array of document analyses in _map_results. Synthesize them into a comprehensive summary identifying overall trends, anomalies, and key takeaways."
-}
-```
-
-The synthesizer can be any node type — a `synthesizer` node (LLM aggregation) or even a `supervisor` for complex post-processing.
-
-## Concurrency and rate limits
-
-`max_concurrency` controls how many map workers run simultaneously. Set this based on:
-- Your LLM provider's rate limits
-- The size of your items
-- How much parallelism your infrastructure supports
-
-With `error_strategy: 'best_effort'`, failed map executions are skipped and the reduce agent receives results from the successful ones. Use this when partial results are acceptable.
+1. **Input**: A list of data items (documents, URLs, user records) is present in the workflow's state memory.
+2. **Fan Out (Map)**: The orchestrator launches a parallel worker agent for *each* item in the array simultaneously. Each worker receives just a single item injected into its scope as `_map_item`.
+3. **Wait**: The map node halts workflow progression until every single parallel task has either completed or timed out.
+4. **Aggregation (Reduce)**: All the outputs are collected into an array and fed into the `_map_results` state memory of a Synthesizer node. The Synthesizer merges the fragments into a final, cohesive output.
 
 ## When to use this pattern
 
-Use Map-Reduce when:
-- You have a collection of independent items to process (documents, URLs, records)
-- Processing can be parallelized without dependencies between items
-- You need to aggregate individual results into a summary
-- The dataset is too large for a single agent's context window
+- **Batch Document Analysis**: Analyzing a folder of 100 separate PDFs (e.g., quarterly earnings reports) and generating an overall sentiment summary.
+- **Large Dataset Extraction**: Parsing a massive structured dataset piece by piece before an LLM synthesizes a conclusive finding.
+- **Embarrassingly Parallel Tasks**: When a dataset can be cleanly divided into independent units of work with no dependencies between items.
 
-For ordered, sequential processing, use a linear pipeline instead.
+## Configuration
+
+Add a `map` node to your graph definition. You point it at the state memory key containing your array, the agent that will process each item, and the agent that will synthesize the results.
+
+```yaml
+id: process_documents
+type: map
+map_reduce_config:
+  items_path: raw_reports
+  worker_node_id: fast_analyzer
+  synthesizer_node_id: deep_summarizer
+  max_concurrency: 5
+  error_strategy: best_effort
+read_keys: [raw_reports]
+write_keys: [final_summary]
+```
+
+| Setting | Purpose |
+|---------|---------|
+| `items_path` | The specific state memory key containing the array to map over. |
+| `max_concurrency` | How many map workers run simultaneously. Important for respecting your LLM provider's rate limits (e.g., max concurrent requests). |
+| `error_strategy` | When set to `best_effort`, if 2 out of 100 documents fail to process, the synthesizer still receives the 98 successful results rather than failing the entire workflow. |
+
+## Core concepts
+
+### Model Cost Efficiency
+Optimizing Map-Reduce requires pairing the right LLM tier with the right node.
+
+- **The Worker (Map)**: Because you are fanning out potentially hundreds of tasks simultaneously, the map worker should use the fastest, cheapest model available (e.g., Claude 3.5 Haiku or GPT-4o-mini). These agents are doing focused, narrow work—complex reasoning is rarely required.
+- **The Synthesizer (Reduce)**: The node receiving the array of outputs *does* require heavy reasoning to deduplicate and find patterns across the fragments. This agent should utilize a frontier reasoning model (e.g., Claude 3.5 Sonnet or GPT-4o).

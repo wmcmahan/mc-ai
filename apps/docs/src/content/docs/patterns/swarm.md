@@ -3,125 +3,60 @@ title: Swarm
 description: Parallel fan-out with synthesis — divide work across multiple agents and merge the results.
 ---
 
-The Swarm pattern divides a task across multiple agents running in parallel, then synthesizes their outputs into a single coherent result. This is useful when a task is too large for a single context window, or when multiple independent perspectives improve quality.
+The **Swarm** pattern divides a complex task across multiple, specialized agents running simultaneously in parallel, before synthesizing their disparate outputs into a single, cohesive final result.
+
+This is highly effective when tasks are too large for a single context window, or when attacking a problem from multiple independent perspectives yields a better outcome than a single sequential approach.
 
 ## How it works
 
-```
-Orchestrator → [Worker A, Worker B, Worker C] (parallel) → Synthesizer → Output
-```
-
-1. An orchestrator agent (or static config) determines the subtasks
-2. Worker agents run in parallel, each tackling a different slice
-3. A Synthesizer agent reads all outputs and merges them intelligently
-
-## Graph definition
-
-```typescript
-const swarmGraph: Graph = {
-  id: 'market-research-v1',
-  nodes: [
-    {
-      id: 'orchestrator',
-      type: 'agent',
-      agent_id: 'planner-agent',
-      read_keys: ['topic'],
-      write_keys: ['subtask_a', 'subtask_b', 'subtask_c'],
-      failure_policy: { max_retries: 2 },
-    },
-    {
-      id: 'researcher_a',
-      type: 'agent',
-      agent_id: 'research-agent',
-      read_keys: ['subtask_a'],
-      write_keys: ['result_a'],
-      failure_policy: { max_retries: 3 },
-    },
-    {
-      id: 'researcher_b',
-      type: 'agent',
-      agent_id: 'research-agent',
-      read_keys: ['subtask_b'],
-      write_keys: ['result_b'],
-      failure_policy: { max_retries: 3 },
-    },
-    {
-      id: 'researcher_c',
-      type: 'agent',
-      agent_id: 'research-agent',
-      read_keys: ['subtask_c'],
-      write_keys: ['result_c'],
-      failure_policy: { max_retries: 3 },
-    },
-    {
-      id: 'synthesizer',
-      type: 'synthesizer',
-      agent_id: 'merge-agent',
-      read_keys: ['result_a', 'result_b', 'result_c'],
-      write_keys: ['final_report'],
-      failure_policy: { max_retries: 1 },
-    },
-  ],
-  edges: [
-    // Orchestrator fans out to all workers in parallel
-    { id: 'e1', source: 'orchestrator', target: 'researcher_a', condition: { type: 'always' } },
-    { id: 'e2', source: 'orchestrator', target: 'researcher_b', condition: { type: 'always' } },
-    { id: 'e3', source: 'orchestrator', target: 'researcher_c', condition: { type: 'always' } },
-    // Workers converge on synthesizer (synthesizer waits for all)
-    { id: 'e4', source: 'researcher_a', target: 'synthesizer', condition: { type: 'always' } },
-    { id: 'e5', source: 'researcher_b', target: 'synthesizer', condition: { type: 'always' } },
-    { id: 'e6', source: 'researcher_c', target: 'synthesizer', condition: { type: 'always' } },
-  ],
-  start_node: 'orchestrator',
-  end_nodes: ['synthesizer'],
-};
+```mermaid
+flowchart TB
+    Orch["Orchestrator"] --> A["Worker A"]
+    Orch --> B["Worker B"]
+    Orch --> C["Worker C"]
+    A --> Synth["Synthesizer"]
+    B --> Synth
+    C --> Synth
+    Synth --> Output(["Output"])
 ```
 
-## The synthesizer
-
-The synthesizer node reads all parallel outputs and produces a unified result. Unlike a simple concatenation, an LLM-powered synthesizer can:
-- Deduplicate overlapping findings
-- Resolve conflicting information
-- Weight sources by credibility
-- Produce a coherent narrative from fragments
-
-```json
-{
-  "id": "merge-agent",
-  "model": "claude-sonnet-4-20250514",
-  "temperature": 0.3,
-  "system": "You are an expert analyst. Given multiple research reports on different aspects of a topic, synthesize them into a single comprehensive report. Identify themes, resolve contradictions, and produce a coherent narrative."
-}
-```
-
-## Peer delegation
-
-In a Swarm, worker agents can delegate to peers via `_peer_delegation` in their output. This allows dynamic task redistribution without a central orchestrator:
-
-```typescript
-// A worker agent's output can include:
-{
-  type: 'set_memory',
-  payload: {
-    result_a: 'My findings...',
-    _peer_delegation: {
-      target: 'researcher_b',
-      instruction: 'Also look into the regulatory landscape — I found a relevant angle.',
-    },
-  },
-}
-```
-
-## Static vs. dynamic fan-out
-
-The example above uses a **static** fan-out — three fixed workers. For a **dynamic** fan-out based on input, use a Supervisor that decides how many workers to spawn and what each should work on.
+1. **Orchestration**: A lead agent (or simply static static routing configuration) analyzes the goal and divides the work into distinct sub-tasks.
+2. **Parallel Execution**: Multiple worker agents spin up simultaneously. Worker A investigates topic X, Worker B investigates topic Y, and Worker C investigates topic Z.
+3. **Synthesis**: The graph converges on a single Synthesizer node. It waits until all prerequisite workers have completed, then an LLM reads all the parallel outputs and weaves them together into a unified format.
 
 ## When to use this pattern
 
-Use Swarm when:
-- A task can be meaningfully divided into independent subtasks
-- Parallel execution would significantly reduce wall-clock time
-- Multiple perspectives or sources are needed (e.g., researching competitors, analyzing different documents)
-- A single agent's context window isn't large enough for the full task
+- **Comprehensive coverage**: When researching a topic where multiple perspectives or sources are critical (e.g., pulling reports from three different competitors simultaneously).
+- **Latency reduction**: When a task can be cleanly divided into independent sub-tasks, parallel execution dramatically lowers the total wall-clock time compared to sequential processing.
+- **Context management**: When analyzing a dataset that exceeds the context token limits of an LLM.
 
-Use a linear pipeline when tasks are sequential and each depends on the previous output.
+*(Note: If you are processing a massive list of identical items, like mapping over hundreds of DB records, the [Map-Reduce](/patterns/map-reduce/) pattern is more appropriate.)*
+
+## Configuration
+
+Setting up a Swarm involves a few architectural components. First, the fan-out from the orchestrator to the workers. Next, the synthesizer node that merges the outputs.
+
+```yaml
+id: synthesizer
+type: synthesizer
+agent_id: merge-agent
+read_keys: 
+  - result_a
+  - result_b
+  - result_c
+write_keys: 
+  - final_report
+```
+
+In your graph edges definition, you simply point all the parallel workers at the `synthesizer` node. The orchestrator engine automatically handles the dependency resolution: the synthesizer will not fire until every single upstream node targeting it has finished its execution.
+
+## Core concepts
+
+### The Synthesizer's Role
+The synthesizer node goes beyond simply concatenating text. Because it is powered by an LLM, its true value lies in intelligent aggregation:
+- **Deduplication**: Removing overlapping findings discovered independently by multiple workers.
+- **Conflict Resolution**: Identifying contradictions between workers and either resolving them or surfacing the discrepancy explicitly.
+- **Formatting**: Stitching fragmented research notes into a cohesive, fluid narrative or standardized JSON output.
+
+### Peer Delegation
+While swarms are often managed top-down, worker agents in a swarm can dynamically delegate to peers by including `_peer_delegation` commands in their output payloads. This enables horizontal task redistribution on the fly without requiring a central orchestrator to intervene.

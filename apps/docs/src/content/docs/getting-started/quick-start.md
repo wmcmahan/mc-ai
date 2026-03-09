@@ -1,41 +1,41 @@
 ---
 title: Quick Start
-description: Run your first MC-AI workflow in under 5 minutes.
+description: Install MC-AI and run your first workflow in under 5 minutes.
 ---
 
-The fastest way to see the engine in action is to run a built-in example. This requires Node.js 22+ and an Anthropic API key.
+Let's install MC-AI, set up an LLM provider, and run a complete workflow with persistence.
 
-## Run an example
+## 1. Installation
 
-```bash
-git clone https://gitlab.com/wmcmahan/mc-ai.git
-cd mc-ai
-npm install
-cd packages/orchestrator
+MC-AI requires **Node.js 22+** (ES Modules).
 
-# Run a 2-node linear workflow: Researcher → Writer
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/research-and-write/research-and-write.ts
-```
-
-To use OpenAI instead, change `provider` to `'openai'`, update the `model` field (e.g. `'gpt-4o'`), and set `OPENAI_API_KEY`.
-
-## More examples
+Install the core orchestrator package, and optionally the postgres persistence package if you want durable database storage:
 
 ```bash
-# Supervisor routing between specialists
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/supervisor-routing/supervisor-routing.ts
+npm install @mcai/orchestrator
 
-# Map-Reduce fan-out with parallel workers
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/map-reduce/map-reduce.ts
-
-# Human-in-the-loop approval gate
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loop.ts
-
-# Real-time event streaming
-ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/streaming/streaming.ts
+# Optional PostgreSQL persistence adapter
+npm install @mcai/orchestrator-postgres
 ```
 
-## Minimal code
+Since MC-AI uses the Vercel AI SDK under the hood, ensure you have the required provider installed for your LLM of choice (e.g., `@ai-sdk/anthropic` or `@ai-sdk/openai`).
+
+## 2. API Keys
+
+You will need an API key for your chosen LLM provider. For this quick start, we'll use Anthropic.
+
+Set your environment variable:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+## 3. Minimal Workflow Example
+
+Here is a complete, standalone example of a simple generative workflow. 
+
+This script configures the provider, creates an Agent that writes a draft and saves it to a specific memory key, sets up the graph definition, and runs it with an in-memory persistence layer.
+
+Create a file named `workflow.ts`:
 
 ```typescript
 import { v4 as uuidv4 } from 'uuid';
@@ -51,64 +51,113 @@ import {
   type WorkflowState,
 } from '@mcai/orchestrator';
 
-// 1. Register an agent (agents are config, not classes)
-const registry = new InMemoryAgentRegistry();
-const agentId = uuidv4();
-registry.register({
-  id: agentId,
-  name: 'Writer',
-  model: 'claude-sonnet-4-20250514',
-  provider: 'anthropic',
-  system_prompt: 'Write a summary. Save it with save_to_memory key "draft".',
-  temperature: 0.7,
-  max_steps: 3,
-  tools: [],
-  permissions: { read_keys: ['goal'], write_keys: ['draft'] },
-});
-configureAgentFactory(registry);
+async function main() {
+  // 1. Configure LLM Providers
+  const providers = new ProviderRegistry();
+  registerBuiltInProviders(providers);
+  configureProviderRegistry(providers);
 
-// 2. Configure LLM providers (OpenAI + Anthropic are built-in)
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
-configureProviderRegistry(providers);
+  // 2. Register an Agent Configuration
+  const registry = new InMemoryAgentRegistry();
+  const agentId = uuidv4();
+  
+  registry.register({
+    id: agentId,
+    name: 'Research Writer',
+    model: 'claude-sonnet-4-20250514', // Ensure this matches your provider
+    provider: 'anthropic',
+    system_prompt: 'You are an expert technical writer. Write a concise summary of the goal. Save it with the save_to_memory tool using the key "draft".',
+    temperature: 0.7,
+    max_steps: 3,
+    tools: [],
+    // Security definitions: This agent can only read 'goal' and write to 'draft'
+    permissions: { read_keys: ['goal'], write_keys: ['draft'] },
+  });
+  configureAgentFactory(registry);
 
-// 3. Define a graph
-const graph: Graph = {
-  id: uuidv4(),
-  name: 'Simple',
-  version: '1.0.0',
-  nodes: [{
-    id: 'write', type: 'agent', agent_id: agentId,
-    read_keys: ['goal'], write_keys: ['draft'],
-  }],
-  edges: [],
-  start_node: 'write',
-  end_nodes: ['write'],
-  created_at: new Date(),
-  updated_at: new Date(),
-};
+  // 3. Define the Graph
+  const graph: Graph = {
+    id: uuidv4(),
+    name: 'Simple Writer Workflow',
+    version: '1.0.0',
+    nodes: [
+      {
+        id: 'write_node', 
+        type: 'agent', 
+        agent_id: agentId,
+        read_keys: ['goal'], 
+        write_keys: ['draft'],
+      }
+    ],
+    edges: [], // Blank edges means it simply executes the start node and finishes
+    start_node: 'write_node',
+    end_nodes: ['write_node'],
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-// 4. Run
-const state: WorkflowState = {
-  workflow_id: graph.id, run_id: uuidv4(),
-  goal: 'Explain how transformers work',
-  status: 'pending', memory: {}, visited_nodes: [],
-  iteration_count: 0, retry_count: 0, max_retries: 3,
-  max_iterations: 50, max_execution_time_ms: 120_000,
-  compensation_stack: [],
-  created_at: new Date(), updated_at: new Date(),
-};
+  // 4. Initialize the Workflow State
+  const state: WorkflowState = {
+    workflow_id: graph.id,
+    run_id: uuidv4(),
+    goal: 'Explain how transformers work in AI.',
+    status: 'pending',
+    memory: {},
+    visited_nodes: [],
+    iteration_count: 0,
+    retry_count: 0,
+    max_retries: 3,
+    max_iterations: 10,
+    max_execution_time_ms: 60_000,
+    compensation_stack: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
 
-const persistence = new InMemoryPersistenceProvider();
+  // 5. Setup Persistence and Run
+  const persistence = new InMemoryPersistenceProvider();
+  const runner = new GraphRunner(graph, state, {
+    // This hook fires after every single state change
+    persistStateFn: async (s) => { 
+      await persistence.saveWorkflowState(s); 
+      console.log(`[State Persisted] Status: ${s.status}, Node: ${s.visited_nodes.slice(-1)[0]}`);
+    },
+  });
+
+  console.log("Starting workflow...");
+  const result = await runner.run();
+  
+  console.log("\n--- Final Output ---");
+  console.log(result.memory.draft);
+}
+
+main().catch(console.error);
+```
+
+## Adding Durable Persistence (PostgreSQL)
+
+While `InMemoryPersistenceProvider` is great for scripts, production environments require durability so workflows can be paused and resumed across server restarts.
+
+If you installed `@mcai/orchestrator-postgres`, you can replace the in-memory provider with a Postgres-backed persistence layer. It automatically handles persisting the state and maintaining the event sourcing logs for durable execution and rollbacks.
+
+```typescript
+import { PostgresPersistenceProvider } from '@mcai/orchestrator-postgres';
+
+// Ensure your database string is configured
+const dbUrl = process.env.DATABASE_URL || 'postgres://user:pass@localhost:5432/mcai';
+
+// Initialize the provider
+const persistence = new PostgresPersistenceProvider(dbUrl);
+
+// Hook it into the runner exactly like before
 const runner = new GraphRunner(graph, state, {
   persistStateFn: async (s) => { await persistence.saveWorkflowState(s); },
+  // Provide the event log writer for durable replay capabilities
+  eventLog: persistence.getEventLogWriter(), 
 });
-
-const result = await runner.run();
-console.log(result.memory.draft);
 ```
 
 ## Next steps
 
-- [How MC-AI Works](/concepts/overview/) — understand the core architecture
-- [Your First Workflow](/guides/first-workflow/) — build a workflow step-by-step
+- [Core Concepts](/concepts/overview/) — deep dive into how Graphs, Nodes, and Reducers work.
+- [Workflow Patterns](/patterns/supervisor/) — see examples of powerful multi-agent patterns you can build.

@@ -3,117 +3,91 @@ title: Evolution (DGM)
 description: Population-based selection — run N candidates in parallel, score them, and breed the next generation.
 ---
 
-The Evolution pattern runs multiple candidate solutions in parallel, scores each with a fitness evaluator, selects the best, and breeds the next generation using the winner's output as context. This continues until a fitness threshold is met or a stopping condition is reached.
+The **Evolution** pattern—inspired by Darwin Godel Machines—runs multiple candidate solutions in parallel, scores each with a fitness evaluator, selects the best, and "breeds" the next generation using the winner's output as context. 
 
-Inspired by **Darwin Godel Machines** — the LLM acts as the mutation operator. Give it the winning parent as context plus a temperature, and its stochastic creativity produces variation.
+This process continues across multiple generations until a specific fitness threshold is met or a stagnation condition is reached. Here, the LLM acts as the mutation operator: by supplying the winning parent as context alongside a calculated temperature, its stochastic creativity produces deliberate variation.
 
 ## How it works
 
-```
-Generation 0: [A, B, C, D, E] → Evaluate → Winner: C (0.72)
-Generation 1: [A', B', C', D', E'] (with C as parent) → Evaluate → Winner: C' (0.85)
-Generation 2: [A'', B'', C'', D'', E''] (with C' as parent) → Evaluate → Winner: D'' (0.91) ✓
+```mermaid
+flowchart TB
+    Start([Start]) --> G0
+
+    subgraph G0["Generation 0"]
+        direction LR
+        A0["Candidate A"] ~~~ B0["Candidate B"] ~~~ C0["Candidate C"]
+    end
+
+    G0 --> Eval0["Evaluate All → Winner (0.72)"]
+    Eval0 --> G1
+
+    subgraph G1["Generation 1"]
+        direction LR
+        A1["Candidate A'"] ~~~ B1["Candidate B'"] ~~~ C1["Candidate C'"]
+    end
+
+    G1 --> Eval1["Evaluate All → Winner (0.85)"]
+    Eval1 --> G2
+
+    subgraph G2["Generation 2"]
+        direction LR
+        A2["Candidate A''"] ~~~ B2["Candidate B''"] ~~~ C2["Candidate C''"]
+    end
+
+    G2 --> Eval2["Evaluate All → Winner (0.91) ✓ Done"]
+    Eval2 --> Done([Done])
 ```
 
-Each generation:
-1. N candidates run in parallel (fan-out)
-2. Each candidate receives the previous generation's winner as `_evolution_parent`
-3. The fitness evaluator scores each candidate 0–1
-4. The best candidate becomes the parent for the next generation
-5. Temperature decreases linearly (exploration → exploitation)
-6. Stops when fitness threshold is met, stagnation is detected, or max generations reached
+Each generation follows a strict loop:
+1. N candidates run in parallel (fan-out).
+2. Each candidate receives the previous generation's winner injected into its prompt.
+3. A fitness evaluator agent scores each candidate on a 0–1 scale.
+4. The highest-scoring candidate becomes the parent for the next generation.
+5. Temperature decreases linearly (moving from broad exploration to focused exploitation).
+6. Execution halts when the fitness threshold is met, stagnation is detected, or max generations are reached.
+
+## When to use this pattern
+
+- **Creative problem solving**: When there are many wildly different valid approaches and you want to explore the landscape simultaneously.
+- **Prompt optimization**: Allowing an LLM to rewrite its own prompt instructions iteratively to find the highest-performing variant.
+- **Out-of-the-box solutions**: Finding non-obvious solutions where a single, sequential self-annealing agent might get stuck in a local maximum.
+
+*(Note: Evolution is resource intensive. If you only need to iteratively refine a single output until it hits a quality bar, use [Self-Annealing](/patterns/self-annealing/) instead.)*
 
 ## Configuration
 
-```typescript
-{
-  id: 'evolve',
-  type: 'evolution',
-  evolution_config: {
-    candidate_agent_id: 'writer-agent',     // Generates candidate solutions
-    evaluator_agent_id: 'critic-agent',     // Scores each candidate 0–1
-    population_size: 5,                     // Candidates per generation
-    max_generations: 10,                    // Hard stop
-    fitness_threshold: 0.9,                 // Early exit when score >= this
-    stagnation_generations: 3,              // Stop if no improvement for N gens
-    selection_strategy: 'rank',             // 'rank' | 'tournament' | 'roulette'
-    elite_count: 1,                         // Top N preserved unchanged
-    initial_temperature: 1.0,              // Diversity at start
-    final_temperature: 0.3,                // Focus at end
-    evaluation_criteria: 'Score based on accuracy, clarity, and citation quality.',
-  },
-  read_keys: ['*'],
-  write_keys: ['*'],
-  failure_policy: { max_retries: 1 },
-  error_strategy: 'best_effort',           // Continue if some candidates fail
-}
+The pattern requires you to pair a "candidate" generator agent with an "evaluator" agent.
+
+```yaml
+id: evolve
+type: evolution
+evolution_config:
+  candidate_agent_id: writer-agent
+  evaluator_agent_id: critic-agent
+  population_size: 5
+  max_generations: 10
+  fitness_threshold: 0.9
+  stagnation_generations: 3
+  selection_strategy: rank
+  initial_temperature: 1.0
+  final_temperature: 0.3
+read_keys: ['*']
+write_keys: ['*']
 ```
 
-## Selection strategies
+| Setting | Purpose |
+|---------|---------|
+| `population_size` | How many parallel paths are explored in each generation. |
+| `selection_strategy` | Determines how the parent is chosen: `rank` (always the highest score), `tournament` (random subset compete), or `roulette` (probabilistic selection). |
+| `stagnation_generations` | Failsafe to exit the loop early if the top score hasn't improved for N generations. |
 
-| Strategy | Behavior |
-|----------|---------|
-| `rank` | Best candidate becomes the parent. Simple, effective. |
-| `tournament` | Random subset compete; the winner becomes the parent. Maintains diversity. |
-| `roulette` | Probabilistic selection weighted by fitness. Good for exploring fitness landscape. |
+## Core concepts
 
-## Context injected into candidates
+### Prompt Context Injection
+Each candidate receives the previous generation's winner automatically in its state view. Your candidate agent's system prompt should explicitly reference these variables:
 
-Each candidate receives these keys automatically in its state view:
+> "If `_evolution_parent` is provided, use it as a starting point. The parent scored `_evolution_parent_fitness`—aim to do better. Current generation: `_evolution_generation`."
 
-| Key | Value |
-|-----|-------|
-| `_evolution_generation` | Current generation number (0-indexed) |
-| `_evolution_candidate_index` | This candidate's index within the generation |
-| `_evolution_population_size` | Total candidates per generation |
-| `_evolution_parent` | Winning output from the previous generation (from gen 1+) |
-| `_evolution_parent_fitness` | Parent's fitness score (from gen 1+) |
-
-The candidate agent's system prompt should reference these:
-
-```
-You are a content writer. Write a blog post on the given topic.
-
-If _evolution_parent is provided, use it as a starting point and improve on it.
-The parent scored {_evolution_parent_fitness} — aim to do better.
-Current generation: {_evolution_generation} of 10.
-```
-
-## Reading results
-
-```typescript
-const finalState = await runner.run();
-
-// The best candidate's output
-console.log(finalState.memory['evolve_winner']);
-
-// Its fitness score (0–1)
-console.log(finalState.memory['evolve_winner_fitness']);
-
-// Evaluator's reasoning
-console.log(finalState.memory['evolve_winner_reasoning']);
-
-// Generations completed
-console.log(finalState.memory['evolve_generation']);
-
-// Score progression across generations
-console.log(finalState.memory['evolve_fitness_history']);
-// → [0.72, 0.85, 0.91]
-```
-
-## Evolution vs. Self-Annealing
-
-| | Evolution | Self-Annealing |
-|-|-----------|----------------|
-| **Candidates per iteration** | N (population) | 1 |
-| **Parallelism** | Yes — fan-out | No — sequential |
-| **Best for** | Creative tasks, multi-approach problems, prompt optimization | Iterative refinement of a single output |
-| **Cost** | Higher (N agents + N evaluations per gen) | Lower (1 agent + 1 evaluation per iter) |
-
-Use Evolution when there are many valid approaches and you want to explore them. Use [Self-Annealing](/patterns/self-annealing/) when you have a single output that needs iterative improvement.
-
-## Cost considerations
-
-With `population_size: 5` and `max_generations: 10`, you could run up to 50 candidate executions plus 50 evaluations. Set `fitness_threshold` conservatively so the loop exits early when a good solution is found.
-
-Use `error_strategy: 'best_effort'` to continue if some candidates fail — useful when external API rate limits cause occasional failures.
+### Cost Considerations
+Evolution executes a massive amount of LLM calls. With a population size of 5 and max generations of 10, you are triggering up to 50 candidate executions plus 50 evaluations. 
+You can use `error_strategy: 'best_effort'` to gracefully handle occasional downstream API timeouts without failing the entire generation. Always set a conservative `fitness_threshold` so the loop exits as early as possible.

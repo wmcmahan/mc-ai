@@ -3,61 +3,69 @@ title: Introduction
 description: What MC-AI is, why it exists, and how it differs from other orchestration frameworks.
 ---
 
-MC-AI is an **agentic orchestration engine** built on a Cyclic State Graph architecture. It enables complex, multi-step AI workflows with patterns including Supervisors, Evolution (DGM), Self-Annealing loops, Swarms, Human-in-the-Loop, and Map-Reduce.
+MC-AI is an **agentic orchestration engine** built on a Cyclic State Graph architecture. It empowers you to build complex, fault-tolerant, multi-step AI workflows reliably in production.
 
-## What makes MC-AI different
+## Why use MC-AI?
 
-Most AI orchestration frameworks model workflows as linear chains or strict DAGs — agent A calls agent B, which calls agent C. This works for simple pipelines, but breaks down when you need:
+Most AI orchestration frameworks model workflows as linear chains or strict DAGs (Directed Acyclic Graphs) — agent A calls agent B, which calls agent C. This works well for simple pipelines, but falls apart when you need:
 
-- An agent to **loop back** and self-correct based on feedback
-- A supervisor to **dynamically route** work without a predetermined path
-- Multiple candidate solutions to **evolve in parallel** across generations
-- A workflow to **pause for human review** and resume hours later
+- An agent to **loop back** and try again based on validation feedback.
+- A supervisor to **dynamically route** work based on real-time findings.
+- Multiple candidates to **evolve in parallel** across generations to find the absolute best solution.
+- A workflow to **pause for human review**, and resume safely hours later without context loss.
 
-MC-AI is built around a **Cyclic State Graph** — a graph where nodes can loop, revisit previous nodes, and make runtime decisions based on shared state. This enables patterns that are difficult or impossible to express in chain-based systems.
+MC-AI solves this by using a **Cyclic State Graph**. Nodes in the graph can loop, revisit previous nodes, and make runtime routing decisions by examining a shared state blackboard.
 
 ## Core mental model
 
-Everything in MC-AI revolves around four concepts:
+Everything in MC-AI revolves around four core concepts:
 
 | Concept | What it is |
 |---------|-----------| 
-| **Graph** | The workflow definition — a set of nodes connected by edges |
-| **Node** | A unit of work: an Agent, a Tool, a Supervisor, or a Subgraph |
-| **State** | A shared blackboard that all nodes read from and write to |
-| **Reducer** | A pure function `(State, Action) → NewState` — the only way state changes |
+| **Graph** | Your workflow definition — a set of nodes connected by edges. |
+| **Node** | A unit of work: an Agent, an MCP Tool, a Supervisor, or a Subgraph. |
+| **State** | A shared blackboard. All nodes read from and write to this state. |
+| **Reducer** | A pure function that takes the current state and an action, and returns the new state. |
 
-Agents never communicate directly with each other. They read from the shared state, do work, and emit actions. Reducers apply those actions to produce a new state. This design eliminates race conditions and makes every state transition auditable.
-
-## What MC-AI is not
-
-- **Not a chatbot framework** — MC-AI is a workflow engine, not a conversational AI system
-- **Not a simple chain library** — it supports complex routing, cycles, and parallel execution
-- **Not a low-code tool** — workflows are defined in TypeScript with full type safety
+Agents never talk directly to each other. They read from the shared state, do their work, and emit actions. Reducers apply those actions to produce a new state. This guarantees that **every state transition is auditable**, eliminates race conditions in swarms, and enables features like time-travel debugging and workflow rollbacks.
 
 ## Architecture overview
 
-```
-GraphRunner.run() / GraphRunner.stream()
-        │
-        ├─── Evaluate Start Node
-        │
-        ├─── Execute Node ──┬── Agent Node ──── LLM + Tools
-        │                   ├── Supervisor ──── Route Decision
-        │                   ├── Map Node ────── Parallel Fan-Out
-        │                   └── Subgraph ────── Nested Graph
-        │
-        ├─── Apply Reducer → New State → Persist
-        │
-        ├─── Evaluate Edge Conditions → Next Node
-        │
-        └─── Repeat until end_node or __done__
+Here is how the underlying `GraphRunner` executes your workflows:
+
+```mermaid
+flowchart TB
+    Start(["run() / stream()"]) --> EvalStart["Evaluate Start Node"]
+    EvalStart --> ExecNode{"Execute Node"}
+    
+    ExecNode -->|Agent Node| LLM["LLM + Tools"]
+    ExecNode -->|Supervisor| Route["Route Decision"]
+    ExecNode -->|Map Node| Parallel["Parallel Fan-Out"]
+    ExecNode -->|Subgraph| Nested["Nested Graph"]
+    
+    LLM --> Reduce["Apply Reducer → Update State"]
+    Route --> Reduce
+    Parallel --> Reduce
+    Nested --> Reduce
+    
+    Reduce --> Persist["Persist Event/Checkpoint"]
+    Persist --> EvalEdges["Evaluate Edge Conditions"]
+    
+    EvalEdges --> Loop{"Is End Node?"}
+    
+    Loop -->|"No"| ExecNode
+    Loop -->|"Yes"| Done(["__done__"])
 ```
 
-The `GraphRunner` is a library — embed it directly in your application. For background processing, pair it with any job queue (BullMQ, SQS, etc.).
+Because the `GraphRunner` is a lightweight TypeScript library, there's no heavy control plane to spin up. You can embed it directly in your Fastify/Express server, execute it in a background queue like BullMQ, or run it in a serverless function.
+
+## What MC-AI is not
+
+- **Not a chatbot UI builder** — MC-AI is a backend workflow engine.
+- **Not a low-code tool** — Workflows are defined in TypeScript with full type safety, not a drag-and-drop builder.
+- **Not tied to a specific model** — We use the Vercel AI SDK under the hood, so you can use Anthropic, OpenAI, Groq, local models, or any other compatible provider.
 
 ## Next steps
 
-- [Install MC-AI](/getting-started/installation/) and run your first example
-- [Quick Start](/getting-started/quick-start/) — run a workflow in under 5 minutes
-- [Core Concepts](/concepts/overview/) — understand the graph model before diving into code
+- [Quick Start](/getting-started/quick-start/) — install the library and run a workflow in under 5 minutes.
+- [Core Concepts](/concepts/overview/) — dive deeper into the graph model.
