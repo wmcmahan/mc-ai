@@ -51,17 +51,6 @@ vi.mock('../src/utils/tracing', () => ({
   withSpan: (_tracer: any, _name: string, fn: (span: any) => any) => fn({ setAttribute: vi.fn() }),
 }));
 
-// Mock gateway-client for tool adapter tests (vi.importActual below will use this)
-const mockExecuteTool = vi.fn();
-vi.mock('../src/mcp/gateway-client', () => ({
-  mcpClient: {
-    listTools: vi.fn().mockResolvedValue([]),
-    executeTool: (...args: any[]) => mockExecuteTool(...args),
-  },
-  MCPGatewayClient: vi.fn(),
-  createMCPClient: vi.fn(),
-}));
-
 vi.mock('../src/architect/tools', () => ({
   architectToolDefinitions: {},
   executeArchitectTool: vi.fn().mockResolvedValue({ drafted: true }),
@@ -78,25 +67,7 @@ vi.mock('../src/agent/agent-executor/executor', () => ({
   })),
 }));
 
-// Mock the full tool-adapter for GraphRunner tests (returns TaintedToolResult for MCP tools)
-vi.mock('../src/mcp/tool-adapter', () => ({
-  loadAgentTools: vi.fn().mockResolvedValue({}),
-  resolveTools: vi.fn().mockResolvedValue({}),
-  executeToolCall: vi.fn(async (toolName: string, _args: any, agentId?: string) => {
-    if (toolName !== 'save_to_memory' && !toolName.startsWith('architect_')) {
-      return {
-        result: { data: `${toolName} output` },
-        taint: {
-          source: 'mcp_tool' as const,
-          tool_name: toolName,
-          agent_id: agentId,
-          created_at: new Date().toISOString(),
-        },
-      };
-    }
-    return { result: 'plain' };
-  }),
-}));
+// tool-adapter.ts has been removed — tool resolution now goes through MCPConnectionManager
 
 // Supervisor-executor is NOT mocked — we test the real buildSupervisorPrompt logic
 // (it uses the mocked 'ai' generateObject above)
@@ -268,83 +239,10 @@ describe('Taint Utilities', () => {
   });
 });
 
-// ─── Tool Adapter Taint Tests ───────────────────────────────────────────
-// Use vi.importActual to get the REAL tool-adapter (since the module is mocked
-// for GraphRunner tests above). The real tool-adapter's dependencies (gateway-client,
-// architect-tools) are still mocked, which is what we want.
+// Taint wrapping for MCP tools is now tested in connection-manager.test.ts
 
-describe('Tool Adapter — Taint Marking', () => {
-  let realExecuteToolCall: typeof import('../src/mcp/tool-adapter')['executeToolCall'];
-
-  beforeEach(async () => {
-    mockExecuteTool.mockReset();
-    const actual = await vi.importActual<typeof import('../src/mcp/tool-adapter')>('../src/mcp/tool-adapter');
-    realExecuteToolCall = actual.executeToolCall;
-  });
-
-  test('MCP tool calls return TaintedToolResult', async () => {
-    mockExecuteTool.mockResolvedValue({ data: 'search results' });
-
-    const result = await realExecuteToolCall('web_search', { query: 'test' }, 'agent-1');
-
-    expect(result).toHaveProperty('result');
-    expect(result).toHaveProperty('taint');
-
-    const tainted = result as any;
-    expect(tainted.result).toEqual({ data: 'search results' });
-    expect(tainted.taint.source).toBe('mcp_tool');
-    expect(tainted.taint.tool_name).toBe('web_search');
-    expect(tainted.taint.agent_id).toBe('agent-1');
-    expect(tainted.taint.created_at).toBeDefined();
-  });
-
-  test('save_to_memory does NOT return tainted result', async () => {
-    const result = await realExecuteToolCall('save_to_memory', { key: 'foo', value: 'bar' });
-
-    expect(result).toEqual({ key: 'foo', value: 'bar', saved: true });
-    expect(result).not.toHaveProperty('taint');
-  });
-
-  test('architect tools do NOT return tainted result', async () => {
-    const result = await realExecuteToolCall('architect_draft_workflow', { prompt: 'test' });
-
-    expect(result).toEqual({ drafted: true });
-    expect(result).not.toHaveProperty('taint');
-  });
-});
-
-// ─── GraphRunner Tool Node Taint Propagation ────────────────────────────
-
-describe('GraphRunner — Tool Node Taint Propagation', () => {
-  test('tool node stores taint registry in memory after MCP execution', async () => {
-    const graph: Graph = {
-      id: uuidv4(), name: 'Taint Tool', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
-      nodes: [
-        makeNode({ id: 'search-tool', type: 'tool', tool_id: 'web_search', agent_id: 'agent-1' }),
-      ],
-      edges: [],
-      start_node: 'search-tool',
-      end_nodes: ['search-tool'],
-    };
-
-    const persistSpy = vi.fn().mockResolvedValue(undefined);
-    const runner = new GraphRunner(graph, createState(), persistSpy);
-    const final = await runner.run();
-
-    expect(final.status).toBe('completed');
-    expect(final.memory['search-tool_result']).toEqual({ data: 'web_search output' });
-
-    const registry = final.memory['_taint_registry'] as TaintRegistry;
-    expect(registry).toBeDefined();
-    expect(registry['search-tool_result']).toEqual(
-      expect.objectContaining({
-        source: 'mcp_tool',
-        tool_name: 'web_search',
-      }),
-    );
-  });
-});
+// Tool node taint propagation is now tested via connection-manager.test.ts
+// (taint wrapping) and node-executors.test.ts (taint registry updates).
 
 // ─── Supervisor Prompt Taint Warning ────────────────────────────────────
 

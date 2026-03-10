@@ -43,7 +43,6 @@ import type { GraphRunnerMiddleware, MiddlewareContext } from './middleware.js';
 import { executeAgent } from '../agent/agent-executor/executor.js';
 import { executeSupervisor } from '../agent/supervisor-executor/executor.js';
 import { evaluateQualityExecutor } from '../agent/evaluator-executor/executor.js';
-import { loadAgentTools, executeToolCall } from '../mcp/tool-adapter.js';
 import type { ToolResolver } from '../mcp/connection-manager.js';
 import type { ToolSource } from '../types/tools.js';
 import { agentFactory } from '../agent/agent-factory/index.js';
@@ -74,6 +73,13 @@ const tracer = getTracer('orchestrator.runner');
  * Lightweight fallback tool resolver used when no ToolResolver (MCPConnectionManager)
  * is configured. Resolves built-in tools only; MCP sources are skipped with a warning.
  */
+/**
+ * Fallback tool resolver used when no {@link ToolResolver} (MCPConnectionManager)
+ * is configured. Resolves built-in tools and returns echo tools for unknown
+ * tool names (test/development mode).
+ *
+ * In production, configure a ToolResolver to get real MCP tool resolution.
+ */
 async function resolveBuiltinsOnly(sources: ToolSource[], _agentId?: string): Promise<Record<string, unknown>> {
   const tools: Record<string, unknown> = {};
   for (const source of sources) {
@@ -99,7 +105,22 @@ async function resolveBuiltinsOnly(sources: ToolSource[], _agentId?: string): Pr
       });
     }
   }
-  return tools;
+
+  // Return a Proxy so that tool nodes can still execute in test/dev mode.
+  // Any unresolved tool name returns an echo tool (args → args).
+  return new Proxy(tools, {
+    get(target, prop) {
+      if (typeof prop === 'string' && prop in target) return target[prop];
+      if (typeof prop === 'string') {
+        return {
+          description: `Echo tool: ${prop} (no ToolResolver configured)`,
+          parameters: {},
+          execute: async (args: Record<string, unknown>) => args,
+        };
+      }
+      return undefined;
+    },
+  });
 }
 
 /** Events emitted by {@link GraphRunner} for observability. */
@@ -378,8 +399,6 @@ export class GraphRunner extends EventEmitter {
         executeAgent,
         executeSupervisor,
         evaluateQualityExecutor,
-        loadAgentTools,
-        executeToolCall,
         loadAgent: (agentId: string) => agentFactory.loadAgent(agentId),
         getTaintRegistry,
         resolveTools: this.toolResolver

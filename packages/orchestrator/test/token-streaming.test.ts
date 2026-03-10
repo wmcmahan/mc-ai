@@ -211,12 +211,7 @@ describe('Token Streaming', () => {
         executeSupervisor: vi.fn(),
       }));
 
-      vi.doMock('../src/mcp/tool-adapter', () => ({
-        loadAgentTools: vi.fn().mockResolvedValue({}),
-        executeToolCall: vi.fn(),
-      }));
-
-      vi.doMock('../src/agent/agent-factory/index', () => ({
+            vi.doMock('../src/agent/agent-factory/index', () => ({
         agentFactory: {
           loadAgent: vi.fn().mockResolvedValue({
             id: 'test-agent', name: 'Test', model: 'claude-sonnet-4-20250514', provider: 'anthropic',

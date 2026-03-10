@@ -59,10 +59,9 @@ export async function executeAgentNode(
   // Node-level tools override agent config tools
   const toolSources = node.tools ?? agentConfig.tools;
   const tools = await ctx.deps.resolveTools(toolSources, agent_id);
-  return ctx.deps.executeAgent(agent_id, stateView, tools as Record<string, import('./context.js').RawToolDefinition>, attempt, {
+  return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,
-    executeToolCall: ctx.deps.executeToolCall,
   });
 }

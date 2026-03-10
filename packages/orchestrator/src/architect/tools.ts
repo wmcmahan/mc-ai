@@ -2,7 +2,7 @@
  * Architect Tools
  *
  * Built-in tools that allow agents to autonomously design and manage
- * workflows. Registered as built-in tools in `tool-adapter.ts`,
+ * workflows. Resolved as built-in tools via `MCPConnectionManager`,
  * alongside `save_to_memory`.
  *
  * Tools:
@@ -14,8 +14,17 @@
  */
 
 import { z } from 'zod';
-import type { ToolDefinition } from '../mcp/tool-adapter.js';
 import { generateWorkflow } from './index.js';
+
+/**
+ * Tool definition used by the agent executor.
+ */
+export interface ToolDefinition {
+  /** Human-readable description of what the tool does. */
+  description: string;
+  /** Zod schema for tool input parameters. */
+  parameters: z.ZodType;
+}
 import { createLogger } from '../utils/logger.js';
 import type { Graph } from '../types/graph.js';
 import { ArchitectError } from './errors.js';

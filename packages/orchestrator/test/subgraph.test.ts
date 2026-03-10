@@ -43,11 +43,6 @@ vi.mock('../src/agent/agent-factory.js', () => ({
   AgentFactory: vi.fn(),
 }));
 
-vi.mock('../src/mcp/tool-adapter.js', () => ({
-  loadAgentTools: vi.fn().mockResolvedValue([]),
-  executeToolCall: vi.fn().mockResolvedValue({ result: 'tool_output' }),
-}));
-
 vi.mock('../src/agent/agent-executor/executor.js', () => ({
   executeAgent: vi.fn(),
   PermissionDeniedError: class extends Error { },

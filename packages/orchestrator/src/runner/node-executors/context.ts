@@ -17,7 +17,7 @@ import type { WorkflowState, Action, StateView } from '../../types/state.js';
 import type { ToolSource } from '../../types/tools.js';
 
 /**
- * Raw tool definition — mirrors the shape from tool-adapter.
+ * Raw tool definition — description + parameters without an execute function.
  */
 export interface RawToolDefinition {
   /** Human-readable tool description. */
@@ -27,7 +27,16 @@ export interface RawToolDefinition {
 }
 
 /**
- * Tainted tool result shape from tool-adapter.
+ * Resolved tool — a tool definition that includes an execute function.
+ * Returned by `resolveTools` from the MCPConnectionManager.
+ */
+export interface ResolvedTool extends RawToolDefinition {
+  /** Execute callback provided by the MCP client or built-in implementation. */
+  execute?: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+/**
+ * Tainted tool result shape from MCP tool execution.
  */
 export interface TaintedToolResultShape {
   /** The actual tool return value. */
@@ -57,14 +66,13 @@ export interface ExecutorDependencies {
   executeAgent: (
     agent_id: string,
     stateView: StateView,
-    tools: Record<string, RawToolDefinition>,
+    tools: Record<string, unknown>,
     attempt: number,
     options?: {
       temperature_override?: number;
       node_id?: string;
       abortSignal?: AbortSignal;
       onToken?: (token: string) => void;
-      executeToolCall?: (toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>;
     },
   ) => Promise<Action>;
 
@@ -91,19 +99,9 @@ export interface ExecutorDependencies {
     instruction?: string,
   ) => Promise<{ score: number; reasoning: string; tokens_used: number }>;
 
-  /** Load tool definitions by name (legacy string-based path). */
-  loadAgentTools: (toolNames: string[]) => Promise<Record<string, RawToolDefinition>>;
-
-  /** Execute a single tool call (used by tool node executor). */
-  executeToolCall: (
-    toolId: string,
-    args: Record<string, unknown>,
-    agentId?: string,
-  ) => Promise<unknown>;
-
   /**
    * Resolve structured tool sources into AI SDK tool objects.
-   * Returns a merged record of tool name → AI SDK tool (with execute).
+   * Returns a merged record of tool name → resolved tool (with execute).
    * Handles built-in tools, MCP server connections, and taint wrapping.
    */
   resolveTools: (sources: ToolSource[], agentId?: string) => Promise<Record<string, unknown>>;

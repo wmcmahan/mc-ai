@@ -96,9 +96,7 @@ function makeDeps(overrides: Partial<ExecutorDependencies> = {}): ExecutorDepend
     executeAgent: vi.fn().mockResolvedValue(makeMockAction()),
     executeSupervisor: vi.fn(),
     evaluateQualityExecutor: vi.fn(),
-    loadAgentTools: vi.fn().mockResolvedValue({}),
   resolveTools: vi.fn().mockResolvedValue({}),
-    executeToolCall: vi.fn().mockResolvedValue({ data: 'tool_result' }),
     loadAgent: vi.fn().mockResolvedValue({ tools: [] }),
     getTaintRegistry: vi.fn().mockReturnValue({}),
     ...overrides,
@@ -167,8 +165,14 @@ describe('executeToolNode', () => {
   });
 
   it('returns update_memory action with tool result', async () => {
-    const node = makeNode({ type: 'tool', tool_id: 'my-tool' });
-    const ctx = makeCtx();
+    const mockExecute = vi.fn().mockResolvedValue({ data: 'tool_result' });
+    const deps = makeDeps({
+      resolveTools: vi.fn().mockResolvedValue({
+        'my-tool': { description: 'test', parameters: {}, execute: mockExecute },
+      }),
+    });
+    const node = makeNode({ type: 'tool', tool_id: 'my-tool', tools: [] } as any);
+    const ctx = makeCtx({ deps });
 
     const result = await executeToolNode(node, makeStateView(), 1, ctx);
 
@@ -176,14 +180,31 @@ describe('executeToolNode', () => {
     expect((result.payload.updates as Record<string, unknown>)['node-1_result']).toEqual({ data: 'tool_result' });
   });
 
-  it('delegates to executeToolCall with correct args', async () => {
-    const deps = makeDeps();
-    const node = makeNode({ type: 'tool', tool_id: 'my-tool', agent_id: 'agent-1' });
+  it('calls execute on the resolved tool', async () => {
+    const mockExecute = vi.fn().mockResolvedValue({ data: 'tool_result' });
+    const deps = makeDeps({
+      resolveTools: vi.fn().mockResolvedValue({
+        'my-tool': { description: 'test', parameters: {}, execute: mockExecute },
+      }),
+    });
+    const node = makeNode({ type: 'tool', tool_id: 'my-tool', agent_id: 'agent-1', tools: [] } as any);
     const ctx = makeCtx({ deps });
 
     await executeToolNode(node, makeStateView(), 1, ctx);
 
-    expect(deps.executeToolCall).toHaveBeenCalledWith('my-tool', expect.any(Object), 'agent-1');
+    expect(mockExecute).toHaveBeenCalledWith(expect.any(Object));
+    expect(deps.resolveTools).toHaveBeenCalledWith([], 'agent-1');
+  });
+
+  it('throws NodeConfigError when tool cannot be resolved', async () => {
+    const deps = makeDeps({
+      resolveTools: vi.fn().mockResolvedValue({}),
+    });
+    const node = makeNode({ type: 'tool', tool_id: 'missing-tool', tools: [] } as any);
+    const ctx = makeCtx({ deps });
+
+    await expect(executeToolNode(node, makeStateView(), 1, ctx))
+      .rejects.toThrow(NodeConfigError);
   });
 });
 

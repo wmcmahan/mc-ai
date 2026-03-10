@@ -62,13 +62,12 @@ export async function executeSwarmAgentNode(
   };
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id) as Record<string, import('./context.js').RawToolDefinition>;
+  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
   const action = await ctx.deps.executeAgent(agent_id, swarmView, tools, attempt, {
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,
-    executeToolCall: ctx.deps.executeToolCall,
   });
 
   const updates = action.payload.updates as Record<string, unknown>;

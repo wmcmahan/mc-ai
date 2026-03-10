@@ -90,11 +90,7 @@ export function setupAgentMocks() {
     evaluateQualityExecutor: vi.fn(),
   }));
 
-  vi.mock('../../src/mcp/tool-adapter', () => ({
-    loadAgentTools: vi.fn().mockResolvedValue({}),
-  resolveTools: vi.fn().mockResolvedValue({}),
-    executeToolCall: vi.fn().mockResolvedValue({ result: 'mock' }),
-  }));
+  // tool-adapter.ts has been removed — tool resolution now goes through MCPConnectionManager
 
   vi.mock('../../src/agent/agent-factory', () => ({
     agentFactory: {

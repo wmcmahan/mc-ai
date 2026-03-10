@@ -20,7 +20,7 @@
 import { createLogger } from '../utils/logger.js';
 import { MCPServerNotFoundError, MCPAccessDeniedError } from './errors.js';
 import type { MCPServerRegistry } from '../persistence/interfaces.js';
-import type { ToolSource, MCPServerEntry, MCPTransportConfig } from '../types/tools.js';
+import type { ToolSource, MCPServerEntry } from '../types/tools.js';
 import type { TaintMetadata } from '../types/state.js';
 
 const logger = createLogger('mcp.connections');
@@ -94,13 +94,21 @@ async function getStdioTransport(): Promise<typeof _StdioTransport> {
 
 /**
  * Registry of built-in tool factories.
- * Each returns an AI SDK-compatible tool object.
+ *
+ * Returns raw tool definitions (description + parameters + execute).
+ * These are NOT pre-formed AI SDK tools — they use the `parameters` key
+ * with plain JSON schema objects. The executor's `buildToolSet()` wraps
+ * them with `tool()` + `jsonSchema()` for AI SDK compatibility.
+ *
+ * IMPORTANT: Do NOT use `inputSchema` or `jsonSchema()` here. That would
+ * cause `isAISDKTool()` to falsely classify them as pre-formed tools and
+ * skip the `tool()` wrapping, breaking LLM tool presentation.
  */
 function createBuiltinTool(name: string): Record<string, unknown> | null {
   switch (name) {
     case 'save_to_memory':
-      // Dynamically import zod to create the schema
-      // The actual persistence is handled by the reducer, not the tool
+      // The actual persistence is handled by the reducer, not the tool.
+      // The tool just captures the key/value pair from the LLM.
       return {
         save_to_memory: {
           description: 'Save data to workflow memory for later use',

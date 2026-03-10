@@ -23,7 +23,7 @@
  * @module agent-executor/executor
  */
 
-import { streamText, tool, stepCountIs } from 'ai';
+import { streamText, tool, stepCountIs, jsonSchema } from 'ai';
 import type { ToolSet } from 'ai';
 import { agentFactory } from '../agent-factory/index.js';
 import type { StateView, Action } from '../../types/state.js';
@@ -50,13 +50,6 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
-/** Raw tool definition passed from the orchestrator layer. */
-interface RawToolDefinition {
-  /** Human-readable description shown to the LLM. */
-  description: string;
-  /** Tool parameters — accepts Zod schemas or JSON schema objects. */
-  parameters: unknown;
-}
 
 /**
  * Minimal shape of a single step returned by `streamText().steps`.
@@ -98,7 +91,7 @@ interface AgentStep {
 export async function executeAgent(
   agent_id: string,
   stateView: StateView,
-  rawTools: Record<string, RawToolDefinition>,
+  rawTools: Record<string, unknown>,
   attempt: number,
   options?: {
     temperature_override?: number;
@@ -106,7 +99,6 @@ export async function executeAgent(
     timeout_ms?: number;
     abortSignal?: AbortSignal;
     onToken?: (token: string) => void;
-    executeToolCall?: (toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -123,8 +115,8 @@ export async function executeAgent(
     const systemPrompt = buildSystemPrompt(config, stateView);
     const taskPrompt = buildTaskPrompt(stateView, attempt);
 
-    // Raw tool definitions built for AI SDK v6 tool() format
-    const tools = buildToolSet(rawTools, options?.executeToolCall, agent_id);
+    // Wrap resolved tools into AI SDK v6 tool() format
+    const tools = buildToolSet(rawTools, agent_id);
 
     logger.info('executing', {
       agent_id,
@@ -218,6 +210,15 @@ export async function executeAgent(
     const toolCalls = steps.flatMap((step) => step.toolCalls ?? []);
     const toolResults = steps.flatMap((step) => step.toolResults ?? []);
 
+    // Log individual tool calls for observability
+    for (const call of toolCalls) {
+      logger.info('tool_called', {
+        agent_id,
+        tool_name: call.toolName,
+        tool_call_id: call.toolCallId,
+      });
+    }
+
     // Build a lookup map for tool results by toolCallId (not index).
     // Index-based alignment breaks when a call has no result or steps
     // have variable numbers of calls.
@@ -278,6 +279,7 @@ export async function executeAgent(
       agent_id,
       duration_ms: duration,
       tool_calls: toolCalls.length,
+      tool_names: toolCalls.map((c) => c.toolName),
       input_tokens: tokenUsage.inputTokens,
       output_tokens: tokenUsage.outputTokens,
       total_tokens: tokenUsage.totalTokens,
@@ -315,31 +317,97 @@ function createAbortControllerWithTimeout(timeoutMs: number) {
 }
 
 /**
- * Wrap raw tool definitions into the AI SDK v6 `tool()` format.
+ * Check whether a resolved tool entry is already a well-formed AI SDK `Tool`.
  *
- * Each tool's `execute` callback delegates to the injected `executeToolCall`
- * function, which routes to the MCP gateway for external tools and handles
- * built-in tools (save_to_memory, architect_*) internally.
+ * The AI SDK `Tool` type discriminates on `type`:
+ * - `undefined | 'function'` — standard tools created by `tool()`
+ * - `'dynamic'`              — runtime tools created by `dynamicTool()` (e.g. `@ai-sdk/mcp`)
+ * - `'provider'`             — provider-specific tools
  *
- * @param rawTools - Raw tool definitions from the orchestrator.
- * @param executeToolCall - Callback that executes a tool via the MCP gateway.
- * @param agentId - The agent ID, passed through for taint tracking.
+ * All three variants require `inputSchema` to be present, so we use that as
+ * the structural guard in addition to `type`.
+ *
+ * @see https://github.com/vercel/ai — `@ai-sdk/provider-utils/src/types/tool.ts`
+ */
+function isAISDKTool(entry: Record<string, unknown>): boolean {
+  const type = entry.type;
+  const hasInputSchema = 'inputSchema' in entry;
+
+  // dynamicTool() always sets type: 'dynamic'
+  if (type === 'dynamic' && hasInputSchema) return true;
+
+  // tool() leaves type undefined (or explicitly 'function')
+  if ((type === undefined || type === 'function') && hasInputSchema) return true;
+
+  // Provider tools have type: 'provider' + an id field
+  if (type === 'provider' && typeof entry.id === 'string') return true;
+
+  return false;
+}
+
+/**
+ * Build an AI SDK {@link ToolSet} from resolved tool definitions.
+ *
+ * Tools arrive from `MCPConnectionManager.resolveTools()` in two shapes:
+ *
+ * 1. **Pre-formed AI SDK tools** (`dynamicTool()` objects from `@ai-sdk/mcp`,
+ *    or `tool()` objects from other sources). Detected via {@link isAISDKTool}
+ *    and passed through directly — re-wrapping would strip internal state.
+ *
+ * 2. **Raw tool definitions** — plain `{ description, parameters, execute }`
+ *    objects (e.g. built-in tools like `save_to_memory`). Wrapped with the
+ *    AI SDK `tool()` helper for schema validation.
+ *
+ * @param rawTools - Resolved tool definitions (may include execute callbacks).
+ * @param agentId - The agent ID, for logging context.
  * @returns A {@link ToolSet} compatible with `streamText`.
  */
 function buildToolSet(
-  rawTools: Record<string, RawToolDefinition>,
-  executeToolCall: ((toolName: string, args: Record<string, unknown>, agentId?: string) => Promise<unknown>) | undefined,
+  rawTools: Record<string, unknown>,
   agentId: string,
 ): ToolSet {
   const tools: ToolSet = {};
-  for (const [name, def] of Object.entries(rawTools)) {
+
+  for (const [name, raw] of Object.entries(rawTools)) {
+    if (!raw || typeof raw !== 'object') {
+      logger.warn('tool_skipped_invalid', { agent_id: agentId, tool_name: name, reason: 'not an object' });
+      continue;
+    }
+
+    const entry = raw as Record<string, unknown>;
+
+    // ── Pre-formed AI SDK tool ─────────────────────────────────────
+    if (isAISDKTool(entry)) {
+      tools[name] = raw as ToolSet[string];
+      continue;
+    }
+
+    // ── Raw tool definition (built-in tools) ───────────────────────
+    const description = entry.description;
+    const schema = entry.inputSchema ?? entry.parameters;
+
+    if (typeof description !== 'string' || !description) {
+      logger.warn('tool_skipped_invalid', { agent_id: agentId, tool_name: name, reason: 'missing description' });
+      continue;
+    }
+
+    if (!schema || typeof schema !== 'object') {
+      logger.warn('tool_skipped_invalid', { agent_id: agentId, tool_name: name, reason: 'missing parameters/inputSchema' });
+      continue;
+    }
+
+    const executeFn = typeof entry.execute === 'function'
+      ? entry.execute as (args: Record<string, unknown>) => Promise<unknown>
+      : undefined;
+
     tools[name] = tool({
-      description: def.description,
-      inputSchema: def.parameters as Parameters<typeof tool>[0]['inputSchema'],
-      execute: executeToolCall
-        ? async (args: Record<string, unknown>) => executeToolCall(name, args, agentId)
+      description,
+      inputSchema: jsonSchema(schema as Parameters<typeof jsonSchema>[0]),
+      execute: executeFn
+        ? async (args: Record<string, unknown>) => executeFn(args)
         : async (args: Record<string, unknown>) => args,
     });
   }
+
   return tools;
 }

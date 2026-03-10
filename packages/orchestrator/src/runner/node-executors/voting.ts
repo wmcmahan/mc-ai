@@ -82,9 +82,9 @@ export async function executeVotingNode(
     tasks,
     async (task) => {
       const agentConfig = await ctx.deps.loadAgent(task.node.agent_id!);
-      const tools = await ctx.deps.resolveTools(agentConfig.tools, task.node.agent_id!) as Record<string, import('./context.js').RawToolDefinition>;
+      const tools = await ctx.deps.resolveTools(agentConfig.tools, task.node.agent_id!);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
-      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, executeToolCall: ctx.deps.executeToolCall });
+      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken });
     },
     { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort' },
   );

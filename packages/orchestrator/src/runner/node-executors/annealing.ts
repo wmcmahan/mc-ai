@@ -47,7 +47,7 @@ export async function executeAnnealingLoop(
   });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id) as Record<string, import('./context.js').RawToolDefinition>;
+  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
 
   let bestAction: Action | null = null;
   let bestScore = -1;
@@ -78,7 +78,6 @@ export async function executeAnnealingLoop(
       node_id: node.id,
       abortSignal: ctx.abortSignal,
       onToken,
-      executeToolCall: ctx.deps.executeToolCall,
     });
 
     // Evaluate quality via evaluator agent or JSONPath extraction

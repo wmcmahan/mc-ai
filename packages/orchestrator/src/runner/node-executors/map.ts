@@ -43,19 +43,25 @@ export async function executeWorkerWithStateView(
       const agent_id = node.agent_id;
       if (!agent_id) throw new NodeConfigError(node.id, 'agent', 'agent_id');
       const agentConfig = await ctx.deps.loadAgent(agent_id);
-      const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id) as Record<string, import('./context.js').RawToolDefinition>;
+      const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
       return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
         node_id: node.id,
         abortSignal: ctx.abortSignal,
         onToken,
-        executeToolCall: ctx.deps.executeToolCall,
       });
     }
     case 'tool': {
       const tool_id = node.tool_id;
       if (!tool_id) throw new NodeConfigError(node.id, 'tool', 'tool_id');
-      const raw = await ctx.deps.executeToolCall(tool_id, stateView.memory, node.agent_id);
+      // Resolve tool sources from node or agent config, then find the named tool
+      const toolSources = node.tools ?? [];
+      const resolvedTools = await ctx.deps.resolveTools(toolSources, node.agent_id);
+      const toolDef = resolvedTools[tool_id] as { execute?: (args: Record<string, unknown>) => Promise<unknown> } | undefined;
+      if (!toolDef?.execute) {
+        throw new NodeConfigError(node.id, 'tool', `resolvable tool "${tool_id}"`);
+      }
+      const raw = await toolDef.execute(stateView.memory);
       const resultKey = `${node.id}_result`;
       return {
         id: uuidv4(),

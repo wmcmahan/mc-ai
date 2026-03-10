@@ -19,8 +19,25 @@
  */
 
 import { z } from 'zod';
-import type { JSONSchema } from './gateway-client.js';
 import { createLogger } from '../utils/logger.js';
+
+/**
+ * Subset of JSON Schema used by MCP tool input definitions.
+ */
+export interface JSONSchema {
+  /** Schema type: `"object"`, `"string"`, `"number"`, `"integer"`, `"boolean"`, `"array"`. */
+  type: string;
+  /** Property schemas for `object` types. */
+  properties?: Record<string, JSONSchema>;
+  /** Item schema for `array` types. */
+  items?: JSONSchema;
+  /** Required property names for `object` types. */
+  required?: string[];
+  /** Human-readable description of the schema. */
+  description?: string;
+  /** Allowed values for enum constraints. */
+  enum?: unknown[];
+}
 
 const logger = createLogger('mcp.schema');
 

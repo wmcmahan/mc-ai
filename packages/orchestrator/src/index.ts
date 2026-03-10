@@ -78,12 +78,9 @@ export type { SupervisorDecision } from './agent/supervisor-executor/executor.js
 
 // ─── MCP Integration ────────────────────────────────────────────────
 
-export { loadAgentTools, executeToolCall } from './mcp/tool-adapter.js';
-export type { ToolDefinition, TaintedToolResult } from './mcp/tool-adapter.js';
-export { mcpClient, MCPGatewayClient, createMCPClient } from './mcp/gateway-client.js';
 export { jsonSchemaToZod } from './mcp/json-schema-converter.js';
-export type { MCPTool, JSONSchema, MCPClientConfig } from './mcp/gateway-client.js';
-export { MCPGatewayError, MCPToolExecutionError, MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
+export type { JSONSchema } from './mcp/json-schema-converter.js';
+export { MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
 export { MCPConnectionManager } from './mcp/connection-manager.js';
 export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult } from './mcp/connection-manager.js';
 

@@ -45,7 +45,19 @@ export async function executeToolNode(
 
   logger.info('tool_node_executing', { tool_id, node_id: node.id });
 
-  const raw = await ctx.deps.executeToolCall(tool_id, stateView.memory, node.agent_id);
+  // Resolve tool sources from node config, then find the named tool
+  const toolSources = node.tools ?? [];
+  const resolvedTools = await ctx.deps.resolveTools(toolSources, node.agent_id);
+  const toolDef = resolvedTools[tool_id] as { execute?: (args: Record<string, unknown>) => Promise<unknown> } | undefined;
+  if (!toolDef?.execute) {
+    logger.warn('tool_not_resolvable', {
+      tool_id,
+      node_id: node.id,
+      hint: 'Add tool sources to the node or configure a ToolResolver',
+    });
+    throw new NodeConfigError(node.id, 'tool', `resolvable tool "${tool_id}" (no tool sources configured or tool not found in resolved sources)`);
+  }
+  const raw = await toolDef.execute(stateView.memory);
 
   // Check if result carries taint metadata (external MCP tool)
   const isTaintedResult = raw && typeof raw === 'object' && 'taint' in raw && 'result' in raw;
