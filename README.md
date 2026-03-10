@@ -2,120 +2,67 @@
 
 **Agentic orchestration built on a Cyclic State Graph architecture.**
 
-MC-AI is a workflow engine for complex, multi-step AI agent systems. It provides patterns for Supervisors, Map-Reduce, Evolution, Human-in-the-Loop, and more — all driven by config, not code.
+MC-AI is a production-ready workflow engine for building complex, multi-step AI agent systems. It provides robust patterns for Supervisors, Map-Reduce, Evolution (DGM), Human-in-the-Loop, and Swarms — all driven by configuration, not hardcoded chains.
 
-**No infrastructure required.** The core orchestrator runs standalone with in-memory state. Postgres and Docker are optional — only needed if you use the `@mcai/orchestrator-postgres` persistence adapter.
+[📚 **Read the full documentation here** →](https://gitlab.com/wmcmahan/mc-ai/tree/main/apps/docs)
+
+---
+
+## Why MC-AI?
+
+Most AI orchestration frameworks model workflows as linear chains or strict Directed Acyclic Graphs (DAGs). This works for simple pipelines, but falls apart when you need an agent to loop back and self-correct, a supervisor to dynamically route work, or a workflow to pause for human approval.
+
+MC-AI uses a **Cyclic State Graph**. Nodes can loop, revisit previous steps, and make runtime decisions based on a shared state blackboard. Agents never communicate directly — they emit actions that are applied via pure reducer functions, eliminating race conditions and making every state transition fully auditable.
 
 ## Key Features
 
-- **Graph-Based Orchestration** — Define workflows as cyclic or acyclic graphs with typed nodes and edges
-- **Config-Driven Agents** — Agents are JSON configs, not classes. Define model, prompt, tools, and permissions declaratively
-- **Reducer-Based State** — Shared blackboard state with pure reducer functions. No direct mutation, no race conditions
-- **10 Node Types** — `agent` `tool` `router` `supervisor` `approval` `map` `synthesizer` `voting` `subgraph` `evolution`
-- **Supervisor Pattern** — LLM-powered dynamic routing across managed nodes
-- **Human-in-the-Loop** — Approval nodes that persist state and resume on human input
-- **Subgraph Composition** — Nest graphs within graphs with cycle detection
-- **Evolution (DGM)** — Population-based Darwinian selection with fitness evaluation
-- **Streaming** — `AsyncGenerator`-based event streaming for real-time UIs and observability
-- **Resilience** — Retry with backoff, circuit breakers, saga rollback, durable execution
-- **Budget Controls** — Token and cost limits per workflow run
-- **Taint Tracking** — External data flagged and tracked through the pipeline
-- **OpenTelemetry** — Opt-in distributed tracing across the full execution tree
+- **Graph-Based Orchestration** — Define workflows as cyclic or acyclic graphs with typed nodes and edges.
+- **Advanced Patterns out-of-the-box** — Built-in support for Supervisors, Swarms, Map-Reduce, and population-based Darwinian Evolution.
+- **Human-in-the-Loop** — Approval nodes that securely persist workflow state and resume exactly where they left off upon human input.
+- **Built for Production** — Includes native retry backoffs, circuit breakers, saga rollbacks, and durable execution capabilities.
+- **Enterprise Security** — Zero Trust architecture with taint tracking to flag and sandbox external data throughout the execution pipeline.
+- **Zero Required Infrastructure** — The core orchestrator is a lightweight TypeScript library with in-memory execution. PostgreSQL is entirely optional.
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js v22+
-- An API key: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
-
-### Setup
+### 1. Install
 
 ```bash
+npm install @mcai/orchestrator
+```
+
+### 2. Run a built-in example
+
+You can run any of our built-in pattern examples instantly using `npx tsx` and an Anthropic API key.
+
+```bash
+# Clone the repository to access the examples
 git clone https://gitlab.com/wmcmahan/mc-ai.git
 cd mc-ai
 npm install
-```
 
-### Run an Example
-
-```bash
-# 2-node linear: Researcher → Writer
-ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/research-and-write/research-and-write.ts
-
-# Supervisor routing between specialists
+# Run a Supervisor routing between specialists
 ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/supervisor-routing/supervisor-routing.ts
 
-# Map-Reduce fan-out with parallel workers
+# Run a Map-Reduce fan-out with parallel workers
 ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/map-reduce/map-reduce.ts
-
-# Human-in-the-loop approval gate
-ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/human-in-the-loop/human-in-the-loop.ts
 ```
 
-See [packages/orchestrator/examples/](packages/orchestrator/examples/) for the full list.
-
-### Programmatic Usage
-
-```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-
-const runner = new GraphRunner(graph, initialState, {
-  persistStateFn: async (state) => { /* save state */ },
-});
-
-// Run to completion
-const finalState = await runner.run();
-
-// Or stream events for real-time UIs
-for await (const event of runner.stream()) {
-  console.log(event.type, event);
-}
-```
-
-### Test
-
-```bash
-npm test
-```
+*See the [Getting Started Guide](https://gitlab.com/wmcmahan/mc-ai/tree/main/apps/docs/src/content/docs/getting-started/quick-start.md) for a complete walkthrough of building your own workflow from scratch.*
 
 ## Project Structure
 
-```
-packages/
-  orchestrator/              Core graph engine (@mcai/orchestrator) — zero infra dependencies
-  orchestrator-postgres/     Postgres persistence adapter (@mcai/orchestrator-postgres) — optional
-```
+This monorepo contains the following packages:
 
-## Optional: Postgres Persistence
-
-Only needed if you want durable state, event logs, or vector search via `@mcai/orchestrator-postgres`.
-
-```bash
-# Start Postgres
-docker-compose up -d
-
-# Copy env and add your API keys
-cp .env.example .env
-
-# Run database migrations
-npm run db:migrate
-```
-
-## Documentation
-
-See [`packages/orchestrator/README.md`](packages/orchestrator/README.md) for the full API reference, streaming guide, and custom provider setup.
+- `packages/orchestrator`: The core graph engine (`@mcai/orchestrator`) with zero infrastructure dependencies.
+- `packages/orchestrator-postgres`: An optional persistence adapter (`@mcai/orchestrator-postgres`) for durable state, event sourcing, and vector search.
+- `apps/docs`: The official Starlight documentation site.
+- `apps/api`: The Fastify gateway and server runtime.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and PR guidelines.
-
-## Security
-
-To report a vulnerability, see [SECURITY.md](SECURITY.md). Do not open public issues for security concerns.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup instructions, coding standards, and PR guidelines.
 
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
-
-See [LICENSE](LICENSE) for the full text.
