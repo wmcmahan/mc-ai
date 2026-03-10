@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { ToolSourceSchema } from '../types/tools.js';
 
 /** Edge condition — determines when an edge is traversed. */
 const LLMEdgeConditionSchema = z.object({
@@ -54,6 +55,7 @@ const LLMGraphNodeSchema = z.object({
   type: z.enum(['agent', 'tool', 'subgraph', 'synthesizer', 'router', 'supervisor', 'map', 'voting', 'approval', 'evolution'])
     .describe('Node type'),
   agent_id: z.string().optional().describe('Agent config ID (required for agent nodes)'),
+  tools: z.array(ToolSourceSchema).optional().describe('Tool sources for this node (overrides agent config tools when set)'),
   tool_id: z.string().optional().describe('Tool ID (for tool nodes)'),
   supervisor_config: LLMSupervisorConfigSchema.optional()
     .describe('Required for supervisor nodes'),

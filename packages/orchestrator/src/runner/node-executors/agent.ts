@@ -54,10 +54,12 @@ export async function executeAgentNode(
   logger.info('agent_node_executing', { agent_id, node_id: node.id });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.loadAgentTools(agentConfig.tools);
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
 
-  return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
+  // Node-level tools override agent config tools
+  const toolSources = node.tools ?? agentConfig.tools;
+  const tools = await ctx.deps.resolveTools(toolSources, agent_id);
+  return ctx.deps.executeAgent(agent_id, stateView, tools as Record<string, import('./context.js').RawToolDefinition>, attempt, {
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,

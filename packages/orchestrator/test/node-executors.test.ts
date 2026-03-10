@@ -97,6 +97,7 @@ function makeDeps(overrides: Partial<ExecutorDependencies> = {}): ExecutorDepend
     executeSupervisor: vi.fn(),
     evaluateQualityExecutor: vi.fn(),
     loadAgentTools: vi.fn().mockResolvedValue({}),
+  resolveTools: vi.fn().mockResolvedValue({}),
     executeToolCall: vi.fn().mockResolvedValue({ data: 'tool_result' }),
     loadAgent: vi.fn().mockResolvedValue({ tools: [] }),
     getTaintRegistry: vi.fn().mockReturnValue({}),
@@ -150,7 +151,7 @@ describe('executeAgentNode', () => {
     await executeAgentNode(node, makeStateView(), 1, ctx);
 
     expect(deps.loadAgent).toHaveBeenCalledWith('agent-1');
-    expect(deps.loadAgentTools).toHaveBeenCalled();
+    expect(deps.resolveTools).toHaveBeenCalled();
   });
 });
 

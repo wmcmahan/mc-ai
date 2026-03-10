@@ -79,6 +79,7 @@ export function graphToLLMSnapshot(graph: Graph): LLMGraph {
       id: n.id,
       type: n.type,
       agent_id: n.agent_id,
+      tools: n.tools,
       tool_id: n.tool_id,
       supervisor_config: n.supervisor_config,
       read_keys: n.read_keys,

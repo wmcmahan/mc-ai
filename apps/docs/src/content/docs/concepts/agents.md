@@ -26,8 +26,8 @@ interface AgentRegistryEntry {
   temperature: number;     // Creativity (0.0 = deterministic, 1.0 = creative)
   max_steps: number;       // Safety limit for tool-use loops (default: 10)
 
-  // Capabilities
-  tools: string[];         // Tool IDs this agent can access (e.g., ["web_search"])
+  // Capabilities — structured tool sources
+  tools: ToolSource[];     // Built-in tools and MCP server references
 
   // Security (Zero Trust)
   permissions: {
@@ -36,6 +36,11 @@ interface AgentRegistryEntry {
     budget_usd?: number;   // Max cost per run
   };
 }
+
+// Tool source types
+type ToolSource =
+  | { type: 'builtin'; name: 'save_to_memory' | 'architect_*' }
+  | { type: 'mcp'; server_id: string; tool_names?: string[] };
 ```
 
 The `provider` field accepts any string — not just `'openai'` or `'anthropic'`. Any Vercel AI SDK-compatible provider can be registered at runtime via the `ProviderRegistry`. See [Custom LLM Providers](/guides/custom-providers/) for details.
@@ -56,7 +61,10 @@ registry.register({
   system_prompt: 'You are a research specialist...',
   temperature: 0.5,
   max_steps: 5,
-  tools: ['web_search'],
+  tools: [
+    { type: 'builtin', name: 'save_to_memory' },
+    { type: 'mcp', server_id: 'web-search' },
+  ],
   permissions: { read_keys: ['topic'], write_keys: ['notes'] },
 });
 
@@ -85,7 +93,7 @@ const result = await streamText({
   model,                            // Resolved from config via ProviderRegistry
   system: systemPrompt,             // Built from config + injected state view
   prompt: taskPrompt,               // Goal + iteration context
-  tools,                            // Dynamic tools from MCP gateway
+  tools,                            // Resolved from ToolSource[] via MCPConnectionManager
   stopWhen: stepCountIs(maxSteps),
   abortSignal: combinedSignal,      // Workflow cancellation + timeout
 });
@@ -115,7 +123,10 @@ Add a JSON config to the registry. No classes needed:
   "system_prompt": "You are an expert TypeScript engineer...",
   "temperature": 0.3,
   "max_steps": 10,
-  "tools": ["fs_read", "fs_write"],
+  "tools": [
+    { "type": "builtin", "name": "save_to_memory" },
+    { "type": "mcp", "server_id": "code-sandbox", "tool_names": ["fs_read", "fs_write"] }
+  ],
   "permissions": {
     "read_keys": ["goal", "requirements"],
     "write_keys": ["code_output"]

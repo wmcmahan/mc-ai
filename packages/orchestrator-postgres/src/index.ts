@@ -28,3 +28,4 @@ export { DrizzleEventLogWriter } from './drizzle-event-log.js';
 export { DrizzleUsageRecorder } from './drizzle-usage.js';
 export { DrizzleRetentionService } from './drizzle-retention.js';
 export { DrizzleAgentRegistry } from './drizzle-agent-registry.js';
+export { DrizzleMCPServerRegistry } from './drizzle-mcp-registry.js';

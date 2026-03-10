@@ -44,6 +44,7 @@ vi.mock('../src/agent/supervisor-executor', () => ({
 
 vi.mock('../src/mcp/tool-adapter', () => ({
   loadAgentTools: vi.fn().mockResolvedValue({}),
+  resolveTools: vi.fn().mockResolvedValue({}),
   executeToolCall: vi.fn(async (toolName: string) => ({ result: `Mock tool output from ${toolName}` })),
 }));
 

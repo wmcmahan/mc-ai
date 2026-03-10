@@ -251,6 +251,8 @@ export interface TaintMetadata {
   source: 'mcp_tool' | 'tool_node' | 'agent_response' | 'derived';
   /** Tool that produced the data (if `source` is tool-related). */
   tool_name?: string;
+  /** MCP server that provided the tool (if `source` is `"mcp_tool"`). */
+  server_id?: string;
   /** Agent that produced the data (if `source` is `"agent_response"`). */
   agent_id?: string;
   /** ISO 8601 timestamp (string for JSON serialization). */

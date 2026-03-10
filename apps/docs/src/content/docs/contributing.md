@@ -45,7 +45,7 @@ const ResearcherConfig: AgentRegistryEntry = {
   id: "researcher",
   model: "claude-sonnet-4-20250514",
   system_prompt: "You are a...",
-  tools: ["web_search"],
+  tools: [{ type: "mcp", server_id: "web-search" }],
 };
 ```
 

@@ -43,7 +43,7 @@ export async function executeWorkerWithStateView(
       const agent_id = node.agent_id;
       if (!agent_id) throw new NodeConfigError(node.id, 'agent', 'agent_id');
       const agentConfig = await ctx.deps.loadAgent(agent_id);
-      const tools = await ctx.deps.loadAgentTools(agentConfig.tools);
+      const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id) as Record<string, import('./context.js').RawToolDefinition>;
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
       return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
         node_id: node.id,

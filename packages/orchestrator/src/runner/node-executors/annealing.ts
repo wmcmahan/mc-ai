@@ -47,7 +47,7 @@ export async function executeAnnealingLoop(
   });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.loadAgentTools(agentConfig.tools);
+  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id) as Record<string, import('./context.js').RawToolDefinition>;
 
   let bestAction: Action | null = null;
   let bestScore = -1;

@@ -81,6 +81,7 @@ vi.mock('../src/agent/agent-executor/executor', () => ({
 // Mock the full tool-adapter for GraphRunner tests (returns TaintedToolResult for MCP tools)
 vi.mock('../src/mcp/tool-adapter', () => ({
   loadAgentTools: vi.fn().mockResolvedValue({}),
+  resolveTools: vi.fn().mockResolvedValue({}),
   executeToolCall: vi.fn(async (toolName: string, _args: any, agentId?: string) => {
     if (toolName !== 'save_to_memory' && !toolName.startsWith('architect_')) {
       return {

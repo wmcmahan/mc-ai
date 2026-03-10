@@ -12,10 +12,12 @@
 
 import type { Graph } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
+import type { MCPServerEntry } from '../types/tools.js';
 import type {
   PersistenceProvider,
   AgentRegistry,
   AgentRegistryEntry,
+  MCPServerRegistry,
   UsageRecorder,
   UsageRecord,
   RetentionService,
@@ -249,6 +251,47 @@ export class InMemoryAgentRegistry implements AgentRegistry {
   /** Clear all registered agents. */
   clear(): void {
     this.agents.clear();
+  }
+}
+
+// ─── InMemoryMCPServerRegistry ──────────────────────────────────────────
+
+/**
+ * In-memory MCP server registry.
+ *
+ * Pre-populate with {@link register} for testing or lightweight deployments.
+ */
+export class InMemoryMCPServerRegistry implements MCPServerRegistry {
+  private readonly servers = new Map<string, MCPServerEntry>();
+
+  /** Register or update an MCP server entry. */
+  async saveServer(entry: MCPServerEntry): Promise<void> {
+    this.servers.set(entry.id, { ...entry });
+  }
+
+  /** Load a server by ID. Returns `null` if not found. */
+  async loadServer(id: string): Promise<MCPServerEntry | null> {
+    return this.servers.get(id) ?? null;
+  }
+
+  /** List all registered servers. */
+  async listServers(): Promise<MCPServerEntry[]> {
+    return [...this.servers.values()];
+  }
+
+  /** Remove a server by ID. Returns `true` if it existed. */
+  async deleteServer(id: string): Promise<boolean> {
+    return this.servers.delete(id);
+  }
+
+  /** Convenience alias for saveServer (test helper). */
+  register(entry: MCPServerEntry): void {
+    this.servers.set(entry.id, { ...entry });
+  }
+
+  /** Clear all registered servers. */
+  clear(): void {
+    this.servers.clear();
   }
 }
 

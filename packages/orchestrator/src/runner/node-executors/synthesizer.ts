@@ -36,7 +36,7 @@ export async function executeSynthesizerNode(
   // Delegate to agent for intelligent synthesis
   if (node.agent_id) {
     const agentConfig = await ctx.deps.loadAgent(node.agent_id);
-    const tools = await ctx.deps.loadAgentTools(agentConfig.tools);
+    const tools = await ctx.deps.resolveTools(agentConfig.tools, node.agent_id) as Record<string, import('./context.js').RawToolDefinition>;
     const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
     return ctx.deps.executeAgent(node.agent_id, stateView, tools, attempt, {
       node_id: node.id,

@@ -12,6 +12,7 @@
 
 import type { Graph } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
+import type { MCPServerEntry, ToolSource } from '../types/tools.js';
 
 // ─── JSON-safe types (DB-agnostic) ──────────────────────────────────────
 
@@ -210,8 +211,8 @@ export interface AgentRegistryEntry {
   temperature: number;
   /** Maximum tool-call steps. */
   max_steps: number;
-  /** Tool IDs this agent may invoke. */
-  tools: string[];
+  /** Structured tool source declarations. */
+  tools: ToolSource[];
   /** Zero-trust permissions (deny-all when `null`). */
   permissions: {
     /** Whether the agent runs in a sandboxed environment. */
@@ -233,6 +234,30 @@ export interface AgentRegistryEntry {
 export interface AgentRegistry {
   /** Load an agent by ID. Returns `null` if not found. */
   loadAgent(id: string): Promise<AgentRegistryEntry | null>;
+}
+
+// ─── MCPServerRegistry ──────────────────────────────────────────────────
+
+/**
+ * Registry for trusted MCP server configurations.
+ *
+ * This is the security boundary between agent configs (which reference
+ * servers by ID) and actual transport configurations (which contain
+ * connection details and secrets). Only administrators should be able
+ * to create or modify entries.
+ */
+export interface MCPServerRegistry {
+  /** Register or update an MCP server entry. */
+  saveServer(entry: MCPServerEntry): Promise<void>;
+
+  /** Load a server by ID. Returns `null` if not found. */
+  loadServer(id: string): Promise<MCPServerEntry | null>;
+
+  /** List all registered servers. */
+  listServers(): Promise<MCPServerEntry[]>;
+
+  /** Remove a server by ID. Returns `true` if it existed. */
+  deleteServer(id: string): Promise<boolean>;
 }
 
 // ─── UsageRecorder ──────────────────────────────────────────────────────

@@ -44,6 +44,8 @@ import { executeAgent } from '../agent/agent-executor/executor.js';
 import { executeSupervisor } from '../agent/supervisor-executor/executor.js';
 import { evaluateQualityExecutor } from '../agent/evaluator-executor/executor.js';
 import { loadAgentTools, executeToolCall } from '../mcp/tool-adapter.js';
+import type { ToolResolver } from '../mcp/connection-manager.js';
+import type { ToolSource } from '../types/tools.js';
 import { agentFactory } from '../agent/agent-factory/index.js';
 import { getTaintRegistry } from '../utils/taint.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
@@ -67,6 +69,38 @@ import {
 
 const logger = createLogger('runner.graph');
 const tracer = getTracer('orchestrator.runner');
+
+/**
+ * Lightweight fallback tool resolver used when no ToolResolver (MCPConnectionManager)
+ * is configured. Resolves built-in tools only; MCP sources are skipped with a warning.
+ */
+async function resolveBuiltinsOnly(sources: ToolSource[], _agentId?: string): Promise<Record<string, unknown>> {
+  const tools: Record<string, unknown> = {};
+  for (const source of sources) {
+    if (source.type === 'builtin' && source.name === 'save_to_memory') {
+      tools.save_to_memory = {
+        description: 'Save data to workflow memory for later use',
+        parameters: {
+          type: 'object',
+          properties: {
+            key: { type: 'string', description: 'Memory key to store the value under' },
+            value: { description: 'Value to save (can be any type)' },
+          },
+          required: ['key', 'value'],
+        },
+        execute: async (args: Record<string, unknown>) => {
+          return { key: args.key, value: args.value, saved: true };
+        },
+      };
+    } else if (source.type === 'mcp') {
+      logger.warn('mcp_source_skipped_no_resolver', {
+        server_id: source.server_id,
+        hint: 'Configure a ToolResolver (MCPConnectionManager) to resolve MCP tool sources',
+      });
+    }
+  }
+  return tools;
+}
 
 /** Events emitted by {@link GraphRunner} for observability. */
 export interface GraphRunnerEvents {
@@ -121,6 +155,13 @@ export interface GraphRunnerOptions {
   onToken?: (token: string, nodeId: string) => void;
   /** Middleware hooks for extending runner behavior */
   middleware?: GraphRunnerMiddleware[];
+  /**
+   * Tool resolver for structured ToolSource declarations.
+   * When provided, resolves MCP server tools via `@ai-sdk/mcp` clients.
+   * Without it, only built-in tools are resolved.
+   * Typically an MCPConnectionManager instance.
+   */
+  toolResolver?: ToolResolver;
 }
 
 /**
@@ -154,6 +195,9 @@ export class GraphRunner extends EventEmitter {
 
   // Middleware hooks
   private readonly middleware: GraphRunnerMiddleware[];
+
+  // Tool resolver for structured ToolSource declarations (MCPConnectionManager)
+  private readonly toolResolver?: ToolResolver;
 
   // Cancellation — allows external abort of in-flight agent/supervisor calls
   private abortController: AbortController = new AbortController();
@@ -196,6 +240,7 @@ export class GraphRunner extends EventEmitter {
       this.eventLog = optionsOrPersistFn.eventLog ?? new NoopEventLogWriter();
       this.onToken = optionsOrPersistFn.onToken;
       this.middleware = optionsOrPersistFn.middleware ?? [];
+      this.toolResolver = optionsOrPersistFn.toolResolver;
     } else {
       // No options or undefined persistFn — still check for legacy loadGraphFn 4th arg
       this.loadGraphFn = loadGraphFn;
@@ -337,6 +382,9 @@ export class GraphRunner extends EventEmitter {
         executeToolCall,
         loadAgent: (agentId: string) => agentFactory.loadAgent(agentId),
         getTaintRegistry,
+        resolveTools: this.toolResolver
+          ? (sources) => this.toolResolver!.resolveTools(sources)
+          : resolveBuiltinsOnly,
       },
     };
   }
@@ -849,6 +897,13 @@ export class GraphRunner extends EventEmitter {
         // Drain all events — run() consumes but discards them
       }
     } finally {
+      // Close MCP connections opened during this run
+      if (this.toolResolver) {
+        await this.toolResolver.closeAll().catch((err) => {
+          logger.error('tool_resolver_cleanup_failed', err as Error);
+        });
+      }
+
       // Prevent memory leaks: remove all event listeners registered by
       // consumers of this runner. Without this, long-lived worker processes
       // that create thousands of GraphRunner instances would accumulate

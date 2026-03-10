@@ -83,7 +83,9 @@ export type { ToolDefinition, TaintedToolResult } from './mcp/tool-adapter.js';
 export { mcpClient, MCPGatewayClient, createMCPClient } from './mcp/gateway-client.js';
 export { jsonSchemaToZod } from './mcp/json-schema-converter.js';
 export type { MCPTool, JSONSchema, MCPClientConfig } from './mcp/gateway-client.js';
-export { MCPGatewayError, MCPToolExecutionError } from './mcp/errors.js';
+export { MCPGatewayError, MCPToolExecutionError, MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
+export { MCPConnectionManager } from './mcp/connection-manager.js';
+export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult } from './mcp/connection-manager.js';
 
 // ─── Workflow Architect ─────────────────────────────────────────────
 

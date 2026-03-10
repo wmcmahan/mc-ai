@@ -82,6 +82,7 @@ function makeDeps(overrides: Partial<ExecutorDependencies> = {}): ExecutorDepend
     executeSupervisor: vi.fn(),
     evaluateQualityExecutor: vi.fn(),
     loadAgentTools: vi.fn().mockResolvedValue({}),
+  resolveTools: vi.fn().mockResolvedValue({}),
     executeToolCall: vi.fn(),
     loadAgent: vi.fn().mockResolvedValue({ tools: [] }),
     getTaintRegistry: vi.fn().mockReturnValue({}),
@@ -185,7 +186,7 @@ describe('executeSynthesizerNode (agent-powered)', () => {
     await executeSynthesizerNode(node, makeStateView(), 1, ctx);
 
     expect(deps.loadAgent).toHaveBeenCalledWith('synthesizer-agent');
-    expect(deps.loadAgentTools).toHaveBeenCalled();
+    expect(deps.resolveTools).toHaveBeenCalled();
   });
 
   it('propagates errors from agent execution', async () => {

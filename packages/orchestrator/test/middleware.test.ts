@@ -33,6 +33,7 @@ vi.mock('../src/agent/supervisor-executor/executor.js', () => ({ executeSupervis
 vi.mock('../src/agent/evaluator-executor/executor.js', () => ({ evaluateQualityExecutor: vi.fn() }));
 vi.mock('../src/mcp/tool-adapter', () => ({
   loadAgentTools: vi.fn().mockResolvedValue({}),
+  resolveTools: vi.fn().mockResolvedValue({}),
   executeToolCall: vi.fn().mockResolvedValue({ result: 'mock' }),
 }));
 vi.mock('../src/agent/agent-factory', () => ({

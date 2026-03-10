@@ -58,7 +58,7 @@ registry.register({
   system: 'Write a summary. Save it with save_to_memory key "draft".',
   temperature: 0.7,
   maxSteps: 3,
-  tools: [],
+  tools: [{ type: 'builtin', name: 'save_to_memory' }],
   read_keys: ['goal'],
   write_keys: ['draft'],
 });
@@ -211,7 +211,7 @@ src/
   architect/      Natural language → graph generation
   db/             Event log writers (in-memory, no-op)
   evals/          Eval framework (assertions, runner)
-  mcp/            MCP gateway client and tool adapter
+  mcp/            MCP connection manager, tool adapter, gateway client
   persistence/    Persistence interfaces + in-memory implementations
   reducers/       Pure state reducer functions
   runner/         GraphRunner, node executors, circuit breaker

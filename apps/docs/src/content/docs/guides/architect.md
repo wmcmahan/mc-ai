@@ -60,9 +60,9 @@ initArchitectTools({
   "provider": "anthropic",
   "system_prompt": "You manage automation workflows. Use your tools to create, update, and inspect workflows.",
   "tools": [
-    "architect_draft_workflow",
-    "architect_publish_workflow",
-    "architect_get_workflow"
+    { "type": "builtin", "name": "architect_draft_workflow" },
+    { "type": "builtin", "name": "architect_publish_workflow" },
+    { "type": "builtin", "name": "architect_get_workflow" }
   ]
 }
 ```

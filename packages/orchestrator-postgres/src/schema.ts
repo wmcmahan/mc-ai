@@ -8,6 +8,7 @@
  */
 
 import { sql } from 'drizzle-orm';
+import type { ToolSource, MCPTransportConfig } from '@mcai/orchestrator';
 import {
   pgTable,
   uuid,
@@ -156,13 +157,24 @@ export const agents = pgTable('agents', {
   system_prompt: text('system_prompt').notNull(),
   temperature: real('temperature').notNull().default(0.7),
   max_steps: integer('max_steps').notNull().default(10),
-  tools: jsonb('tools').notNull().$type<string[]>(),
+  tools: jsonb('tools').notNull().$type<ToolSource[]>(),
   permissions: jsonb('permissions').notNull().$type<{
     sandbox: boolean;
     read_keys: string[];
     write_keys: string[];
     budget_usd?: number;
   }>(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const mcp_servers = pgTable('mcp_servers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  transport: jsonb('transport').$type<MCPTransportConfig>().notNull(),
+  allowed_agents: jsonb('allowed_agents').$type<string[]>(),
+  timeout_ms: integer('timeout_ms').notNull().default(30000),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -227,3 +239,5 @@ export type WorkflowCheckpointRow = typeof workflow_checkpoints.$inferSelect;
 export type NewWorkflowCheckpointRow = typeof workflow_checkpoints.$inferInsert;
 export type UsageRecord = typeof usage_records.$inferSelect;
 export type NewUsageRecord = typeof usage_records.$inferInsert;
+export type MCPServer = typeof mcp_servers.$inferSelect;
+export type NewMCPServer = typeof mcp_servers.$inferInsert;

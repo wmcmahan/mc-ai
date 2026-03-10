@@ -69,15 +69,42 @@ For high-stakes actions:
 
 See [Human-in-the-Loop](/patterns/human-in-the-loop/) for the implementation pattern.
 
-## MCP tool firewalling
+## MCP tool security
 
-Agents don't connect to MCP servers directly. The MCP gateway acts as a firewall:
+Agents never see MCP server transport configurations or secrets. The security model has two layers:
 
-1. **Intercept** — catch the tool call request
-2. **Authenticate** — verify the agent's task token
-3. **Authorize** — check if the agent is allowed to call this tool
-4. **Inspect** — scan arguments for dangerous patterns
-5. **Forward** — only if all checks pass
+### Trusted MCP Server Registry
+
+Server connection configs (URLs, commands, auth headers) live in the **MCP Server Registry** — an admin-only data store. Agent configs reference servers by ID only:
+
+```json
+// Agent config — references server by ID, no transport details
+{ "type": "mcp", "server_id": "web-search" }
+```
+
+### Access control (`allowed_agents`)
+
+Each server entry can restrict which agents may use it:
+
+```typescript
+{
+  id: 'admin-tools',
+  name: 'Admin Tools',
+  transport: { type: 'http', url: 'https://internal.example.com/admin' },
+  allowed_agents: ['admin-agent-001'],  // only this agent can access
+}
+```
+
+When `allowed_agents` is set, an `MCPAccessDeniedError` is thrown if an unauthorized agent attempts to resolve tools from that server.
+
+### Taint wrapping
+
+All MCP tool results are automatically wrapped with taint metadata (source, tool name, server ID, timestamp). This enables downstream nodes to check provenance before trusting inputs.
+
+### Transport restrictions
+
+- **stdio**: Only allowlisted commands (`npx`, `node`, `python3`, `python`, `uvx`) — no arbitrary execution
+- **http/sse**: URLs stored in the registry, not in agent configs — secrets stay server-side
 
 ## Next steps
 

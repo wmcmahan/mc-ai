@@ -52,7 +52,7 @@ Once registered, agents can reference the provider by name:
   "model": "llama-3.3-70b-versatile",
   "provider": "groq",
   "system_prompt": "You are a research specialist...",
-  "tools": ["web_search"]
+  "tools": [{ "type": "mcp", "server_id": "web-search" }]
 }
 ```
 

@@ -14,6 +14,7 @@
 import type { GraphNode } from '../../types/graph.js';
 import type { Graph } from '../../types/graph.js';
 import type { WorkflowState, Action, StateView } from '../../types/state.js';
+import type { ToolSource } from '../../types/tools.js';
 
 /**
  * Raw tool definition — mirrors the shape from tool-adapter.
@@ -39,8 +40,8 @@ export interface TaintedToolResultShape {
  * Agent config shape (subset needed by executors).
  */
 export interface AgentConfigShape {
-  /** Tool names available to the agent. */
-  tools: string[];
+  /** Structured tool source declarations. */
+  tools: ToolSource[];
   [key: string]: unknown;
 }
 
@@ -90,15 +91,22 @@ export interface ExecutorDependencies {
     instruction?: string,
   ) => Promise<{ score: number; reasoning: string; tokens_used: number }>;
 
-  /** Load tool definitions by name. */
+  /** Load tool definitions by name (legacy string-based path). */
   loadAgentTools: (toolNames: string[]) => Promise<Record<string, RawToolDefinition>>;
 
-  /** Execute a single tool call. */
+  /** Execute a single tool call (used by tool node executor). */
   executeToolCall: (
     toolId: string,
     args: Record<string, unknown>,
     agentId?: string,
   ) => Promise<unknown>;
+
+  /**
+   * Resolve structured tool sources into AI SDK tool objects.
+   * Returns a merged record of tool name → AI SDK tool (with execute).
+   * Handles built-in tools, MCP server connections, and taint wrapping.
+   */
+  resolveTools: (sources: ToolSource[], agentId?: string) => Promise<Record<string, unknown>>;
 
   /** Load an agent's configuration. */
   loadAgent: (agentId: string) => Promise<AgentConfigShape>;

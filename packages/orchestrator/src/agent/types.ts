@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { ToolSourceSchema } from '../types/tools.js';
 
 /**
  * Zod schema for agent configuration records.
@@ -42,8 +43,8 @@ export const AgentConfigSchema = z.object({
 
   // ── Capabilities ──
 
-  /** Tool IDs this agent is allowed to invoke. */
-  tools: z.array(z.string()).default([]),
+  /** Structured tool source declarations. References built-in tools and registered MCP servers by ID. */
+  tools: z.array(ToolSourceSchema).default([]),
 
   // ── Zero Trust Permissions (deny-all by default) ──
 
