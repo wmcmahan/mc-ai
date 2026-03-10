@@ -6,7 +6,7 @@ description: Development setup, coding standards, and contribution guidelines.
 ## Getting started
 
 ```bash
-git clone https://gitlab.com/wmcmahan/mc-ai.git
+git clone https://github.com/wmcmahan/mc-ai.git
 cd mc-ai
 npm install
 ```
@@ -78,4 +78,4 @@ Use typed error classes for structured errors. If a graph node fails, catch the 
 
 ## Full guidelines
 
-See [CONTRIBUTING.md](https://gitlab.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md) for the complete contribution guide including PR process, branch naming, and commit conventions.
+See [CONTRIBUTING.md](https://github.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md) for the complete contribution guide including PR process, branch naming, and commit conventions.

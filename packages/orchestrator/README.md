@@ -19,7 +19,7 @@ npm install @mcai/orchestrator
 The fastest way to see the engine in action is to run an example. This requires Node.js 22+ and an Anthropic API key.
 
 ```bash
-git clone https://gitlab.com/wmcmahan/mc-ai.git
+git clone https://github.com/wmcmahan/mc-ai.git
 cd mc-ai
 npm install
 cd packages/orchestrator
@@ -201,7 +201,7 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/<example-name>/<example-name>.ts
 ## Documentation
 
 - **[Examples](./examples/)** — Runnable workflow examples with full source
-- **[CONTRIBUTING](https://gitlab.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md)** — Development setup, coding standards, PR guidelines
+- **[CONTRIBUTING](https://github.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md)** — Development setup, coding standards, PR guidelines
 
 ## Project Structure
 
@@ -223,7 +223,7 @@ src/
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://gitlab.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md).
 
 ## License
 

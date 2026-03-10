@@ -6,7 +6,7 @@
   "author": "Will McMahan",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/wmcmahan/mc-ai"
+    "url": "https://github.com/wmcmahan/mc-ai"
   },
   "workspaces": [
     "packages/*"

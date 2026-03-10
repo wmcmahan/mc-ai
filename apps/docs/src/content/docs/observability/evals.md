@@ -36,7 +36,7 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/evals/supervisor-routing.ts
 ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/evals/hitl-approval.ts
 ```
 
-See the [evals examples](https://gitlab.com/wmcmahan/mc-ai/tree/main/packages/orchestrator/examples/evals) for complete eval suite implementations.
+See the [evals examples](https://github.com/wmcmahan/mc-ai/tree/main/packages/orchestrator/examples/evals) for complete eval suite implementations.
 
 ## Cost tracking
 

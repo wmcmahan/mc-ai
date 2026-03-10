@@ -10,10 +10,10 @@ export default defineConfig({
       description:
         'Agentic orchestration built on a Cyclic State Graph architecture.',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://gitlab.com/wmcmahan/mc-ai' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/wmcmahan/mc-ai' },
       ],
       editLink: {
-        baseUrl: 'https://gitlab.com/wmcmahan/mc-ai/edit/main/apps/docs/',
+        baseUrl: 'https://github.com/wmcmahan/mc-ai/edit/main/apps/docs/',
       },
       sidebar: [
         {

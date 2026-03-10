@@ -4,7 +4,7 @@
 
 MC-AI is a production-ready workflow engine for building complex, multi-step AI agent systems. It provides robust patterns for Supervisors, Map-Reduce, Evolution (DGM), Human-in-the-Loop, and Swarms — all driven by configuration, not hardcoded chains.
 
-[📚 **Read the full documentation here** →](https://gitlab.com/wmcmahan/mc-ai/tree/main/apps/docs)
+[📚 **Read the full documentation here** →](https://mc-ai-docs.vercel.app)
 
 ---
 
@@ -37,7 +37,7 @@ You can run any of our built-in pattern examples instantly using `npx tsx` and a
 
 ```bash
 # Clone the repository to access the examples
-git clone https://gitlab.com/wmcmahan/mc-ai.git
+git clone https://github.com/wmcmahan/mc-ai.git
 cd mc-ai
 npm install
 
@@ -48,7 +48,7 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/supervisor-r
 ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/map-reduce/map-reduce.ts
 ```
 
-*See the [Getting Started Guide](https://gitlab.com/wmcmahan/mc-ai/tree/main/apps/docs/src/content/docs/getting-started/quick-start.md) for a complete walkthrough of building your own workflow from scratch.*
+*See the [Getting Started Guide](https://github.com/wmcmahan/mc-ai/tree/main/apps/docs/src/content/docs/getting-started/quick-start.md) for a complete walkthrough of building your own workflow from scratch.*
 
 ## Project Structure
 
