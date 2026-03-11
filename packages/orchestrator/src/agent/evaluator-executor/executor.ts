@@ -75,6 +75,7 @@ export async function evaluateQualityExecutor(
       system: systemPrompt,
       prompt,
       output: Output.object({ schema: EvaluationSchema }),
+      ...(agentConfig.providerOptions ? { providerOptions: agentConfig.providerOptions } : {}),
     });
 
     const tokens_used = usage?.totalTokens ?? 0;

@@ -60,8 +60,8 @@ export { PermissionDeniedError, AgentTimeoutError, AgentExecutionError } from '.
 export type { TokenUsage } from './agent/agent-executor/executor.js';
 export { AgentConfigSchema } from './agent/types.js';
 export type { AgentConfig, AgentExecutionMetadata } from './agent/types.js';
-export { ProviderRegistry, createDefaultProviderRegistry, registerBuiltInProviders } from './agent/provider-registry.js';
-export type { ProviderRegistration } from './agent/provider-registry.js';
+export { ProviderRegistry, createProviderRegistry, registerBuiltInProviders } from './agent/provider-registry.js';
+export type { LanguageModelFactory, ProviderOptions } from './agent/provider-registry.js';
 export { UnsupportedProviderError } from './agent/agent-factory/errors.js';
 
 // ─── Evaluator (LLM-as-Judge) ───────────────────────────────────────

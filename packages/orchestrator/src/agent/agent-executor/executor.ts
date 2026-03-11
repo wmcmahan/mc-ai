@@ -153,6 +153,7 @@ export async function executeAgent(
         stopWhen: stepCountIs(config.maxSteps),
         abortSignal: combinedSignal,
         ...(options?.temperature_override !== undefined ? { temperature: options.temperature_override } : {}),
+        ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
       });
 
       // When onToken is provided, consume the textStream for token-by-token

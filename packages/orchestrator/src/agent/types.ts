@@ -12,7 +12,29 @@
  */
 
 import { z } from 'zod';
+import type { JSONValue } from 'ai';
 import { ToolSourceSchema } from '../types/tools.js';
+
+/**
+ * Recursive Zod schema for JSON-safe values.
+ *
+ * Matches the AI SDK's `JSONValue` type so that `providerOptions`
+ * can be passed directly to `streamText` / `generateText` without
+ * type narrowing.
+ */
+const jsonValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+);
+
+/** Zod schema for a JSON object (matches AI SDK's `JSONObject`). */
+const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
 
 /**
  * Zod schema for agent configuration records.
@@ -40,6 +62,24 @@ export const AgentConfigSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.7),
   /** Maximum tool-call steps before the agent is forced to stop. */
   maxSteps: z.number().min(1).max(50).default(10),
+
+  /**
+   * Provider-specific options, namespaced by provider name.
+   *
+   * Passed through directly to the LLM call (e.g. `streamText`).
+   * Allows configuring provider-native features without coupling
+   * the schema to any specific provider SDK.
+   *
+   * @example
+   * ```json
+   * {
+   *   "anthropic": {
+   *     "thinking": { "type": "enabled", "budgetTokens": 12000 }
+   *   }
+   * }
+   * ```
+   */
+  providerOptions: z.record(z.string(), jsonObjectSchema).optional(),
 
   // ── Capabilities ──
 

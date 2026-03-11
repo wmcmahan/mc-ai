@@ -3,7 +3,7 @@ import { AgentFactory } from '../src/agent/agent-factory/agent-factory.js';
 import { AgentNotFoundError, UnsupportedProviderError, AgentLoadError } from '../src/agent/agent-factory/errors.js';
 import { isValidUUID } from '../src/agent/agent-factory/validation.js';
 import { InMemoryAgentRegistry } from '../src/persistence/in-memory.js';
-import { ProviderRegistry } from '../src/agent/provider-registry.js';
+import { createProviderRegistry } from '../src/agent/provider-registry.js';
 import type { LanguageModel } from 'ai';
 
 // Mock the AI SDK providers so tests don't need real API keys
@@ -175,12 +175,12 @@ describe('AgentFactory', () => {
       expect(config.write_keys).toEqual(['output']);
     });
 
-    it('infers anthropic provider from claude- model name', async () => {
+    it('infers anthropic provider from known claude model name', async () => {
       registry.register({
         id: TEST_UUID,
         name: 'Test Agent',
         description: 'test',
-        model: 'claude-3-5-sonnet',
+        model: 'claude-3-5-sonnet-20241022',
         provider: null, // no explicit provider — triggers inference
         system_prompt: 'You are helpful',
         temperature: 0.5,
@@ -234,32 +234,6 @@ describe('AgentFactory', () => {
       expect(model2).toBeDefined();
       // After clearing, a new model instance should be created (not the same ref)
       // Note: with mocked providers, the objects are structurally equal but different refs
-    });
-  });
-
-  // ─── setProviderRegistry ────────────────────────────────────────
-
-  describe('setProviderRegistry', () => {
-    it('uses a custom provider registry for model creation', () => {
-      const customRegistry = new ProviderRegistry();
-      const stubModel = { provider: 'groq', modelId: 'llama-3' } as unknown as LanguageModel;
-      customRegistry.register('groq', {
-        createLanguageModel: () => stubModel,
-      });
-
-      factory.setProviderRegistry(customRegistry);
-
-      const config = { ...factory.getDefaultConfig('test'), provider: 'groq', model: 'llama-3' };
-      const model = factory.getModel(config);
-      expect(model).toBe(stubModel);
-    });
-
-    it('throws UnsupportedProviderError for providers not in the custom registry', () => {
-      const emptyRegistry = new ProviderRegistry();
-      factory.setProviderRegistry(emptyRegistry);
-
-      const config = factory.getDefaultConfig('test'); // provider: 'anthropic'
-      expect(() => factory.getModel(config)).toThrow(UnsupportedProviderError);
     });
   });
 

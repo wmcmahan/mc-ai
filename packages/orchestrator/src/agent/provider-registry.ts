@@ -2,12 +2,12 @@
  * LLM Provider Registry
  *
  * A runtime registry for Vercel AI SDK-compatible LLM providers.
- * Any provider can be registered with a factory function and optional
- * model-name prefixes for auto-inference.
+ * Any provider can be registered with a resolver function and a list
+ * of known model identifiers for validation and auto-inference.
  *
  * Built-in OpenAI and Anthropic providers are pre-registered via
  * {@link registerBuiltInProviders}. API keys are resolved lazily at
- * model-creation time (not at registration time).
+ * model-resolution time (not at registration time).
  *
  * @module agent/provider-registry
  */
@@ -16,32 +16,56 @@ import type { LanguageModel } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import {
-  OPENAI_MODEL_PREFIXES,
-  ANTHROPIC_MODEL_PREFIXES,
+  OPENAI_MODELS,
+  ANTHROPIC_MODELS,
+  DEFAULT_AGENT_PROVIDER,
 } from './constants.js';
 import { UnsupportedProviderError } from './agent-factory/errors.js';
+import { createLogger } from '../utils/logger.js';
 
-/** Configuration for a registered LLM provider. */
-export interface ProviderRegistration {
-  /** Creates a LanguageModel instance for the given model ID. */
-  createLanguageModel: (modelId: string) => LanguageModel;
-  /** Model name prefixes for auto-inference (e.g., ['gpt-', 'o1-']). */
-  modelPrefixes?: string[];
+const logger = createLogger('provider.registry');
+
+/**
+ * A callable that resolves a model ID to a {@link LanguageModel} instance.
+ *
+ * This matches the signature returned by AI SDK provider factories
+ * (e.g. `createOpenAI()`, `createGroq()`, `createOllama()`).
+ */
+export type LanguageModelFactory = (modelId: string) => LanguageModel;
+
+/** Options for registering a provider. */
+export interface ProviderOptions {
+  /** Known model identifiers this provider supports. */
+  models: string[];
+}
+
+/** Internal storage for a registered provider. */
+interface ProviderRegistration {
+  /** Resolves a model ID to a LanguageModel instance. */
+  factory: LanguageModelFactory;
+  /** Known model identifiers this provider supports. */
+  models: string[];
 }
 
 /**
  * Runtime registry for LLM providers.
  *
- * Consumers register providers by name with a factory function. The
- * {@link AgentFactory} delegates model creation to this registry,
- * eliminating the hardcoded provider switch.
+ * Consumers register providers by name with a factory function and
+ * known model list. The {@link AgentFactory} delegates model resolution
+ * to this registry, eliminating the hardcoded provider switch.
  */
 export class ProviderRegistry {
   private providers = new Map<string, ProviderRegistration>();
 
-  /** Register a provider by name. Overwrites if already registered. */
-  register(name: string, registration: ProviderRegistration): void {
-    this.providers.set(name, registration);
+  /**
+   * Register a provider by name. Overwrites if already registered.
+   *
+   * @param name - Provider name (e.g. `'groq'`, `'ollama'`).
+   * @param factory - Callable that resolves a model ID to a LanguageModel.
+   * @param options - Additional options including known model identifiers.
+   */
+  register(name: string, factory: LanguageModelFactory, options: ProviderOptions): void {
+    this.providers.set(name, { factory, models: options.models });
   }
 
   /** Check if a provider is registered. */
@@ -60,67 +84,94 @@ export class ProviderRegistry {
   }
 
   /**
-   * Create a LanguageModel for the given provider and model ID.
+   * Resolve a LanguageModel for the given provider and model ID.
+   *
+   * Logs a warning if the model is not in the provider's known model
+   * list, but does not block — this allows using new models before
+   * the list is updated.
    *
    * @throws {UnsupportedProviderError} If the provider is not registered.
    */
-  createModel(providerName: string, modelId: string): LanguageModel {
+  resolveModel(providerName: string, modelId: string): LanguageModel {
     const registration = this.providers.get(providerName);
     if (!registration) {
       throw new UnsupportedProviderError(providerName);
     }
-    return registration.createLanguageModel(modelId);
+    if (!registration.models.includes(modelId)) {
+      logger.warn('unknown_model', { provider: providerName, modelId, known: registration.models });
+    }
+    return registration.factory(modelId);
   }
 
   /**
-   * Infer provider name from model ID using registered prefixes.
+   * Check if a model is in the provider's known model list.
    *
-   * @returns The provider name, or `null` if no prefix matches.
+   * @returns `true` if the provider is registered and knows the model.
    */
-  inferProvider(modelId: string): string | null {
-    const m = modelId.toLowerCase();
+  supportsModel(providerName: string, modelId: string): boolean {
+    const registration = this.providers.get(providerName);
+    if (!registration) return false;
+    return registration.models.includes(modelId);
+  }
+
+  /**
+   * Add a model name to an existing provider's known model list.
+   *
+   * @throws {UnsupportedProviderError} If the provider is not registered.
+   */
+  addModel(providerName: string, modelId: string): void {
+    const registration = this.providers.get(providerName);
+    if (!registration) {
+      throw new UnsupportedProviderError(providerName);
+    }
+    if (!registration.models.includes(modelId)) {
+      registration.models.push(modelId);
+    }
+  }
+
+  /**
+   * Infer provider name from model ID using exact match against
+   * registered model lists.
+   *
+   * @returns The provider name, or default provider if no match is found.
+   */
+  inferProvider(modelId: string): string {
     for (const [name, reg] of this.providers) {
-      if (reg.modelPrefixes?.some(p => m.startsWith(p))) {
+      if (reg.models.includes(modelId)) {
         return name;
       }
     }
-    return null;
+    return DEFAULT_AGENT_PROVIDER;
   }
 }
 
 /**
  * Register the built-in OpenAI and Anthropic providers.
  *
- * API keys are resolved lazily at model-creation time so that
+ * API keys are resolved lazily at model-resolution time so that
  * registration never throws. This preserves the existing error
  * behavior where missing keys are caught when `getModel()` is called.
  */
 export function registerBuiltInProviders(registry: ProviderRegistry): void {
-  registry.register('openai', {
-    createLanguageModel: (modelId: string) => {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        throw new Error('OPENAI_API_KEY environment variable is not set');
-      }
-      return createOpenAI({ apiKey })(modelId);
-    },
-    modelPrefixes: OPENAI_MODEL_PREFIXES,
-  });
+  registry.register('openai', (modelId: string) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
+    return createOpenAI({ apiKey })(modelId);
+  }, { models: [...OPENAI_MODELS] });
 
-  registry.register('anthropic', {
-    createLanguageModel: (modelId: string) => {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-      }
-      return createAnthropic({ apiKey })(modelId);
-    },
-    modelPrefixes: ANTHROPIC_MODEL_PREFIXES,
-  });
+  registry.register('anthropic', (modelId: string) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
+    return createAnthropic({ apiKey })(modelId);
+  }, { models: [...ANTHROPIC_MODELS] });
 }
 
 /** Create a ProviderRegistry with built-in providers pre-registered. */
-export function createDefaultProviderRegistry(): ProviderRegistry {
+export function createProviderRegistry(): ProviderRegistry {
   const registry = new ProviderRegistry();
   registerBuiltInProviders(registry);
   return registry;

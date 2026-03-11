@@ -14,15 +14,12 @@ import {
   GraphRunner,
   InMemoryPersistenceProvider,
   InMemoryAgentRegistry,
+  createProviderRegistry,
   configureAgentFactory,
-  ProviderRegistry,
-  registerBuiltInProviders,
   configureProviderRegistry,
   isTerminalEvent,
   type Graph,
   type WorkflowState,
-  type StreamEvent,
-  type AgentRegistryEntry,
 } from '@mcai/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
@@ -84,8 +81,7 @@ configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
 // Add custom providers here (e.g., Groq, Ollama) via providers.register().
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
+const providers = createProviderRegistry();
 configureProviderRegistry(providers);
 
 // ─── 2. Define the graph ─────────────────────────────────────────────────

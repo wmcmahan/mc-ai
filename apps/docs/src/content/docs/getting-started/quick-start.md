@@ -45,7 +45,7 @@ import {
   InMemoryAgentRegistry,
   configureAgentFactory,
   ProviderRegistry,
-  registerBuiltInProviders,
+  createProviderRegistry,
   configureProviderRegistry,
   type Graph,
   type WorkflowState,
@@ -53,8 +53,7 @@ import {
 
 async function main() {
   // 1. Configure LLM Providers
-  const providers = new ProviderRegistry();
-  registerBuiltInProviders(providers);
+  const providers = createProviderRegistry();
   configureProviderRegistry(providers);
 
   // 2. Register an Agent Configuration

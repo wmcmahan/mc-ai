@@ -109,6 +109,7 @@ export async function executeSupervisor(
       system: systemPrompt,
       prompt: `Based on the current workflow state, decide which node should execute next. Choose from the available nodes or select '${SUPERVISOR_DONE}' if the goal is fully achieved.`,
       ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
+      ...(agentConfig.providerOptions ? { providerOptions: agentConfig.providerOptions } : {}),
     });
 
     const duration = Date.now() - startTime;

@@ -29,7 +29,7 @@ import {
 import { isValidUUID } from './validation.js';
 import { AgentNotFoundError, AgentLoadError, UnsupportedProviderError } from './errors.js';
 import type { AgentRegistry } from '../../persistence/interfaces.js';
-import { ProviderRegistry, createDefaultProviderRegistry } from '../provider-registry.js';
+import { ProviderRegistry, createProviderRegistry } from '../provider-registry.js';
 
 const logger = createLogger('agent.factory');
 
@@ -53,7 +53,7 @@ export class AgentFactory {
   private modelCache = new Map<string, LanguageModel>();
   private configCache = new Map<string, CacheEntry<AgentConfig>>();
   private registry: AgentRegistry | null = null;
-  private providerRegistry: ProviderRegistry = createDefaultProviderRegistry();
+  private providerRegistry: ProviderRegistry = createProviderRegistry();
 
   /**
    * Configure the agent registry for database-backed agent loading.
@@ -163,6 +163,7 @@ export class AgentFactory {
         temperature: dbAgent.temperature,
         maxSteps: dbAgent.max_steps,
         tools: dbAgent.tools,
+        ...(dbAgent.provider_options ? { providerOptions: { [dbAgent.provider]: dbAgent.provider_options } } : {}),
         read_keys: permissions.read_keys ?? [],
         write_keys: permissions.write_keys ?? [],
       };
@@ -232,16 +233,16 @@ export class AgentFactory {
   }
 
   /**
-   * Create a language model instance via the provider registry.
+   * Resolve a language model instance via the provider registry.
    *
    * @param config - The agent config specifying provider and model.
    * @returns A new {@link LanguageModel}.
    * @throws {UnsupportedProviderError} If the provider is not registered.
-   * @throws {AgentLoadError} If model creation fails (e.g. missing API key).
+   * @throws {AgentLoadError} If model resolution fails (e.g. missing API key).
    */
   private createModel(config: AgentConfig): LanguageModel {
     try {
-      return this.providerRegistry.createModel(config.provider, config.model);
+      return this.providerRegistry.resolveModel(config.provider, config.model);
     } catch (error) {
       if (error instanceof UnsupportedProviderError) throw error;
       throw new AgentLoadError(config.id, error);

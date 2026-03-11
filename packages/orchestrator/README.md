@@ -40,8 +40,7 @@ import {
   InMemoryPersistenceProvider,
   InMemoryAgentRegistry,
   configureAgentFactory,
-  ProviderRegistry,
-  registerBuiltInProviders,
+  createProviderRegistry,
   configureProviderRegistry,
   type Graph,
   type WorkflowState,
@@ -65,8 +64,7 @@ registry.register({
 configureAgentFactory(registry);
 
 // 2. Configure LLM providers (OpenAI + Anthropic are built-in)
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
+const providers = createProviderRegistry();
 configureProviderRegistry(providers);
 
 // 3. Define a graph
@@ -106,40 +104,7 @@ console.log(result.memory.draft);
 
 The `ProviderRegistry` supports any Vercel AI SDK-compatible provider. OpenAI and Anthropic are built-in; register additional providers at startup:
 
-```typescript
-import { createOpenAI } from '@ai-sdk/openai';
-import {
-  ProviderRegistry,
-  registerBuiltInProviders,
-  configureProviderRegistry,
-} from '@mcai/orchestrator';
-
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
-
-// Groq (OpenAI-compatible API)
-const groq = createOpenAI({
-  baseURL: 'https://api.groq.com/openai/v1',
-  apiKey: process.env.GROQ_API_KEY!,
-});
-providers.register('groq', {
-  createLanguageModel: (modelId) => groq(modelId),
-  modelPrefixes: ['llama-', 'mixtral-', 'gemma-'],
-});
-
-// Ollama (local, no API key)
-const ollama = createOpenAI({
-  baseURL: 'http://localhost:11434/v1',
-  apiKey: 'ollama',
-});
-providers.register('ollama', {
-  createLanguageModel: (modelId) => ollama(modelId),
-});
-
-configureProviderRegistry(providers);
-```
-
-Agents can then use `provider: 'groq'` or `provider: 'ollama'` in their config. The registry also supports prefix-based provider inference — a model named `llama-3-70b` auto-resolves to the `groq` provider when `provider` is omitted.
+Agents can then use `provider: 'groq'` or `provider: 'ollama'` in their config. The registry also supports provider inference — a model in the provider's known model list auto-resolves to that provider when `provider` is omitted. Use `addModel()` to register new model names at runtime.
 
 ### Streaming
 

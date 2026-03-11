@@ -68,8 +68,7 @@ const graph: Graph = {
 import {
   InMemoryAgentRegistry,
   configureAgentFactory,
-  ProviderRegistry,
-  registerBuiltInProviders,
+  createProviderRegistry,
   configureProviderRegistry,
 } from '@mcai/orchestrator';
 
@@ -102,8 +101,7 @@ registry.register({
 configureAgentFactory(registry);
 
 // Configure LLM providers (OpenAI + Anthropic are built-in)
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
+const providers = createProviderRegistry();
 configureProviderRegistry(providers);
 ```
 

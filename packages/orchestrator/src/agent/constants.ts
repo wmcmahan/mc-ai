@@ -43,13 +43,25 @@ export const DEFAULT_AGENT_MAX_STEPS = 10;
 export const DEFAULT_AGENT_SYSTEM_PROMPT =
   'You are a helpful AI assistant working in an orchestrated workflow. Execute your task and provide your response.';
 
-// ─── Provider Inference ─────────────────────────────────────────────────
+// ─── Known Models ───────────────────────────────────────────────────────
 
-/** Model name prefixes that map to OpenAI. */
-export const OPENAI_MODEL_PREFIXES = ['gpt-', 'o1-', 'o3-'];
+/** Known OpenAI model identifiers for provider inference and validation. */
+export const OPENAI_MODELS = [
+  'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4',
+  'o1-preview', 'o1-mini', 'o3', 'o3-mini', 'o4-mini',
+];
 
-/** Model name prefixes that map to Anthropic. */
-export const ANTHROPIC_MODEL_PREFIXES = ['claude-'];
+/** Known Anthropic model identifiers for provider inference and validation. */
+export const ANTHROPIC_MODELS = [
+  'claude-opus-4-20250514', 'claude-sonnet-4-20250514',
+  'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022',
+  'claude-3-opus-20240229',
+];
+
+export const PROVIDERS_MODELS = {
+  'openai': OPENAI_MODELS,
+  'anthropic': ANTHROPIC_MODELS,
+} as const;
 
 // ─── Executor ───────────────────────────────────────────────────────────
 

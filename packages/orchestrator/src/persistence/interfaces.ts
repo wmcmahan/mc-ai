@@ -14,6 +14,9 @@ import type { Graph } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
 import type { MCPServerEntry, ToolSource } from '../types/tools.js';
 
+/** JSON-serializable value. Structurally compatible with AI SDK's `JSONValue`. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 // ─── JSON-safe types (DB-agnostic) ──────────────────────────────────────
 
 /**
@@ -203,8 +206,8 @@ export interface AgentRegistryEntry {
   description: string | null;
   /** LLM model identifier (e.g. `"claude-sonnet-4-20250514"`). */
   model: string;
-  /** LLM provider (`"openai"` | `"anthropic"` | `null` for auto-detect). */
-  provider: string | null;
+  /** LLM provider (`"openai"` | `"anthropic"` | `"groq"`). */
+  provider: string;
   /** System prompt that defines the agent's behaviour. */
   system_prompt: string;
   /** Sampling temperature (0–1). */
@@ -213,6 +216,15 @@ export interface AgentRegistryEntry {
   max_steps: number;
   /** Structured tool source declarations. */
   tools: ToolSource[];
+  /**
+   * Provider-specific options, namespaced by provider name.
+   *
+   * Values must be JSON-serializable. Structurally compatible with
+   * AI SDK's `JSONObject` without importing it.
+   *
+   * @example `{ "anthropic": { "thinking": { "type": "enabled", "budgetTokens": 12000 } } }`
+   */
+  provider_options?: Record<string, Record<string, JsonValue>> | null;
   /** Zero-trust permissions (deny-all when `null`). */
   permissions: {
     /** Whether the agent runs in a sandboxed environment. */

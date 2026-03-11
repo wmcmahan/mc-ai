@@ -18,8 +18,7 @@ import {
   InMemoryPersistenceProvider,
   InMemoryAgentRegistry,
   configureAgentFactory,
-  ProviderRegistry,
-  registerBuiltInProviders,
+  createProviderRegistry,
   configureProviderRegistry,
   createLogger,
   type Graph,
@@ -122,8 +121,7 @@ configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
 // Add custom providers here (e.g., Groq, Ollama) via providers.register().
-const providers = new ProviderRegistry();
-registerBuiltInProviders(providers);
+const providers = createProviderRegistry();
 configureProviderRegistry(providers);
 
 // ─── 2. Define the graph ─────────────────────────────────────────────────

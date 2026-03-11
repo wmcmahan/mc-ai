@@ -153,7 +153,7 @@ export const agents = pgTable('agents', {
   name: text('name').notNull().unique(),
   description: text('description'),
   model: text('model').notNull(),
-  provider: text('provider'),
+  provider: text('provider').notNull(),
   system_prompt: text('system_prompt').notNull(),
   temperature: real('temperature').notNull().default(0.7),
   max_steps: integer('max_steps').notNull().default(10),
