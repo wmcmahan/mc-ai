@@ -8,14 +8,11 @@
  * @module evals/supervisor-routing
  */
 
-import { v4 as uuidv4 } from 'uuid';
-import type { EvalSuite, Graph } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@mcai/orchestrator';
 
-const supervisorGraph: Graph = {
-  id: uuidv4(),
+const supervisorGraph = createGraph({
   name: 'Supervisor Routing Eval',
   description: 'Router dispatches to tool node then completes',
-  version: '1.0.0',
   nodes: [
     {
       id: 'router',
@@ -50,9 +47,7 @@ const supervisorGraph: Graph = {
   ],
   start_node: 'router',
   end_nodes: ['done'],
-  created_at: new Date(),
-  updated_at: new Date(),
-};
+});
 
 /** Eval suite asserting the router dispatches to a worker and completes. */
 export const suite: EvalSuite = {

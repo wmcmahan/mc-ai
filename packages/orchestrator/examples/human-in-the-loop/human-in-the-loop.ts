@@ -12,7 +12,6 @@
  *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loop.ts
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import * as readline from 'node:readline/promises';
 import {
   GraphRunner,
@@ -23,9 +22,8 @@ import {
   registerBuiltInProviders,
   configureProviderRegistry,
   createLogger,
-  type Graph,
-  type WorkflowState,
-  type AgentRegistryEntry,
+  createGraph,
+  createWorkflowState,
   type HumanResponse,
 } from '@mcai/orchestrator';
 
@@ -40,13 +38,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const logger = createLogger('example');
 
 // ─── 1. Register agents ──────────────────────────────────────────────────
-// Agent IDs must be UUIDs (the factory validates this before registry lookup).
+// register() returns the auto-generated UUID for each agent.
 
-const WRITER_ID = uuidv4();
-const PUBLISHER_ID = uuidv4();
+const registry = new InMemoryAgentRegistry();
 
-const writer: AgentRegistryEntry = {
-  id: WRITER_ID,
+const WRITER_ID = registry.register({
   name: 'Writer Agent',
   description: 'Produces a draft article on a given topic',
   model: 'claude-sonnet-4-20250514',
@@ -64,10 +60,9 @@ const writer: AgentRegistryEntry = {
     read_keys: ['goal', 'constraints'],
     write_keys: ['draft'],
   },
-};
+});
 
-const publisher: AgentRegistryEntry = {
-  id: PUBLISHER_ID,
+const PUBLISHER_ID = registry.register({
   name: 'Publisher Agent',
   description: 'Finalizes and formats an approved draft for publication',
   model: 'claude-sonnet-4-20250514',
@@ -86,11 +81,7 @@ const publisher: AgentRegistryEntry = {
     read_keys: ['goal', 'draft', 'human_response', 'human_decision'],
     write_keys: ['published'],
   },
-};
-
-const registry = new InMemoryAgentRegistry();
-registry.register(writer);
-registry.register(publisher);
+});
 configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
@@ -103,15 +94,9 @@ configureProviderRegistry(providers);
 // Linear: write → review (approval gate) → publish
 // The approval gate pauses the workflow until a human approves or rejects.
 
-const now = new Date();
-
-const graph: Graph = {
-  id: uuidv4(),
+const graph = createGraph({
   name: 'Human-in-the-Loop',
   description: 'Write → Human Review → Publish with approval gate',
-  version: '1.0.0',
-  created_at: now,
-  updated_at: now,
 
   nodes: [
     {
@@ -155,31 +140,16 @@ const graph: Graph = {
 
   start_node: 'write',
   end_nodes: ['publish'],
-};
+});
 
 // ─── 3. Create initial state ─────────────────────────────────────────────
 
-const initialState: WorkflowState = {
+const initialState = createWorkflowState({
   workflow_id: graph.id,
-  run_id: uuidv4(),
-  created_at: now,
-  updated_at: now,
   goal: 'Write a short article explaining why open-source software matters for innovation.',
   constraints: ['Keep the draft under 300 words', 'Use plain language suitable for a general audience'],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  total_tokens_used: 0,
-  total_cost_usd: 0,
-  _cost_alert_thresholds_fired: [],
-  visited_nodes: [],
-  max_iterations: 50,
-  compensation_stack: [],
-  supervisor_history: [],
   max_execution_time_ms: 600_000,
-};
+});
 
 // ─── 4. Set up persistence + runner ──────────────────────────────────────
 

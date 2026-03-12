@@ -80,7 +80,6 @@ const createGraph = (nodes?: any[]): Graph => ({
   id: 'mw-graph',
   name: 'Middleware Test',
   description: 'Test middleware hooks',
-  version: '1.0.0',
   nodes: nodes ?? [{
     id: 'node-a',
     type: 'agent',
@@ -93,8 +92,6 @@ const createGraph = (nodes?: any[]): Graph => ({
   edges: [],
   start_node: nodes?.[0]?.id ?? 'node-a',
   end_nodes: [nodes?.[nodes.length - 1]?.id ?? 'node-a'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 const createTwoNodeGraph = (): Graph => createGraph([
@@ -214,7 +211,6 @@ describe('GraphRunner Middleware', () => {
       id: 'route-graph',
       name: 'Route Test',
       description: 'Tests routing override',
-      version: '1.0.0',
       nodes: [
         {
           id: 'start',
@@ -247,8 +243,6 @@ describe('GraphRunner Middleware', () => {
       edges: [{ source: 'start', target: 'default-next', condition: { type: 'always' as const } }],
       start_node: 'start',
       end_nodes: ['default-next', 'override-target'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const mw: GraphRunnerMiddleware = {
@@ -344,7 +338,6 @@ describe('GraphRunner Middleware', () => {
       id: 'route-graph',
       name: 'Route Test',
       description: 'Default routing',
-      version: '1.0.0',
       nodes: [
         {
           id: 'start',
@@ -368,8 +361,6 @@ describe('GraphRunner Middleware', () => {
       edges: [{ source: 'start', target: 'expected-next', condition: { type: 'always' as const } }],
       start_node: 'start',
       end_nodes: ['expected-next'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const mw: GraphRunnerMiddleware = {

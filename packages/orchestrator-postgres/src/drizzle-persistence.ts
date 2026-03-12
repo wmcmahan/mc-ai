@@ -34,7 +34,6 @@ function toGraphDefinitionJson(graph: Graph): GraphDefinitionJson {
     start_node: graph.start_node,
     end_nodes: graph.end_nodes,
     description: graph.description,
-    version: graph.version,
   };
 }
 
@@ -86,7 +85,7 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
       name: graph.name,
       description: graph.description,
       definition,
-      version: graph.version || '1.0.0',
+      version: '1.0.0',
       created_at: now,
       updated_at: now,
     }).onConflictDoUpdate({
@@ -95,7 +94,6 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
         name: graph.name,
         description: graph.description,
         definition,
-        version: graph.version || '1.0.0',
         updated_at: now,
       },
     });

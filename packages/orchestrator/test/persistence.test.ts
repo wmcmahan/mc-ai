@@ -40,7 +40,6 @@ function createGraph(overrides?: Partial<Graph>): Graph {
     id: uuidv4(),
     name: 'Test Graph',
     description: 'A test graph',
-    version: '1.0.0',
     nodes: [
       {
         id: 'start',
@@ -55,8 +54,6 @@ function createGraph(overrides?: Partial<Graph>): Graph {
     edges: [],
     start_node: 'start',
     end_nodes: ['start'],
-    created_at: new Date(),
-    updated_at: new Date(),
     ...overrides,
   };
 }

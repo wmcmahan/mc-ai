@@ -86,7 +86,6 @@ const createEvolutionGraph = (configOverrides: any = {}): Graph => ({
   id: 'evolution-graph',
   name: 'Evolution Test',
   description: 'Test DGM evolution',
-  version: '1.0.0',
   nodes: [{
     id: 'evo-node',
     type: 'evolution',
@@ -114,8 +113,6 @@ const createEvolutionGraph = (configOverrides: any = {}): Graph => ({
   edges: [],
   start_node: 'evo-node',
   end_nodes: ['evo-node'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 /**
@@ -194,7 +191,6 @@ describe('Evolution (DGM) Node', () => {
         id: 'bad-graph',
         name: 'Bad',
         description: 'Missing config',
-        version: '1.0.0',
         nodes: [{
           id: 'evo',
           type: 'evolution',
@@ -207,8 +203,6 @@ describe('Evolution (DGM) Node', () => {
         edges: [],
         start_node: 'evo',
         end_nodes: ['evo'],
-        created_at: new Date(),
-        updated_at: new Date(),
       };
 
       const validation = validateGraph(graph);

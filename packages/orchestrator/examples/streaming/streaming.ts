@@ -9,7 +9,6 @@
  *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/streaming/streaming.ts
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import {
   GraphRunner,
   InMemoryPersistenceProvider,
@@ -18,8 +17,8 @@ import {
   configureAgentFactory,
   configureProviderRegistry,
   isTerminalEvent,
-  type Graph,
-  type WorkflowState,
+  createGraph,
+  createWorkflowState,
 } from '@mcai/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
@@ -32,13 +31,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
 
 // ─── 1. Register agents ──────────────────────────────────────────────────
 
-const RESEARCHER_ID = uuidv4();
-const WRITER_ID = uuidv4();
-
 const registry = new InMemoryAgentRegistry();
 
-registry.register({
-  id: RESEARCHER_ID,
+const RESEARCHER_ID = registry.register({
   name: 'Research Agent',
   description: 'Gathers background information on a topic',
   model: 'claude-sonnet-4-20250514',
@@ -57,8 +52,7 @@ registry.register({
   },
 });
 
-registry.register({
-  id: WRITER_ID,
+const WRITER_ID = registry.register({
   name: 'Writer Agent',
   description: 'Produces a polished draft from research notes',
   model: 'claude-sonnet-4-20250514',
@@ -86,15 +80,9 @@ configureProviderRegistry(providers);
 
 // ─── 2. Define the graph ─────────────────────────────────────────────────
 
-const now = new Date();
-
-const graph: Graph = {
-  id: uuidv4(),
+const graph = createGraph({
   name: 'Streaming Research & Write',
   description: 'Two-node linear workflow with streaming output',
-  version: '1.0.0',
-  created_at: now,
-  updated_at: now,
   nodes: [
     {
       id: 'research',
@@ -120,31 +108,16 @@ const graph: Graph = {
   ],
   start_node: 'research',
   end_nodes: ['write'],
-};
+});
 
 // ─── 3. Create initial state ─────────────────────────────────────────────
 
-const initialState: WorkflowState = {
+const initialState = createWorkflowState({
   workflow_id: graph.id,
-  run_id: uuidv4(),
-  created_at: now,
-  updated_at: now,
   goal: 'Explain how large language models work, covering transformers and attention.',
   constraints: ['Keep under 200 words', 'Use plain language'],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  total_tokens_used: 0,
-  total_cost_usd: 0,
-  _cost_alert_thresholds_fired: [],
-  visited_nodes: [],
-  max_iterations: 50,
-  compensation_stack: [],
-  supervisor_history: [],
   max_execution_time_ms: 120_000,
-};
+});
 
 // ─── 4. Stream execution ─────────────────────────────────────────────────
 

@@ -114,8 +114,8 @@ export type FailurePolicy = z.infer<typeof FailurePolicySchema>;
  * Controls how the supervisor LLM routes work between managed sub-nodes.
  */
 export const SupervisorConfigSchema = z.object({
-  /** Agent ID for the LLM that makes routing decisions. */
-  agent_id: z.string(),
+  /** Agent ID for the LLM that makes routing decisions. Optional — falls back to `node.agent_id`. */
+  agent_id: z.string().optional(),
   /** Node IDs this supervisor can delegate work to. */
   managed_nodes: z.array(z.string()),
   /** Max routing iterations before forced completion (loop guard). */
@@ -378,14 +378,12 @@ export type GraphNode = z.infer<typeof GraphNodeSchema>;
  * reachable from `start_node` via `edges`.
  */
 export const GraphSchema = z.object({
-  /** Unique graph identifier. */
-  id: z.string(),
+  /** Unique graph identifier (auto-generated if omitted). */
+  id: z.string().default(() => crypto.randomUUID()),
   /** Human-readable graph name. */
   name: z.string(),
   /** Description of what this graph does. */
   description: z.string(),
-  /** Semantic version string. */
-  version: z.string().default('1.0.0'),
 
   // ── Structure ──
   /** All nodes in the graph. */
@@ -398,12 +396,25 @@ export const GraphSchema = z.object({
   start_node: z.string(),
   /** Terminal node IDs. */
   end_nodes: z.array(z.string()),
-
-  // ── Metadata ──
-  /** When the graph was created. */
-  created_at: z.date(),
-  /** When the graph was last modified. */
-  updated_at: z.date(),
 });
 
+/** Fully-populated graph definition (output of {@link GraphSchema.parse}). */
 export type Graph = z.infer<typeof GraphSchema>;
+
+/**
+ * Input shape for constructing a graph.
+ *
+ * Fields with Zod defaults (`id`) are optional.
+ * Use with {@link createGraph} for the simplest construction path.
+ */
+export type GraphInput = z.input<typeof GraphSchema>;
+
+/**
+ * Create a Graph with auto-generated defaults.
+ *
+ * Parses the input through {@link GraphSchema}, filling in `id`
+ * via `crypto.randomUUID()` when omitted.
+ */
+export function createGraph(input: GraphInput): Graph {
+  return GraphSchema.parse(input);
+}

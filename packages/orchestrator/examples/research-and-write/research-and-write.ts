@@ -11,7 +11,6 @@
  *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/research-and-write/research-and-write.ts
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import {
   GraphRunner,
   InMemoryPersistenceProvider,
@@ -20,9 +19,8 @@ import {
   createProviderRegistry,
   configureProviderRegistry,
   createLogger,
-  type Graph,
-  type WorkflowState,
-  type AgentRegistryEntry,
+  createGraph,
+  createWorkflowState,
 } from '@mcai/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
@@ -36,13 +34,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const logger = createLogger('example');
 
 // ─── 1. Register agents ──────────────────────────────────────────────────
-// Agent IDs must be UUIDs (the factory validates this before registry lookup).
+// register() returns the auto-generated UUID for each agent.
 
-const RESEARCHER_ID = uuidv4();
-const WRITER_ID = uuidv4();
+const registry = new InMemoryAgentRegistry();
 
-const researcher: AgentRegistryEntry = {
-  id: RESEARCHER_ID,
+const RESEARCHER_ID = registry.register({
   name: 'Research Agent',
   description: 'Gathers background information on a topic',
   model: 'claude-sonnet-4-20250514',
@@ -61,10 +57,9 @@ const researcher: AgentRegistryEntry = {
     read_keys: ['goal', 'constraints'],
     write_keys: ['research_notes'],
   },
-};
+});
 
-const writer: AgentRegistryEntry = {
-  id: WRITER_ID,
+const WRITER_ID = registry.register({
   name: 'Writer Agent',
   description: 'Produces a polished draft from research notes',
   model: 'claude-sonnet-4-20250514',
@@ -82,11 +77,7 @@ const writer: AgentRegistryEntry = {
     read_keys: ['goal', 'research_notes'],
     write_keys: ['draft'],
   },
-};
-
-const registry = new InMemoryAgentRegistry();
-registry.register(researcher);
-registry.register(writer);
+});
 configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
@@ -96,15 +87,9 @@ configureProviderRegistry(providers);
 
 // ─── 2. Define the graph ─────────────────────────────────────────────────
 
-const now = new Date();
-
-const graph: Graph = {
-  id: uuidv4(),
+const graph = createGraph({
   name: 'Research & Write',
   description: 'Two-node linear workflow: research then write',
-  version: '1.0.0',
-  created_at: now,
-  updated_at: now,
 
   nodes: [
     {
@@ -138,31 +123,16 @@ const graph: Graph = {
 
   start_node: 'research',
   end_nodes: ['write'],
-};
+});
 
 // ─── 3. Create initial state ─────────────────────────────────────────────
 
-const initialState: WorkflowState = {
+const initialState = createWorkflowState({
   workflow_id: graph.id,
-  run_id: uuidv4(),
-  created_at: now,
-  updated_at: now,
   goal: 'Explain how large language models work, including transformers, attention mechanisms, and training data.',
   constraints: ['Keep the final draft under 300 words', 'Use plain language suitable for a general audience'],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  total_tokens_used: 0,
-  total_cost_usd: 0,
-  _cost_alert_thresholds_fired: [],
-  visited_nodes: [],
-  max_iterations: 50,
-  compensation_stack: [],
-  supervisor_history: [],
   max_execution_time_ms: 120_000,
-};
+});
 
 // ─── 4. Set up persistence + runner ──────────────────────────────────────
 

@@ -17,6 +17,7 @@ import type {
   PersistenceProvider,
   AgentRegistry,
   AgentRegistryEntry,
+  AgentRegistryInput,
   MCPServerRegistry,
   UsageRecorder,
   UsageRecord,
@@ -59,14 +60,13 @@ export class InMemoryPersistenceProvider implements PersistenceProvider {
       start_node: graph.start_node,
       end_nodes: graph.end_nodes,
       description: graph.description,
-      version: graph.version,
     };
     this.graphs.set(graph.id, {
       id: graph.id,
       name: graph.name,
       description: graph.description ?? null,
       definition,
-      version: graph.version || '1.0.0',
+      version: '1.0.0',
       created_at: existing?.created_at ?? now,
       updated_at: now,
     });
@@ -243,9 +243,17 @@ export class InMemoryAgentRegistry implements AgentRegistry {
     return this.agents.get(id) ?? null;
   }
 
-  /** Register an agent config (test helper). */
-  register(entry: AgentRegistryEntry): void {
-    this.agents.set(entry.id, entry);
+  /**
+   * Register an agent config and return its ID.
+   *
+   * If the input includes an `id`, it is used as-is (backwards compatible).
+   * Otherwise, a UUID is auto-generated via `crypto.randomUUID()`.
+   */
+  register(entry: AgentRegistryInput | AgentRegistryEntry): string {
+    const id = 'id' in entry && entry.id ? entry.id : crypto.randomUUID();
+    const full: AgentRegistryEntry = { ...entry, id };
+    this.agents.set(id, full);
+    return id;
   }
 
   /** Clear all registered agents. */

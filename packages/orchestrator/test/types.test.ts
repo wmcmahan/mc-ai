@@ -285,7 +285,6 @@ describe('Type Validation (Zod Schemas)', () => {
         id: '123e4567-e89b-12d3-a456-426614174000',
         name: 'Test Graph',
         description: 'A test graph',
-        version: '1.0.0',
         nodes: [
           { id: 'start', type: 'agent' },
           { id: 'end', type: 'agent' },
@@ -295,28 +294,38 @@ describe('Type Validation (Zod Schemas)', () => {
         ],
         start_node: 'start',
         end_nodes: ['end'],
-        created_at: new Date(),
-        updated_at: new Date(),
       };
 
       expect(() => GraphSchema.parse(validGraph)).not.toThrow();
     });
 
-    test('should apply default version', () => {
-      const graph = {
-        id: 'test',
+    test('should auto-generate id when omitted', () => {
+      const parsed = GraphSchema.parse({
         name: 'Test',
         description: 'Test',
         nodes: [],
         edges: [],
         start_node: 'start',
         end_nodes: [],
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+      });
 
-      const parsed = GraphSchema.parse(graph);
-      expect(parsed.version).toBe('1.0.0');
+      expect(parsed.id).toBeDefined();
+      expect(typeof parsed.id).toBe('string');
+      expect(parsed.id.length).toBeGreaterThan(0);
+    });
+
+    test('should preserve explicitly provided id', () => {
+      const parsed = GraphSchema.parse({
+        id: 'my-custom-id',
+        name: 'Test',
+        description: 'Test',
+        nodes: [],
+        edges: [],
+        start_node: 'start',
+        end_nodes: [],
+      });
+
+      expect(parsed.id).toBe('my-custom-id');
     });
   });
 });

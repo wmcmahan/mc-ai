@@ -273,6 +273,9 @@ function validateNodeByType(
       if (!node.supervisor_config) {
         errors.push(`Supervisor node '${node.id}' is missing supervisor_config`);
       } else {
+        if (!node.supervisor_config.agent_id && !node.agent_id) {
+          errors.push(`Supervisor node '${node.id}' is missing agent_id (set on the node or in supervisor_config)`);
+        }
         const { managed_nodes } = node.supervisor_config;
 
         for (const managedId of managed_nodes) {

@@ -107,7 +107,6 @@ function createToolGraph(id: string, overrides: Partial<Graph> = {}): Graph {
     id,
     name: `test-graph-${id}`,
     description: 'Test graph',
-    version: '1.0.0',
     nodes: [
       {
         id: 'tool-node',
@@ -122,8 +121,6 @@ function createToolGraph(id: string, overrides: Partial<Graph> = {}): Graph {
     edges: [],
     start_node: 'tool-node',
     end_nodes: ['tool-node'],
-    created_at: new Date(),
-    updated_at: new Date(),
     ...overrides,
   };
 }
@@ -140,7 +137,6 @@ describe('Subgraph Execution', () => {
       id: 'parent-graph',
       name: 'parent',
       description: 'Parent with subgraph',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -160,8 +156,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const loadGraphFn = vi.fn().mockResolvedValue(childGraph);
@@ -182,7 +176,6 @@ describe('Subgraph Execution', () => {
       id: 'parent-graph',
       name: 'parent',
       description: 'Parent with limited mapping',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -202,8 +195,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     // Track what child state gets built by intercepting the loadGraphFn
@@ -228,7 +219,6 @@ describe('Subgraph Execution', () => {
       id: 'parent-graph',
       name: 'parent',
       description: 'Budget inheritance test',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -248,8 +238,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const loadGraphFn = vi.fn().mockResolvedValue(childGraph);
@@ -270,7 +258,6 @@ describe('Subgraph Execution', () => {
       id: 'child-graph',
       name: 'child',
       description: 'Child that calls parent',
-      version: '1.0.0',
       nodes: [
         {
           id: 'recursive-sub',
@@ -290,15 +277,12 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'recursive-sub',
       end_nodes: ['recursive-sub'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const parentGraph: Graph = {
       id: 'parent-graph',
       name: 'parent',
       description: 'Parent that invokes child',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -318,8 +302,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const loadGraphFn = vi.fn().mockImplementation(async (graphId: string) => {
@@ -339,7 +321,6 @@ describe('Subgraph Execution', () => {
       id: 'parent-graph',
       name: 'parent',
       description: 'Missing subgraph',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -359,8 +340,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const loadGraphFn = vi.fn().mockResolvedValue(null);
@@ -376,7 +355,6 @@ describe('Subgraph Execution', () => {
       id: 'failing-child',
       name: 'failing child',
       description: 'Will fail',
-      version: '1.0.0',
       nodes: [
         {
           id: 'bad-node',
@@ -391,15 +369,12 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'bad-node',
       end_nodes: ['bad-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const parentGraph: Graph = {
       id: 'parent-graph',
       name: 'parent',
       description: 'Child will fail',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -419,8 +394,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const loadGraphFn = vi.fn().mockResolvedValue(childGraph);
@@ -435,7 +408,6 @@ describe('Subgraph Execution', () => {
       id: 'parent-graph',
       name: 'parent',
       description: 'No loadGraphFn',
-      version: '1.0.0',
       nodes: [
         {
           id: 'sub-node',
@@ -455,8 +427,6 @@ describe('Subgraph Execution', () => {
       edges: [],
       start_node: 'sub-node',
       end_nodes: ['sub-node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const state = createTestState();

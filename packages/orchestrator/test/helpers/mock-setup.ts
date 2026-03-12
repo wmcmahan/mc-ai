@@ -11,8 +11,9 @@
 
 import { vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
-import type { Graph } from '../../src/types/graph.js';
+import type { Graph, GraphInput } from '../../src/types/graph.js';
 import type { WorkflowState } from '../../src/types/state.js';
+import { createWorkflowState } from '../../src/types/state.js';
 
 // ─── Core Mocks ──────────────────────────────────────────────────────
 
@@ -112,37 +113,21 @@ export function setupAgentMocks() {
  * Create a test WorkflowState with sensible defaults.
  */
 export function createTestState(overrides: Partial<WorkflowState> = {}): WorkflowState {
-  return {
+  return createWorkflowState({
     workflow_id: uuidv4(),
-    run_id: uuidv4(),
-    created_at: new Date(),
-    updated_at: new Date(),
     goal: 'Test goal',
-    constraints: [],
-    status: 'pending',
-    iteration_count: 0,
-    retry_count: 0,
-    max_retries: 3,
-    memory: {},
-    visited_nodes: [],
-    max_iterations: 50,
-    compensation_stack: [],
-    max_execution_time_ms: 3600000,
-    total_tokens_used: 0,
-    supervisor_history: [],
     ...overrides,
-  };
+  });
 }
 
 /**
  * Create a simple single-node agent graph for testing.
  */
-export function createSimpleGraph(overrides: Partial<Graph> = {}): Graph {
+export function createSimpleGraph(overrides: Partial<GraphInput> = {}): Graph {
   return {
     id: uuidv4(),
     name: 'Test Graph',
     description: 'Simple test graph',
-    version: '1.0.0',
     nodes: [{
       id: 'agent-node',
       type: 'agent',
@@ -155,8 +140,6 @@ export function createSimpleGraph(overrides: Partial<Graph> = {}): Graph {
     edges: [],
     start_node: 'agent-node',
     end_nodes: ['agent-node'],
-    created_at: new Date(),
-    updated_at: new Date(),
     ...overrides,
-  };
+  } as Graph;
 }

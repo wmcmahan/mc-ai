@@ -90,15 +90,21 @@ export async function executeSupervisor(
       return createCompletionAction(node.id, attempt, Date.now() - startTime, 'Max supervisor iterations reached', supervisorIterations);
     }
 
+    // Resolve agent ID: supervisor_config.agent_id takes precedence, falls back to node.agent_id
+    const supervisorAgentId = config.agent_id ?? node.agent_id;
+    if (!supervisorAgentId) {
+      throw new SupervisorConfigError(node.id, 'supervisor node requires agent_id on the node or in supervisor_config');
+    }
+
     // Load agent config for the supervisor LLM (cached)
-    const agentConfig = await agentFactory.loadAgent(config.agent_id);
+    const agentConfig = await agentFactory.loadAgent(supervisorAgentId);
     const model = agentFactory.getModel(agentConfig);
 
     const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory);
 
     logger.info('routing', {
       supervisor_id: node.id,
-      agent_id: config.agent_id,
+      agent_id: supervisorAgentId,
       managed_nodes: config.managed_nodes,
       iteration: supervisorIterations + 1,
     });
@@ -143,7 +149,7 @@ export async function executeSupervisor(
     span.setAttribute('supervisor.input_tokens', usage?.inputTokens ?? 0);
     span.setAttribute('supervisor.output_tokens', usage?.outputTokens ?? 0);
 
-    return createHandoffAction(node, attempt, duration, decision, supervisorIterations);
+    return createHandoffAction(node, supervisorAgentId, attempt, duration, decision, supervisorIterations);
   });
 }
 
@@ -159,6 +165,7 @@ export async function executeSupervisor(
  */
 function createHandoffAction(
   node: GraphNode,
+  agentId: string,
   attempt: number,
   duration: number,
   decision: SupervisorDecision,
@@ -175,7 +182,7 @@ function createHandoffAction(
     },
     metadata: {
       node_id: node.id,
-      agent_id: node.supervisor_config?.agent_id,
+      agent_id: agentId,
       timestamp: new Date(),
       attempt,
       duration_ms: duration,

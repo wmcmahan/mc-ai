@@ -145,8 +145,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should follow edge with JSONPath == string condition', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Conditional String', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Conditional String', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'decider-A' }),
         makeNode({ id: 'router', type: 'router' }),
@@ -181,8 +180,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should take second conditional edge when first does not match', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Conditional Branch B', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Conditional Branch B', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'decider-B' }),
         makeNode({ id: 'router', type: 'router' }),
@@ -215,8 +213,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should follow edge with JSONPath > numeric condition', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Numeric Compare', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Numeric Compare', description: '',
       nodes: [
         makeNode({ id: 'scorer', type: 'agent', agent_id: 'writer-high' }),
         makeNode({ id: 'high-handler', type: 'agent', agent_id: 'handler-high' }),
@@ -244,8 +241,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should follow edge with JSONPath <= numeric condition', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Numeric Compare Low', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Numeric Compare Low', description: '',
       nodes: [
         makeNode({ id: 'scorer', type: 'agent', agent_id: 'writer-low' }),
         makeNode({ id: 'high-handler', type: 'agent', agent_id: 'handler-high' }),
@@ -273,8 +269,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should follow edge with JSONPath boolean truthiness check', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Boolean Check', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Boolean Check', description: '',
       nodes: [
         makeNode({ id: 'checker', type: 'agent', agent_id: 'flagger' }),
         makeNode({ id: 'approved-path', type: 'agent', agent_id: 'approve-handler' }),
@@ -304,8 +299,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should skip conditional edge when boolean value is false', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Boolean False', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Boolean False', description: '',
       nodes: [
         makeNode({ id: 'checker', type: 'agent', agent_id: 'no-approve' }),
         makeNode({ id: 'approved-path', type: 'agent', agent_id: 'approve-handler' }),
@@ -334,8 +328,7 @@ describe('GraphRunner — Conditional Edge Routing', () => {
    */
   test('should gracefully handle condition referencing missing memory key', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Missing Key', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Missing Key', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'generic-agent' }),
         makeNode({ id: 'guarded', type: 'agent', agent_id: 'handler' }),
@@ -366,8 +359,7 @@ describe('GraphRunner — No Matching Edge', () => {
    */
   test('should complete when no conditional edge matches and no fallback exists', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Dead End', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Dead End', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'decider-A' }),
         makeNode({ id: 'unreachable', type: 'agent', agent_id: 'handler' }),
@@ -395,8 +387,7 @@ describe('GraphRunner — No Matching Edge', () => {
    */
   test('should complete when node has no outgoing edges at all', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'No Outgoing', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'No Outgoing', description: '',
       nodes: [
         makeNode({ id: 'only-node', type: 'agent', agent_id: 'solo' }),
       ],
@@ -421,8 +412,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should execute a 4-node linear chain in order', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: '4-Node Chain', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: '4-Node Chain', description: '',
       nodes: [
         makeNode({ id: 'step-1', type: 'agent', agent_id: 'agent-1' }),
         makeNode({ id: 'step-2', type: 'agent', agent_id: 'agent-2' }),
@@ -460,8 +450,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should handle diamond graph with conditional fork', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Diamond', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Diamond', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'writer-high' }), // score=95
         makeNode({ id: 'left', type: 'agent', agent_id: 'left-handler' }),
@@ -494,8 +483,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should handle router as start node with empty memory', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Router Start', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Router Start', description: '',
       nodes: [
         makeNode({ id: 'router', type: 'router', write_keys: [] }),
         makeNode({ id: 'branch-a', type: 'agent', agent_id: 'handler-a' }),
@@ -524,8 +512,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should route based on pre-populated initial memory', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Seeded Memory', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Seeded Memory', description: '',
       nodes: [
         makeNode({ id: 'router', type: 'router', write_keys: [] }),
         makeNode({ id: 'advanced', type: 'agent', agent_id: 'advanced-handler' }),
@@ -555,8 +542,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should take first matching edge when multiple conditions are true', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Edge Priority', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Edge Priority', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'flagger' }), // approved=true
         makeNode({ id: 'first-match', type: 'agent', agent_id: 'handler-1' }),
@@ -586,8 +572,7 @@ describe('GraphRunner — Graph Topology', () => {
    */
   test('should accurately count iterations for multi-node execution', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Count Test', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Count Test', description: '',
       nodes: [
         makeNode({ id: 'a', type: 'agent', agent_id: 'agent-a' }),
         makeNode({ id: 'b', type: 'agent', agent_id: 'agent-b' }),
@@ -617,8 +602,7 @@ describe('GraphRunner — Edge Condition Types', () => {
    */
   test('should not follow conditional edge with missing condition string', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Missing Condition', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Missing Condition', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'generic-agent' }),
         makeNode({ id: 'guarded', type: 'agent', agent_id: 'handler' }),
@@ -646,8 +630,7 @@ describe('GraphRunner — Edge Condition Types', () => {
    */
   test('should follow edge with JSONPath != condition', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Not Equal', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Not Equal', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'decider-A' }), // decision='A'
         makeNode({ id: 'not-b', type: 'agent', agent_id: 'handler-not-b' }),
@@ -675,8 +658,7 @@ describe('GraphRunner — Edge Condition Types', () => {
    */
   test('should treat unknown condition type as false', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Unknown Type', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Unknown Type', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'generic-agent' }),
         makeNode({ id: 'unknown-edge', type: 'agent', agent_id: 'handler' }),

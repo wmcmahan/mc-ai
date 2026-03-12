@@ -69,12 +69,12 @@ export const WorkflowStateSchema = z.object({
   // ── Core metadata ──
   /** Graph definition ID. */
   workflow_id: z.string().uuid(),
-  /** Unique run identifier. */
-  run_id: z.string().uuid(),
-  /** When this run was created. */
-  created_at: z.date(),
-  /** Last state mutation timestamp. */
-  updated_at: z.date(),
+  /** Unique run identifier (auto-generated if omitted). */
+  run_id: z.string().uuid().default(() => crypto.randomUUID()),
+  /** When this run was created (defaults to now). */
+  created_at: z.date().default(() => new Date()),
+  /** Last state mutation timestamp (defaults to now). */
+  updated_at: z.date().default(() => new Date()),
 
   // ── User input ──
   /** High-level objective for this workflow run. */
@@ -83,8 +83,8 @@ export const WorkflowStateSchema = z.object({
   constraints: z.array(z.string()).default([]),
 
   // ── Control flow ──
-  /** Current lifecycle status. */
-  status: WorkflowStatusSchema,
+  /** Current lifecycle status (defaults to 'pending'). */
+  status: WorkflowStatusSchema.default('pending'),
   /** Node currently being executed. */
   current_node: z.string().optional(),
   /** Number of reducer dispatches (loop guard). */
@@ -155,6 +155,30 @@ export const WorkflowStateSchema = z.object({
 });
 
 export type WorkflowState = z.infer<typeof WorkflowStateSchema>;
+
+/** Input type for `createWorkflowState()` — only `workflow_id` and `goal` are required. */
+export type WorkflowStateInput = z.input<typeof WorkflowStateSchema>;
+
+/**
+ * Create a valid WorkflowState with sensible defaults.
+ *
+ * Only `workflow_id` and `goal` are required. All runtime-managed fields
+ * (`run_id`, `created_at`, `status`, `iteration_count`, etc.) are
+ * auto-populated via schema defaults.
+ *
+ * @example
+ * ```typescript
+ * const state = createWorkflowState({
+ *   workflow_id: graph.id,
+ *   goal: 'Research and summarize quantum computing',
+ *   constraints: ['Under 500 words'],
+ *   max_execution_time_ms: 120_000,
+ * });
+ * ```
+ */
+export function createWorkflowState(input: WorkflowStateInput): WorkflowState {
+  return WorkflowStateSchema.parse(input);
+}
 
 // ─── State View ─────────────────────────────────────────────────────
 

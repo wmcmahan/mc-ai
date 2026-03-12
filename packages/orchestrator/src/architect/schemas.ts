@@ -39,8 +39,8 @@ const LLMFailurePolicySchema = z.object({
 
 /** Supervisor configuration for hierarchical routing nodes. */
 const LLMSupervisorConfigSchema = z.object({
-  /** ID of the agent that acts as the supervisor LLM. */
-  agent_id: z.string(),
+  /** ID of the agent that acts as the supervisor LLM. Optional — falls back to node.agent_id. */
+  agent_id: z.string().optional(),
   /** Node IDs this supervisor may delegate work to. */
   managed_nodes: z.array(z.string()),
   /** Maximum routing iterations before auto-completing. */

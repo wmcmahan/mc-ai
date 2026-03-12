@@ -13,7 +13,6 @@
  *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/map-reduce/map-reduce.ts
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import {
   GraphRunner,
   InMemoryPersistenceProvider,
@@ -22,9 +21,8 @@ import {
   createProviderRegistry,
   configureProviderRegistry,
   createLogger,
-  type Graph,
-  type WorkflowState,
-  type AgentRegistryEntry,
+  createGraph,
+  createWorkflowState,
 } from '@mcai/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
@@ -38,13 +36,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const logger = createLogger('example');
 
 // ─── 1. Register agents ──────────────────────────────────────────────────
+// register() returns the auto-generated UUID for each agent.
 
-const SPLITTER_ID = uuidv4();
-const RESEARCHER_ID = uuidv4();
-const SYNTHESIZER_ID = uuidv4();
+const registry = new InMemoryAgentRegistry();
 
-const splitter: AgentRegistryEntry = {
-  id: SPLITTER_ID,
+const SPLITTER_ID = registry.register({
   name: 'Splitter Agent',
   description: 'Decomposes a broad topic into focused sub-topics for parallel research',
   model: 'claude-sonnet-4-20250514',
@@ -64,10 +60,9 @@ const splitter: AgentRegistryEntry = {
     read_keys: ['goal', 'constraints'],
     write_keys: ['topics'],
   },
-};
+});
 
-const researcher: AgentRegistryEntry = {
-  id: RESEARCHER_ID,
+const RESEARCHER_ID = registry.register({
   name: 'Researcher Agent',
   description: 'Investigates a specific sub-topic and produces research notes',
   model: 'claude-sonnet-4-20250514',
@@ -86,10 +81,9 @@ const researcher: AgentRegistryEntry = {
     read_keys: ['_map_item', '_map_index', '_map_total', 'goal'],
     write_keys: ['research'],
   },
-};
+});
 
-const synthesizer: AgentRegistryEntry = {
-  id: SYNTHESIZER_ID,
+const SYNTHESIZER_ID = registry.register({
   name: 'Synthesizer Agent',
   description: 'Merges parallel research results into a unified summary',
   model: 'claude-sonnet-4-20250514',
@@ -108,12 +102,7 @@ const synthesizer: AgentRegistryEntry = {
     read_keys: ['goal', 'mapper_results', 'mapper_count'],
     write_keys: ['summary'],
   },
-};
-
-const registry = new InMemoryAgentRegistry();
-registry.register(splitter);
-registry.register(researcher);
-registry.register(synthesizer);
+});
 configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
@@ -123,15 +112,9 @@ configureProviderRegistry(providers);
 
 // ─── 2. Define the graph ─────────────────────────────────────────────────
 
-const now = new Date();
-
-const graph: Graph = {
-  id: uuidv4(),
+const graph = createGraph({
   name: 'Fan-Out Map-Reduce',
   description: 'Parallel research with LLM-powered synthesis: split → map → synthesize',
-  version: '1.0.0',
-  created_at: now,
-  updated_at: now,
 
   nodes: [
     {
@@ -194,31 +177,16 @@ const graph: Graph = {
 
   start_node: 'splitter',
   end_nodes: ['synthesizer'],
-};
+});
 
 // ─── 3. Create initial state ─────────────────────────────────────────────
 
-const initialState: WorkflowState = {
+const initialState = createWorkflowState({
   workflow_id: graph.id,
-  run_id: uuidv4(),
-  created_at: now,
-  updated_at: now,
   goal: 'Research the impacts of climate change across different sectors: agriculture, public health, infrastructure, biodiversity, and economic systems.',
   constraints: ['Each sub-topic research should be 3-5 bullet points', 'Final summary under 500 words'],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  total_tokens_used: 0,
-  total_cost_usd: 0,
-  _cost_alert_thresholds_fired: [],
-  visited_nodes: [],
-  max_iterations: 50,
-  compensation_stack: [],
-  supervisor_history: [],
   max_execution_time_ms: 180_000,
-};
+});
 
 // ─── 4. Set up persistence + runner ──────────────────────────────────────
 

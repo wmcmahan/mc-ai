@@ -9,8 +9,8 @@
  */
 
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
 import type { Graph } from '../types/graph.js';
+import { createGraph } from '../types/graph.js';
 import { LLMGraphSchema } from './schemas.js';
 
 /** Inferred type of an LLM-generated graph (before runtime fields are added). */
@@ -19,23 +19,17 @@ export type LLMGraph = z.infer<typeof LLMGraphSchema>;
 /**
  * Convert an LLM-generated graph to a full runtime {@link Graph}.
  *
- * Adds:
- * - A UUID `id` (or preserves `existingId` in modification mode)
- * - `version: '1.0.0'`
- * - `created_at` / `updated_at` timestamps
+ * Adds a UUID `id` (or preserves `existingId` in modification mode).
  *
  * @param llm - The validated LLM output.
  * @param existingId - If provided, preserves this ID (modification mode).
  * @returns A complete {@link Graph} ready for validation and persistence.
  */
 export function llmGraphToGraph(llm: LLMGraph, existingId?: string): Graph {
-  const now = new Date();
-
-  return {
-    id: existingId || uuidv4(),
+  return createGraph({
+    ...(existingId ? { id: existingId } : {}),
     name: llm.name,
     description: llm.description,
-    version: '1.0.0',
     nodes: llm.nodes.map(n => ({
       ...n,
       failure_policy: {
@@ -55,16 +49,14 @@ export function llmGraphToGraph(llm: LLMGraph, existingId?: string): Graph {
     })),
     start_node: llm.start_node,
     end_nodes: llm.end_nodes,
-    created_at: now,
-    updated_at: now,
-  };
+  });
 }
 
 /**
  * Convert a runtime {@link Graph} back to the LLM-friendly format.
  *
- * Strips runtime-only fields (`id`, `version`, `created_at`, `updated_at`)
- * so the LLM can understand and modify the structure without confusion.
+ * Strips the runtime `id` field so the LLM can understand and modify
+ * the structure without confusion.
  *
  * Used in modification mode to provide context to the architect LLM.
  *

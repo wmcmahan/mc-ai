@@ -98,7 +98,6 @@ const createLinearGraph = (): Graph => ({
   id: uuidv4(),
   name: 'Linear Test Graph',
   description: 'Simple linear graph for testing',
-  version: '1.0.0',
   nodes: [
     {
       id: 'start', type: 'agent', agent_id: 'agent-1',
@@ -116,8 +115,6 @@ const createLinearGraph = (): Graph => ({
   edges: [{ id: 'e1', source: 'start', target: 'end', condition: { type: 'always' } }],
   start_node: 'start',
   end_nodes: ['end'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ───────────────────────────────────────────────────────────────

@@ -65,7 +65,6 @@ const createSupervisorGraph = (): Graph => ({
   id: uuidv4(),
   name: 'Supervisor Test Graph',
   description: 'Graph with a supervisor routing between workers',
-  version: '1.0.0',
   nodes: [
     {
       id: 'supervisor',
@@ -122,8 +121,6 @@ const createSupervisorGraph = (): Graph => ({
   ],
   start_node: 'supervisor',
   end_nodes: [],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Schema Tests ───────────────────────────────────────────────────────
@@ -177,10 +174,11 @@ describe('Supervisor Schema Tests', () => {
       expect(parsed.completion_condition).toBe('$.memory.all_done == true');
     });
 
-    test('should reject missing agent_id', () => {
-      expect(() => SupervisorConfigSchema.parse({
+    test('should accept missing agent_id (optional, falls back to node.agent_id)', () => {
+      const parsed = SupervisorConfigSchema.parse({
         managed_nodes: ['research'],
-      })).toThrow();
+      });
+      expect(parsed.agent_id).toBeUndefined();
     });
 
     test('should reject missing managed_nodes', () => {

@@ -118,8 +118,7 @@ describe('GraphRunner — Resume from Checkpoint', () => {
    */
   test('should resume from current_node when state has visited_nodes', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Resume Test', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Resume Test', description: '',
       nodes: [
         makeNode({ id: 'step-1', type: 'agent', agent_id: 'good-agent' }),
         makeNode({ id: 'step-2', type: 'agent', agent_id: 'good-agent' }),
@@ -158,8 +157,7 @@ describe('GraphRunner — Resume from Checkpoint', () => {
    */
   test('should reconstruct idempotency keys and skip already-executed iterations', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Idempotency Resume', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Idempotency Resume', description: '',
       nodes: [
         makeNode({ id: 'node-a', type: 'agent', agent_id: 'good-agent' }),
         makeNode({ id: 'node-b', type: 'agent', agent_id: 'good-agent' }),
@@ -193,8 +191,7 @@ describe('GraphRunner — Resume from Checkpoint', () => {
    */
   test('should start from start_node when visited_nodes is empty', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Fresh Start', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Fresh Start', description: '',
       nodes: [
         makeNode({ id: 'first', type: 'agent', agent_id: 'good-agent' }),
         makeNode({ id: 'second', type: 'agent', agent_id: 'good-agent' }),

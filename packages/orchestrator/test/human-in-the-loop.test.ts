@@ -77,7 +77,6 @@ const createHITLGraph = (rejectionNodeId?: string): Graph => ({
   id: 'hitl-graph',
   name: 'HITL Test',
   description: 'Test human-in-the-loop',
-  version: '1.0.0',
   nodes: [
     {
       id: 'agent1',
@@ -131,8 +130,6 @@ const createHITLGraph = (rejectionNodeId?: string): Graph => ({
   ],
   start_node: 'agent1',
   end_nodes: ['publish', ...(rejectionNodeId ? [rejectionNodeId] : [])],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────
@@ -254,7 +251,6 @@ describe('Human-in-the-Loop', () => {
       id: 'bad-graph',
       name: 'Bad',
       description: 'Missing config',
-      version: '1.0.0',
       nodes: [{
         id: 'bad-approval',
         type: 'approval',
@@ -267,8 +263,6 @@ describe('Human-in-the-Loop', () => {
       edges: [],
       start_node: 'bad-approval',
       end_nodes: ['bad-approval'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const state = createState();

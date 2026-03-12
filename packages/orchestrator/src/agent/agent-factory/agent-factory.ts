@@ -69,8 +69,6 @@ export class AgentFactory {
 
   /**
    * Configure a custom provider registry.
-   *
-   * Replaces the default registry (which has OpenAI + Anthropic).
    * Clears the model cache since providers may have changed.
    *
    * @param providerRegistry - The provider registry to use.

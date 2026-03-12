@@ -150,12 +150,10 @@ function makeSupervisorLLMGraph() {
 
 /** A minimal existing graph (for modification tests) */
 function makeExistingGraph(): Graph {
-  const now = new Date();
   return {
     id: 'existing-graph-id',
     name: 'Existing Graph',
     description: 'An existing graph to modify',
-    version: '1.0.0',
     nodes: [
       {
         id: 'research',
@@ -175,8 +173,6 @@ function makeExistingGraph(): Graph {
     edges: [],
     start_node: 'research',
     end_nodes: ['research'],
-    created_at: now,
-    updated_at: now,
   };
 }
 
@@ -215,15 +211,13 @@ describe('generateWorkflow', () => {
     expect(result.graph.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it('sets created_at and updated_at timestamps', async () => {
+  it('does not include timestamps (persistence-layer concerns)', async () => {
     (generateText as any).mockResolvedValue({ output: makeValidLLMGraph() });
 
-    const before = new Date();
     const result = await generateWorkflow({ prompt: 'test' });
-    const after = new Date();
 
-    expect(result.graph.created_at.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(result.graph.updated_at.getTime()).toBeLessThanOrEqual(after.getTime());
+    expect((result.graph as any).created_at).toBeUndefined();
+    expect((result.graph as any).updated_at).toBeUndefined();
   });
 
   it('loads agent config from factory with default architect-agent ID', async () => {

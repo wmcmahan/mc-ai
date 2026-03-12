@@ -12,7 +12,6 @@
  *   ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/eval-loop/eval-loop.ts
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import {
   GraphRunner,
   InMemoryPersistenceProvider,
@@ -21,9 +20,8 @@ import {
   createProviderRegistry,
   configureProviderRegistry,
   createLogger,
-  type Graph,
-  type WorkflowState,
-  type AgentRegistryEntry,
+  createGraph,
+  createWorkflowState,
 } from '@mcai/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
@@ -37,13 +35,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const logger = createLogger('example');
 
 // ─── 1. Register agents ──────────────────────────────────────────────────
+// register() returns the auto-generated UUID for each agent.
 
-const WRITER_ID = uuidv4();
-const EVALUATOR_ID = uuidv4();
-const PUBLISHER_ID = uuidv4();
+const registry = new InMemoryAgentRegistry();
 
-const writerAgent: AgentRegistryEntry = {
-  id: WRITER_ID,
+const WRITER_ID = registry.register({
   name: 'Writer Agent',
   description: 'Writes or refines a draft based on feedback',
   model: 'claude-sonnet-4-20250514',
@@ -63,10 +59,9 @@ const writerAgent: AgentRegistryEntry = {
     read_keys: ['goal', 'constraints', 'feedback', 'suggestions', 'draft'],
     write_keys: ['draft'],
   },
-};
+});
 
-const evaluatorAgent: AgentRegistryEntry = {
-  id: EVALUATOR_ID,
+const EVALUATOR_ID = registry.register({
   name: 'Evaluator Agent',
   description: 'Scores a draft on quality and provides feedback',
   model: 'claude-sonnet-4-20250514',
@@ -89,10 +84,9 @@ const evaluatorAgent: AgentRegistryEntry = {
     read_keys: ['goal', 'constraints', 'draft'],
     write_keys: ['score', 'feedback', 'suggestions'],
   },
-};
+});
 
-const publisherAgent: AgentRegistryEntry = {
-  id: PUBLISHER_ID,
+const PUBLISHER_ID = registry.register({
   name: 'Publisher Agent',
   description: 'Produces the final polished version',
   model: 'claude-sonnet-4-20250514',
@@ -111,12 +105,7 @@ const publisherAgent: AgentRegistryEntry = {
     read_keys: ['goal', 'draft'],
     write_keys: ['final_output'],
   },
-};
-
-const registry = new InMemoryAgentRegistry();
-registry.register(writerAgent);
-registry.register(evaluatorAgent);
-registry.register(publisherAgent);
+});
 configureAgentFactory(registry);
 
 // Configure LLM providers — built-in OpenAI + Anthropic are pre-registered.
@@ -130,15 +119,9 @@ configureProviderRegistry(providers);
 //                │
 //                └──[score < 0.8]──→ writer (loop back)
 
-const now = new Date();
-
-const graph: Graph = {
-  id: uuidv4(),
+const graph = createGraph({
   name: 'Eval Loop',
   description: 'Cyclic write-evaluate-revise loop with conditional quality gate',
-  version: '1.0.0',
-  created_at: now,
-  updated_at: now,
 
   nodes: [
     {
@@ -197,15 +180,12 @@ const graph: Graph = {
 
   start_node: 'writer',
   end_nodes: ['publisher'],
-};
+});
 
 // ─── 3. Create initial state ─────────────────────────────────────────────
 
-const initialState: WorkflowState = {
+const initialState = createWorkflowState({
   workflow_id: graph.id,
-  run_id: uuidv4(),
-  created_at: now,
-  updated_at: now,
   goal: 'Write a concise explanation of quantum computing for a general audience.',
   constraints: [
     'Under 250 words',
@@ -213,20 +193,9 @@ const initialState: WorkflowState = {
     'Cover qubits, superposition, and entanglement',
     'Suitable for someone with no physics background',
   ],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  total_tokens_used: 0,
-  total_cost_usd: 0,
-  _cost_alert_thresholds_fired: [],
-  visited_nodes: [],
   max_iterations: 20,
-  compensation_stack: [],
-  supervisor_history: [],
   max_execution_time_ms: 300_000,
-};
+});
 
 // ─── 4. Set up persistence + runner ──────────────────────────────────────
 

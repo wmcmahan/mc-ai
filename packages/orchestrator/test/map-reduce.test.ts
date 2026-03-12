@@ -83,7 +83,6 @@ const createMapGraph = (config: any = {}): Graph => ({
   id: 'map-graph',
   name: 'Map-Reduce Test',
   description: 'Test map-reduce',
-  version: '1.0.0',
   nodes: [
     {
       id: 'mapper',
@@ -123,8 +122,6 @@ const createMapGraph = (config: any = {}): Graph => ({
   ],
   start_node: 'mapper',
   end_nodes: ['synth'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────

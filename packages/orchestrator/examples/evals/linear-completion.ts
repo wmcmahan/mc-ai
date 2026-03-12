@@ -7,14 +7,11 @@
  * @module evals/linear-completion
  */
 
-import { v4 as uuidv4 } from 'uuid';
-import type { EvalSuite, Graph } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@mcai/orchestrator';
 
-const linearGraph: Graph = {
-  id: uuidv4(),
+const linearGraph = createGraph({
   name: 'Linear Completion Eval',
   description: 'Two tool nodes in sequence',
-  version: '1.0.0',
   nodes: [
     {
       id: 'fetch',
@@ -40,9 +37,7 @@ const linearGraph: Graph = {
   ],
   start_node: 'fetch',
   end_nodes: ['transform'],
-  created_at: new Date(),
-  updated_at: new Date(),
-};
+});
 
 /** Eval suite asserting a linear tool pipeline completes successfully. */
 export const suite: EvalSuite = {

@@ -99,7 +99,6 @@ const createSwarmGraph = (maxHandoffs = 10): Graph => ({
   id: 'swarm-graph',
   name: 'Swarm Test',
   description: 'Test swarm handoffs',
-  version: '1.0.0',
   nodes: [
     {
       id: 'agent-a',
@@ -136,8 +135,6 @@ const createSwarmGraph = (maxHandoffs = 10): Graph => ({
   ],
   start_node: 'agent-a',
   end_nodes: ['agent-a', 'agent-b'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────

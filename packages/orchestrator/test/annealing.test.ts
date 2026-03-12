@@ -104,7 +104,6 @@ const createAnnealingGraph = (config: any = {}): Graph => ({
   id: 'annealing-graph',
   name: 'Annealing Test',
   description: 'Test self-annealing',
-  version: '1.0.0',
   nodes: [{
     id: 'annealing-agent',
     type: 'agent',
@@ -126,8 +125,6 @@ const createAnnealingGraph = (config: any = {}): Graph => ({
   edges: [],
   start_node: 'annealing-agent',
   end_nodes: ['annealing-agent'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────

@@ -229,7 +229,6 @@ describe('Token Streaming', () => {
         id: uuidv4(),
         name: 'Streaming Test',
         description: 'Test token streaming',
-        version: '1.0.0',
         start_node: 'agent-1',
         end_nodes: ['agent-1'],
         nodes: [{

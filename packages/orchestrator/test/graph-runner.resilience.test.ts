@@ -157,8 +157,7 @@ describe('GraphRunner — Retry Behavior', () => {
    */
   test('should retry failed node and succeed on later attempt', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Retry Success', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Retry Success', description: '',
       nodes: [
         makeNode({
           id: 'flaky-node', type: 'agent', agent_id: 'fail-then-succeed',
@@ -184,8 +183,7 @@ describe('GraphRunner — Retry Behavior', () => {
    */
   test('should fail workflow when node exhausts all retries', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Retry Exhausted', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Retry Exhausted', description: '',
       nodes: [
         makeNode({
           id: 'broken-node', type: 'agent', agent_id: 'always-fail',
@@ -209,8 +207,7 @@ describe('GraphRunner — Retry Behavior', () => {
    */
   test('should emit node:retry events during retries', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Retry Events', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Retry Events', description: '',
       nodes: [
         makeNode({
           id: 'flaky', type: 'agent', agent_id: 'fail-then-succeed',
@@ -250,8 +247,7 @@ describe('GraphRunner — Error Handling & Events', () => {
    */
   test('should set status to failed and emit workflow:failed on node error', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Fail Flow', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Fail Flow', description: '',
       nodes: [
         makeNode({
           id: 'exploder', type: 'agent', agent_id: 'always-fail',
@@ -294,8 +290,7 @@ describe('GraphRunner — Error Handling & Events', () => {
    */
   test('should emit node:failed event when node exhausts retries', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Node Fail Event', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Node Fail Event', description: '',
       nodes: [
         makeNode({
           id: 'bad-node', type: 'agent', agent_id: 'always-fail',
@@ -333,8 +328,7 @@ describe('GraphRunner — Error Handling & Events', () => {
    */
   test('should propagate failure from non-start node', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Mid Fail', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Mid Fail', description: '',
       nodes: [
         makeNode({ id: 'ok-node', type: 'agent', agent_id: 'good-agent' }),
         makeNode({
@@ -370,8 +364,7 @@ describe('GraphRunner — Per-Node Timeout', () => {
    */
   test('should enforce per-node timeout_ms', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Node Timeout', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Node Timeout', description: '',
       nodes: [
         makeNode({
           id: 'slow-node', type: 'agent', agent_id: 'slow-agent',
@@ -399,8 +392,7 @@ describe('GraphRunner — Per-Node Timeout', () => {
    */
   test('should not timeout nodes without timeout_ms configured', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'No Timeout', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'No Timeout', description: '',
       nodes: [
         makeNode({
           id: 'normal-node', type: 'agent', agent_id: 'good-agent',
@@ -423,8 +415,7 @@ describe('GraphRunner — Per-Node Timeout', () => {
 describe('GraphRunner — Subgraph Node Validation', () => {
   test('should throw when subgraph node has no loadGraphFn', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Subgraph Test', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Subgraph Test', description: '',
       nodes: [
         makeNode({ id: 'sub', type: 'subgraph', subgraph_id: 'nested-graph', subgraph_config: { subgraph_id: 'nested-graph', input_mapping: {}, output_mapping: {}, max_iterations: 50 } }),
       ],
@@ -440,8 +431,7 @@ describe('GraphRunner — Subgraph Node Validation', () => {
 
   test('synthesizer node should execute without error (simple merge)', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Synthesizer Test', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Synthesizer Test', description: '',
       nodes: [
         makeNode({ id: 'synth', type: 'synthesizer' }),
       ],
@@ -492,8 +482,7 @@ describe('GraphRunner — Saga Rollback', () => {
     });
 
     const graph: Graph = {
-      id: uuidv4(), name: 'Rollback', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Rollback', description: '',
       nodes: [makeNode({ id: 'dummy', type: 'agent', agent_id: 'x' })],
       edges: [],
       start_node: 'dummy',
@@ -524,8 +513,7 @@ describe('GraphRunner — Saga Rollback', () => {
     });
 
     const graph: Graph = {
-      id: uuidv4(), name: 'Rollback Event', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Rollback Event', description: '',
       nodes: [makeNode({ id: 'dummy', type: 'agent', agent_id: 'x' })],
       edges: [],
       start_node: 'dummy',
@@ -578,8 +566,7 @@ describe('GraphRunner — Saga Rollback', () => {
     });
 
     const graph: Graph = {
-      id: uuidv4(), name: 'Partial Rollback', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Partial Rollback', description: '',
       nodes: [makeNode({ id: 'dummy', type: 'agent', agent_id: 'x' })],
       edges: [],
       start_node: 'dummy',
@@ -606,8 +593,7 @@ describe('GraphRunner — Graph Validation', () => {
    */
   test('should throw on invalid graph (start node not in nodes)', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Invalid', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Invalid', description: '',
       nodes: [
         makeNode({ id: 'orphan', type: 'agent', agent_id: 'agent-x' }),
       ],
@@ -626,8 +612,7 @@ describe('GraphRunner — Graph Validation', () => {
    */
   test('should throw on invalid graph (end node references missing node)', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Bad End', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Bad End', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'agent-1' }),
       ],
@@ -646,8 +631,7 @@ describe('GraphRunner — Graph Validation', () => {
    */
   test('should persist failed state on graph validation failure', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Invalid Persist', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Invalid Persist', description: '',
       nodes: [],
       edges: [],
       start_node: 'nonexistent',
@@ -674,8 +658,7 @@ describe('GraphRunner — Graph Validation', () => {
    */
   test('should throw on graph with duplicate node IDs', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Duplicate IDs', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Duplicate IDs', description: '',
       nodes: [
         makeNode({ id: 'same-id', type: 'agent', agent_id: 'agent-1' }),
         makeNode({ id: 'same-id', type: 'agent', agent_id: 'agent-2' }),
@@ -699,8 +682,7 @@ describe('GraphRunner — Persistence Resilience', () => {
    */
   test('should continue execution even when persistence fails', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Persist Fail', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Persist Fail', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'good-agent' }),
         makeNode({ id: 'end', type: 'agent', agent_id: 'finish-agent' }),

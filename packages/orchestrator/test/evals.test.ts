@@ -130,13 +130,10 @@ const createToolGraph = (nodeCount: number = 2): Graph => {
     id: uuidv4(),
     name: 'Test Tool Graph',
     description: 'Graph for eval tests',
-    version: '1.0.0',
     nodes,
     edges,
     start_node: 'node_0',
     end_nodes: [`node_${nodeCount - 1}`],
-    created_at: new Date(),
-    updated_at: new Date(),
   };
 };
 
@@ -539,7 +536,6 @@ describe('runEval', () => {
       id: uuidv4(),
       name: 'Bad Graph',
       description: 'Graph with validation errors',
-      version: '1.0.0',
       nodes: [
         {
           id: 'only_node',
@@ -554,8 +550,6 @@ describe('runEval', () => {
       edges: [],
       start_node: 'nonexistent_start',  // invalid: start node doesn't exist
       end_nodes: ['only_node'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const suite: EvalSuite = {

@@ -7,7 +7,6 @@ describe('Graph Validation', () => {
     id: 'test-graph',
     name: 'Test Graph',
     description: 'A valid test graph',
-    version: '1.0.0',
     start_node: 'start',
     end_nodes: ['end'],
     nodes: [
@@ -48,8 +47,6 @@ describe('Graph Validation', () => {
         condition: { type: 'always' },
       },
     ],
-    created_at: new Date(),
-    updated_at: new Date(),
   });
 
   describe('valid graphs', () => {

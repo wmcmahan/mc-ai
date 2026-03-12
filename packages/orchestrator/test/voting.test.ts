@@ -97,7 +97,6 @@ const createVotingGraph = (config: any = {}): Graph => ({
   id: 'voting-graph',
   name: 'Voting Test',
   description: 'Test voting',
-  version: '1.0.0',
   nodes: [{
     id: 'vote-node',
     type: 'voting',
@@ -115,8 +114,6 @@ const createVotingGraph = (config: any = {}): Graph => ({
   edges: [],
   start_node: 'vote-node',
   end_nodes: ['vote-node'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 // ─── Tests ────────────────────────────────────────────────────────
@@ -218,7 +215,6 @@ describe('Voting/Consensus', () => {
       id: 'bad-graph',
       name: 'Bad',
       description: 'Missing config',
-      version: '1.0.0',
       nodes: [{
         id: 'bad-vote',
         type: 'voting',
@@ -231,8 +227,6 @@ describe('Voting/Consensus', () => {
       edges: [],
       start_node: 'bad-vote',
       end_nodes: ['bad-vote'],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
 
     const state = createState();

@@ -43,7 +43,6 @@ function makeGraph(overrides: Partial<Graph> = {}): Graph {
     id: 'graph-123',
     name: 'Test Workflow',
     description: 'A test workflow',
-    version: '1.0.0',
     nodes: [
       {
         id: 'research',
@@ -70,8 +69,6 @@ function makeGraph(overrides: Partial<Graph> = {}): Graph {
     ],
     start_node: 'research',
     end_nodes: ['writer'],
-    created_at: new Date('2025-01-01'),
-    updated_at: new Date('2025-01-01'),
     ...overrides,
   } as Graph;
 }
@@ -94,19 +91,11 @@ describe('llmGraphToGraph', () => {
     expect(graph.id).toBe('existing-id-123');
   });
 
-  it('sets version to 1.0.0', () => {
+  it('does not include version or timestamps (persistence-layer concerns)', () => {
     const graph = llmGraphToGraph(makeLLMGraph());
-    expect(graph.version).toBe('1.0.0');
-  });
-
-  it('sets created_at and updated_at timestamps', () => {
-    const before = new Date();
-    const graph = llmGraphToGraph(makeLLMGraph());
-    const after = new Date();
-
-    expect(graph.created_at.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(graph.created_at.getTime()).toBeLessThanOrEqual(after.getTime());
-    expect(graph.updated_at.getTime()).toEqual(graph.created_at.getTime());
+    expect((graph as any).version).toBeUndefined();
+    expect((graph as any).created_at).toBeUndefined();
+    expect((graph as any).updated_at).toBeUndefined();
   });
 
   it('maps nodes with failure_policy and requires_compensation', () => {

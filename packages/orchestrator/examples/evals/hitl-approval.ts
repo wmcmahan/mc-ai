@@ -8,14 +8,11 @@
  * @module evals/hitl-approval
  */
 
-import { v4 as uuidv4 } from 'uuid';
-import type { EvalSuite, Graph } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@mcai/orchestrator';
 
-const hitlGraph: Graph = {
-  id: uuidv4(),
+const hitlGraph = createGraph({
   name: 'HITL Approval Eval',
   description: 'Approval gate pauses for human review',
-  version: '1.0.0',
   nodes: [
     {
       id: 'prepare',
@@ -56,9 +53,7 @@ const hitlGraph: Graph = {
   ],
   start_node: 'prepare',
   end_nodes: ['finalize'],
-  created_at: new Date(),
-  updated_at: new Date(),
-};
+});
 
 /** Eval suite asserting the approval gate pauses the workflow. */
 export const suite: EvalSuite = {

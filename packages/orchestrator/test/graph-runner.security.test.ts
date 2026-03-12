@@ -202,8 +202,7 @@ describe('GraphRunner — Write Key Permissions', () => {
    */
   test('should reject action writing to unauthorized memory key', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Permission Block', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Permission Block', description: '',
       nodes: [
         makeNode({
           id: 'restricted-node', type: 'agent', agent_id: 'writer-secret',
@@ -225,8 +224,7 @@ describe('GraphRunner — Write Key Permissions', () => {
    */
   test('should allow action writing to authorized memory key', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Permission Allow', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Permission Allow', description: '',
       nodes: [
         makeNode({
           id: 'allowed-node', type: 'agent', agent_id: 'writer-allowed',
@@ -250,8 +248,7 @@ describe('GraphRunner — Write Key Permissions', () => {
    */
   test('should allow wildcard write_keys to write any key', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Wildcard Write', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Wildcard Write', description: '',
       nodes: [
         makeNode({
           id: 'wild-node', type: 'agent', agent_id: 'writer-secret',
@@ -277,8 +274,7 @@ describe('GraphRunner — Write Key Permissions', () => {
    */
   test('should reject set_status action without explicit status permission', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Status Block', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Status Block', description: '',
       nodes: [
         makeNode({
           id: 'status-node', type: 'agent', agent_id: 'status-changer',
@@ -301,8 +297,7 @@ describe('GraphRunner — Write Key Permissions', () => {
    */
   test('should deny all writes with empty write_keys', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Deny All', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Deny All', description: '',
       nodes: [
         makeNode({
           id: 'locked-node', type: 'agent', agent_id: 'writer-allowed',
@@ -327,8 +322,7 @@ describe('GraphRunner — StateView Read Key Filtering', () => {
    */
   test('should filter memory by read_keys in StateView', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Read Filter', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Read Filter', description: '',
       nodes: [
         makeNode({
           id: 'reader-node', type: 'agent', agent_id: 'reader-agent',
@@ -367,8 +361,7 @@ describe('GraphRunner — StateView Read Key Filtering', () => {
    */
   test('should give full memory access with wildcard read_keys', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Full Read', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Full Read', description: '',
       nodes: [
         makeNode({
           id: 'full-reader', type: 'agent', agent_id: 'full-reader-agent',
@@ -402,8 +395,7 @@ describe('GraphRunner — StateView Read Key Filtering', () => {
    */
   test('should produce empty memory when read_keys reference non-existent keys', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Empty Read', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Empty Read', description: '',
       nodes: [
         makeNode({
           id: 'empty-reader', type: 'agent', agent_id: 'empty-reader-agent',
@@ -438,8 +430,7 @@ describe('GraphRunner — StateView Read Key Filtering', () => {
     });
 
     const graph: Graph = {
-      id: uuidv4(), name: 'Context Fields', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Context Fields', description: '',
       nodes: [
         makeNode({
           id: 'context-reader', type: 'agent', agent_id: 'context-agent',
@@ -472,8 +463,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
    */
   test('should throw BudgetExceededError when token budget exceeded', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Budget Exceed', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Budget Exceed', description: '',
       nodes: [
         makeNode({
           id: 'expensive-node', type: 'agent', agent_id: 'big-spender',
@@ -503,8 +493,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
    */
   test('should not throw when token usage is within budget', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Budget OK', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Budget OK', description: '',
       nodes: [
         makeNode({
           id: 'cheap-node', type: 'agent', agent_id: 'moderate-spender',
@@ -529,8 +518,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
    */
   test('should track tokens without budget enforcement when no budget set', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'No Budget', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'No Budget', description: '',
       nodes: [
         makeNode({ id: 'node', type: 'agent', agent_id: 'big-spender' }),
       ],
@@ -553,8 +541,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
    */
   test('should persist failed state when budget exceeded', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Budget Persist', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Budget Persist', description: '',
       nodes: [
         makeNode({ id: 'expensive', type: 'agent', agent_id: 'big-spender' }),
       ],
@@ -585,8 +572,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
    */
   test('should accumulate tokens across multiple nodes', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Cumulative Tokens', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Cumulative Tokens', description: '',
       nodes: [
         makeNode({ id: 'node1', type: 'agent', agent_id: 'moderate-spender' }),
         makeNode({ id: 'node2', type: 'agent', agent_id: 'moderate-spender' }),
@@ -609,8 +595,7 @@ describe('GraphRunner — Token Budget Enforcement', () => {
 
   test('should fail when cumulative tokens exceed budget on second node', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Cumulative Over', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Cumulative Over', description: '',
       nodes: [
         makeNode({ id: 'node1', type: 'agent', agent_id: 'moderate-spender' }),
         makeNode({ id: 'node2', type: 'agent', agent_id: 'moderate-spender' }),
@@ -638,8 +623,7 @@ describe('GraphRunner — Memory Accumulation', () => {
    */
   test('should accumulate memory across node executions', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Memory Accum', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Memory Accum', description: '',
       nodes: [
         makeNode({ id: 'node-a', type: 'agent', agent_id: 'writer-allowed' }), // writes public_result
         makeNode({ id: 'node-b', type: 'agent', agent_id: 'writer-secret' }),   // writes secret_data
@@ -664,8 +648,7 @@ describe('GraphRunner — Memory Accumulation', () => {
    */
   test('should preserve pre-populated memory alongside new writes', async () => {
     const graph: Graph = {
-      id: uuidv4(), name: 'Preserve Memory', description: '', version: '1.0.0',
-      created_at: new Date(), updated_at: new Date(),
+      id: uuidv4(), name: 'Preserve Memory', description: '',
       nodes: [
         makeNode({ id: 'node', type: 'agent', agent_id: 'writer-allowed' }),
       ],

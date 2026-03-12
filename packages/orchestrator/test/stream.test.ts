@@ -96,7 +96,6 @@ const createLinearGraph = (): Graph => ({
   id: uuidv4(),
   name: 'Linear Test Graph',
   description: 'Simple linear graph for testing',
-  version: '1.0.0',
   nodes: [
     {
       id: 'start', type: 'agent', agent_id: 'agent-1',
@@ -114,15 +113,12 @@ const createLinearGraph = (): Graph => ({
   edges: [{ id: 'e1', source: 'start', target: 'end', condition: { type: 'always' } }],
   start_node: 'start',
   end_nodes: ['end'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 const createSingleNodeGraph = (): Graph => ({
   id: uuidv4(),
   name: 'Single Node Graph',
   description: 'One-node graph',
-  version: '1.0.0',
   nodes: [
     {
       id: 'only', type: 'agent', agent_id: 'agent-1',
@@ -134,8 +130,6 @@ const createSingleNodeGraph = (): Graph => ({
   edges: [],
   start_node: 'only',
   end_nodes: ['only'],
-  created_at: new Date(),
-  updated_at: new Date(),
 });
 
 async function collectStreamEvents(runner: GraphRunner, options?: { signal?: AbortSignal }): Promise<StreamEvent[]> {
@@ -218,13 +212,10 @@ describe('GraphRunner.stream() — Terminal Events', () => {
       id: uuidv4(),
       name: 'Bad Graph',
       description: 'Invalid graph',
-      version: '1.0.0',
       nodes: [],
       edges: [],
       start_node: 'nonexistent',
       end_nodes: [],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
     const runner = new GraphRunner(badGraph, createInitialState());
     const events = await collectStreamEvents(runner);
@@ -341,13 +332,10 @@ describe('GraphRunner.stream() — Backward Compatibility', () => {
       id: uuidv4(),
       name: 'Bad',
       description: 'Invalid',
-      version: '1.0.0',
       nodes: [],
       edges: [],
       start_node: 'nonexistent',
       end_nodes: [],
-      created_at: new Date(),
-      updated_at: new Date(),
     };
     const runner = new GraphRunner(badGraph, createInitialState());
 
