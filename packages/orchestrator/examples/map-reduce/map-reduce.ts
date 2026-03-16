@@ -161,18 +161,8 @@ const graph = createGraph({
   ],
 
   edges: [
-    {
-      id: 'split-to-map',
-      source: 'splitter',
-      target: 'mapper',
-      condition: { type: 'always' },
-    },
-    {
-      id: 'map-to-synthesize',
-      source: 'mapper',
-      target: 'synthesizer',
-      condition: { type: 'always' },
-    },
+    { source: 'splitter', target: 'mapper' },
+    { source: 'mapper', target: 'synthesizer' },
   ],
 
   start_node: 'splitter',

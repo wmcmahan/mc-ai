@@ -54,40 +54,93 @@ Each generation follows a strict loop:
 
 *(Note: Evolution is resource intensive. If you only need to iteratively refine a single output until it hits a quality bar, use [Self-Annealing](/patterns/self-annealing/) instead.)*
 
-## Configuration
+## Implementation example
 
-The pattern requires you to pair a "candidate" generator agent with an "evaluator" agent.
+The pattern requires you to pair a "candidate" generator agent with an "evaluator" agent within an `evolution` node.
 
-```yaml
-id: evolve
-type: evolution
-evolution_config:
-  candidate_agent_id: writer-agent
-  evaluator_agent_id: critic-agent
-  population_size: 5
-  max_generations: 10
-  fitness_threshold: 0.9
-  stagnation_generations: 3
-  selection_strategy: rank
-  initial_temperature: 1.0
-  final_temperature: 0.3
-read_keys: ['*']
-write_keys: ['*']
+### 1. The Agents
+
+Register the candidate agent that will generate variations, and the evaluator agent that will score their fitness.
+
+```typescript
+import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+
+const registry = new InMemoryAgentRegistry();
+
+const WRITER_ID = registry.register({
+  name: 'Candidate Writer',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: [
+    'You are a creative writer.',
+    'Write a poem based on the prompt.',
+    'If `_evolution_parent` is provided, use it as a starting point. The parent scored `_evolution_parent_fitness`—aim to do better.',
+    'Current generation: `_evolution_generation`.',
+  ].join(' '),
+  // Temperature is overridden by the evolution node dynamically
+  temperature: 1.0, 
+  tools: [],
+  permissions: { read_keys: ['prompt'], write_keys: ['poem'] },
+});
+
+const EVALUATOR_ID = registry.register({
+  name: 'Fitness Evaluator',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: [
+    'Evaluate the poem strictly on its metrical structure and emotional impact.',
+    'Return your evaluation by calling save_to_memory with key "score" as a number between 0.0 and 1.0.',
+  ].join(' '),
+  temperature: 0.1,
+  tools: [],
+  permissions: { read_keys: ['poem'], write_keys: ['score'] },
+});
 ```
 
-| Setting | Purpose |
-|---------|---------|
-| `population_size` | How many parallel paths are explored in each generation. |
-| `selection_strategy` | Determines how the parent is chosen: `rank` (always the highest score), `tournament` (random subset compete), or `roulette` (probabilistic selection). |
-| `stagnation_generations` | Failsafe to exit the loop early if the top score hasn't improved for N generations. |
+### 2. The Evolution Node
+
+The `evolution` node type requires an `evolution_config` block that dictates the population size, selection strategy, and stopping conditions.
+
+```typescript
+import { createGraph } from '@mcai/orchestrator';
+
+const graph = createGraph({
+  name: 'Poem Evolution',
+  nodes: [
+    {
+      id: 'evolve-poem',
+      type: 'evolution',
+      read_keys: ['*'],
+      write_keys: ['*'],
+      evolution_config: {
+        candidate_agent_id: WRITER_ID,
+        evaluator_agent_id: EVALUATOR_ID,
+        population_size: 5,        // Parallel candidates per generation
+        max_generations: 10,       // Hard limit
+        fitness_threshold: 0.9,    // Early exit score
+        stagnation_generations: 3, // Exit if no improvement
+        selection_strategy: 'rank',// Always select the top scorer
+        initial_temperature: 1.0,  // Exploration (Generation 0)
+        final_temperature: 0.3,    // Exploitation (Final Generation)
+      },
+    },
+  ],
+  edges: [],
+  start_node: 'evolve-poem',
+  end_nodes: ['evolve-poem'],
+});
+```
 
 ## Core concepts
 
 ### Prompt Context Injection
-Each candidate receives the previous generation's winner automatically in its state view. Your candidate agent's system prompt should explicitly reference these variables:
+
+Each candidate receives the previous generation's winner automatically in its state view. Your candidate agent's system prompt must explicitly address these variables to "mutate" successfully:
 
 > "If `_evolution_parent` is provided, use it as a starting point. The parent scored `_evolution_parent_fitness`—aim to do better. Current generation: `_evolution_generation`."
 
 ### Cost Considerations
+
 Evolution executes a massive amount of LLM calls. With a population size of 5 and max generations of 10, you are triggering up to 50 candidate executions plus 50 evaluations. 
-You can use `error_strategy: 'best_effort'` to gracefully handle occasional downstream API timeouts without failing the entire generation. Always set a conservative `fitness_threshold` so the loop exits as early as possible.
+
+You can configure `error_strategy: 'best_effort'` on your node to gracefully handle occasional downstream API timeouts without failing the entire generation. Always set a conservative `fitness_threshold` so the loop exits as early as possible.

@@ -155,27 +155,11 @@ const graph = createGraph({
 
   edges: [
     // writer always goes to evaluator
-    {
-      id: 'writer-to-evaluator',
-      source: 'writer',
-      target: 'evaluator',
-      condition: { type: 'always' },
-    },
+    { source: 'writer', target: 'evaluator' },
     // loop back: evaluator → writer when score < 0.8
-    // (listed first so it matches before the exit edge)
-    {
-      id: 'evaluator-to-writer',
-      source: 'evaluator',
-      target: 'writer',
-      condition: { type: 'conditional', condition: 'number(memory.score) < 0.8' },
-    },
+    { source: 'evaluator', target: 'writer', condition: { type: 'conditional', condition: 'number(memory.score) < 0.8' } },
     // quality gate: evaluator → publisher when score >= 0.8
-    {
-      id: 'evaluator-to-publisher',
-      source: 'evaluator',
-      target: 'publisher',
-      condition: { type: 'conditional', condition: 'number(memory.score) >= 0.8' },
-    },
+    { source: 'evaluator', target: 'publisher', condition: { type: 'conditional', condition: 'number(memory.score) >= 0.8' } },
   ],
 
   start_node: 'writer',

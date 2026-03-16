@@ -19,45 +19,92 @@ flowchart TB
     Sup --> |"Goal complete"| Done(["✓ __done__"])
 ```
 
-1. **Initial Goal**: The workflow receives a complex, open-ended goal (e.g., "Write a comprehensive research report on AI agents").
-2. **First Routing Decision**: The Supervisor reads the goal and decides the first step: "I need research data before I can write." It delegates the task to the `researcher` node.
-3. **Execution & Return**: The `researcher` executes the task, saves the data to memory, and control returns directly to the Supervisor.
-4. **Subsequent Routing**: The Supervisor reviews the new state of the memory. "I have the research data now. The next step is drafting." It delegates to the `writer` node.
-5. **Completion**: Once the `writer` returns a draft, the Supervisor reviews it and concludes the goal is met. It routes the final execution to `__done__`, terminating the graph.
+1. **Initial Goal**: The workflow receives an open-ended goal (e.g., "Write a comprehensive report").
+2. **First Routing Decision**: The Supervisor assigns the first step to the most appropriate specialist node in its `managed_nodes` list (e.g., `research`).
+3. **Execution & Return**: The `research` node executes, and control returns directly to the Supervisor via a cyclic return edge.
+4. **Subsequent Routing**: The Supervisor reviews the new state of the memory, decides what is missing, and delegates again (e.g., to `write`).
+5. **Completion**: Once the goal is met, the Supervisor routes the final execution to the `__done__` sentinel, terminating the graph.
 
-## When to use this pattern
+## Implementation example
 
-- **Unknown execution paths**: When the number of steps required to complete a task isn't known in advance.
-- **Complex, multi-step goals**: Tasks that require a sequence of distinct specialized skills (e.g., research → compile → format → review).
-- **Data-dependent routing**: When the next step depends entirely on the output of the previous step. For simple conditional logic, use a static router node instead.
+This example demonstrates a supervisor routing between three specialists: a researcher, a writer, and an editor. See the [full runnable code](https://github.com/wmcmahan/mc-ai/tree/main/packages/orchestrator/examples/supervisor-routing/supervisor-routing.ts).
 
-## Configuration
+### 1. The Supervisor prompt
 
-A Supervisor node requires an LLM agent capable of structured output to make the routing decisions, and an explicitly defined list of sibling nodes it is permitted to dispatch work to.
+The agent powering the supervisor should be instructed to act as a manager. It evaluates the current state and identifies the single best next worker to delegate to.
 
-```yaml
-id: manager
-type: supervisor
-supervisor_config:
-  agent_id: router-agent
-  managed_nodes: 
-    - researcher
-    - writer
-  max_iterations: 10
-read_keys: ['*']
-write_keys: ['*']
+```typescript
+const SUPERVISOR_ID = registry.register({
+  name: 'Supervisor Agent',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: [
+    'You are a project supervisor coordinating a team of specialists to produce a high-quality article.',
+    'You have three team members: "research" (gathers facts), "write" (produces drafts), and "edit" (polishes prose).',
+    'Review the current state and decide which specialist should work next.',
+    'Typical flow: research → write → edit, but you may loop back if quality is insufficient.',
+    'When the final_draft is polished and ready, route to "__done__" to complete the workflow.',
+  ].join(' '),
+  // We keep the temperature low so routing decisions are deterministic
+  temperature: 0.3,
+  tools: [],
+  permissions: {
+    read_keys: ['*'], // The supervisor needs to see everything to make good routing decisions
+    write_keys: ['*'],
+  },
+});
 ```
 
-| Setting | Purpose |
-|---------|---------|
-| `agent_id` | The ID of the LLM agent tasked with making the routing decisions. This agent uses `generateObject` under the hood to output a strict routing target and reasoning. |
-| `managed_nodes` | An allow-list of node IDs this supervisor is permitted to delegate to. It cannot route to unmanaged nodes. |
-| `max_iterations` | A safety threshold. If the supervisor loops back to itself this many times, it fails to prevent infinite runtime and cost loops. |
+### 2. The Supervisor node
 
-## Core concepts
+The `supervisor` node type requires a `supervisor_config` block defining which node IDs it is permitted to route work to.
 
-### The Supervisor Agent Prompt
-The agent powering the supervisor should be instructed to act as a project manager, not an executor. It should only evaluate the current state of memory against the goal, and identify the single best next worker to delegate to.
+```typescript
+import { createGraph } from '@mcai/orchestrator';
 
-### Nested Delegation
-Because Supervisors are just nodes in a graph, they can be configured to manage other Supervisors. This allows for hierarchical delegation—for instance, a "Product Director" supervisor that delegates high-level milestones to "Engineering Manager" and "Marketing Manager" supervisors, who each manage their own team of specialist worker agents.
+const graph = createGraph({
+  name: 'Supervisor Routing',
+  nodes: [
+    {
+      id: 'supervisor',
+      type: 'supervisor',
+      agent_id: SUPERVISOR_ID,
+      read_keys: ['*'],
+      write_keys: ['*'],
+      supervisor_config: {
+        managed_nodes: ['research', 'write', 'edit'],
+        max_iterations: 10,
+      },
+    },
+    // ... define the 'research', 'write', and 'edit' agent nodes ...
+  ],
+  // ...
+});
+```
+
+### 3. The Cyclic edges
+
+Supervisors require a **hub-and-spoke topology**. You must define unconditional edges from the supervisor to every managed node, and from every managed node securely back to the supervisor.
+
+```typescript
+const graph = createGraph({
+  // ... nodes ...
+  edges: [
+    // Supervisor → specialists (outbound)
+    { source: 'supervisor', target: 'research' },
+    { source: 'supervisor', target: 'write' },
+    { source: 'supervisor', target: 'edit' },
+
+    // Specialists → supervisor (cyclic return)
+    { source: 'research', target: 'supervisor' },
+    { source: 'write', target: 'supervisor' },
+    { source: 'edit', target: 'supervisor' },
+  ],
+  start_node: 'supervisor',
+  end_nodes: [],  // Termination is handled dynamically by routing to __done__
+});
+```
+
+## Nested delegation
+
+Because Supervisors are just nodes in a graph, they can be configured to manage *other* Supervisors. This allows for hierarchical delegation—for instance, a "Product Director" supervisor that delegates high-level milestones to "Engineering Manager" and "Marketing Manager" supervisors, who each manage their own team of specialist worker agents.

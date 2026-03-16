@@ -1,62 +1,137 @@
 ---
 title: Swarm
-description: Parallel fan-out with synthesis — divide work across multiple agents and merge the results.
+description: Peer-to-peer handoffs — agents collaborate and dynamically pass control to one another.
 ---
 
-The **Swarm** pattern divides a complex task across multiple, specialized agents running simultaneously in parallel, before synthesizing their disparate outputs into a single, cohesive final result.
+The **Swarm** pattern enables a network of highly specialized, independent agents to collaborate on a task by dynamically handing off control to one another based on who is best suited for the next step.
 
-This is highly effective when tasks are too large for a single context window, or when attacking a problem from multiple independent perspectives yields a better outcome than a single sequential approach.
+Unlike the [Supervisor](/patterns/supervisor/) pattern—where a central manager dictates routing—the Swarm operates horizontally. Each agent evaluates its own capabilities against the remaining goal; if another agent in the swarm is better equipped to handle the next phase, the current agent seamlessly transfers execution to its peer.
 
 ## How it works
 
 ```mermaid
-flowchart TB
-    Orch["Orchestrator"] --> A["Worker A"]
-    Orch --> B["Worker B"]
-    Orch --> C["Worker C"]
-    A --> Synth["Synthesizer"]
-    B --> Synth
-    C --> Synth
-    Synth --> Output(["Output"])
+flowchart LR
+    Start(["Input"]) --> A
+
+    subgraph The Swarm
+        A["Research Specialist"] <-->|handoff| B["Math Expert"]
+        B <-->|handoff| C["Python Writer"]
+        A <-->|handoff| C
+    end
+
+    A -->|"__done__"| Done(["Output"])
+    B -->|"__done__"| Done
+    C -->|"__done__"| Done
 ```
 
-1. **Orchestration**: A lead agent (or simply static static routing configuration) analyzes the goal and divides the work into distinct sub-tasks.
-2. **Parallel Execution**: Multiple worker agents spin up simultaneously. Worker A investigates topic X, Worker B investigates topic Y, and Worker C investigates topic Z.
-3. **Synthesis**: The graph converges on a single Synthesizer node. It waits until all prerequisite workers have completed, then an LLM reads all the parallel outputs and weaves them together into a unified format.
+1. **Initialization**: The workflow enters the `swarm` node and triggers the first agent.
+2. **Peer Evaluation**: The active agent uses its tools and logic to progress the task. When it reaches the limit of its specialization, it looks at the list of available `peer_nodes` in the Swarm.
+3. **Handoff**: The agent calls a built-in handoff tool, suspending its own execution and transferring control—along with the current state memory—to a peer (e.g., passing control from the Researcher to the Math Expert to crunch the numbers).
+4. **Completion**: The peers continue passing the baton until one of them determines the overarching goal is fully achieved, at which point it hands off to the `__done__` sentinel, terminating the Swarm.
 
 ## When to use this pattern
 
-- **Comprehensive coverage**: When researching a topic where multiple perspectives or sources are critical (e.g., pulling reports from three different competitors simultaneously).
-- **Latency reduction**: When a task can be cleanly divided into independent sub-tasks, parallel execution dramatically lowers the total wall-clock time compared to sequential processing.
-- **Context management**: When analyzing a dataset that exceeds the context token limits of an LLM.
+- **Highly diverse toolsets**: When you have many specialized tools (UI interactions, database queries, code execution) that would overwhelm a single LLM's context window. Instead, create specialized agents for each domain.
+- **Complex, unstructured workflows**: When the problem requires fluid back-and-forth collaboration rather than a strict linear pipeline or a rigid managerial hierarchy.
+- **Autonomous troubleshooting**: A "Triage" agent can hand off to a "Database Config" agent, who realizes it's actually an infrastructure issue and hands off to the "DevOps" agent.
 
-*(Note: If you are processing a massive list of identical items, like mapping over hundreds of DB records, the [Map-Reduce](/patterns/map-reduce/) pattern is more appropriate.)*
+## Implementation example
 
-## Configuration
+The `swarm` node relies on an intelligent routing definition. You define the network of peers, and the orchestrator automatically handles the dynamic state transfers between them by injecting handoff capabilities into their prompts.
 
-Setting up a Swarm involves a few architectural components. First, the fan-out from the orchestrator to the workers. Next, the synthesizer node that merges the outputs.
+### 1. The Specialized Agents
 
-```yaml
-id: synthesizer
-type: synthesizer
-agent_id: merge-agent
-read_keys: 
-  - result_a
-  - result_b
-  - result_c
-write_keys: 
-  - final_report
+First, register the independent specialists that will make up the swarm network.
+
+```typescript
+import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+
+const registry = new InMemoryAgentRegistry();
+
+const RESEARCHER_ID = registry.register({
+  name: 'Research Expert',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: 'You specialize in fetching information and summarizing facts. When calculation is needed, hand off to the Math Expert.',
+  temperature: 0.3,
+  tools: [{ type: 'mcp', server_id: 'web-search' }],
+  permissions: { read_keys: ['*'], write_keys: ['*'] },
+});
+
+const MATH_ID = registry.register({
+  name: 'Math Expert',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: 'You specialize in complex arithmetic and logic. You cannot read the web. Receive data, calculate the result, and hand off to the Python Writer if scripting is needed, or finish the task if the goal is met.',
+  temperature: 0.0, // Absolute precision
+  tools: [{ type: 'mcp', server_id: 'calculator' }],
+  permissions: { read_keys: ['*'], write_keys: ['*'] },
+});
+
+const C முறை_ID = registry.register({
+  name: 'Python Writer',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: 'You write and execute Python scripts to process data. You do not search the web.',
+  temperature: 0.1,
+  tools: [{ type: 'mcp', server_id: 'code-sandbox' }],
+  permissions: { read_keys: ['*'], write_keys: ['*'] },
+});
 ```
 
-In your graph edges definition, you simply point all the parallel workers at the `synthesizer` node. The orchestrator engine automatically handles the dependency resolution: the synthesizer will not fire until every single upstream node targeting it has finished its execution.
+### 2. The Swarm Node
+
+Next, map those agents as standard nodes in the graph, and weave them together using a `swarm` parent node.
+
+```typescript
+import { createGraph } from '@mcai/orchestrator';
+
+const graph = createGraph({
+  name: 'Data Analysis Swarm',
+  description: 'Peer-to-peer swarm solving complex data questions',
+  nodes: [
+    {
+      id: 'analysis_swarm',
+      type: 'swarm',
+      read_keys: ['*'],
+      write_keys: ['*'],
+      swarm_config: {
+        peer_nodes: ['researcher', 'math_wiz', 'python_dev'],
+        handoff_mode: 'agent_choice', // Agents use LLM reasoning to pick the next peer
+        max_handoffs: 15,             // Prevent infinite handoff loops
+      },
+    },
+    // The individual peers must still be defined as nodes in the graph
+    // so the orchestrator knows how to execute them
+    {
+      id: 'researcher',
+      type: 'agent',
+      agent_id: RESEARCHER_ID,
+      read_keys: ['*'], write_keys: ['*'],
+    },
+    {
+      id: 'math_wiz',
+      type: 'agent',
+      agent_id: MATH_ID,
+      read_keys: ['*'], write_keys: ['*'],
+    },
+    {
+      id: 'python_dev',
+      type: 'agent',
+      agent_id: C_ID,
+      read_keys: ['*'], write_keys: ['*'],
+    },
+  ],
+  edges: [],
+  start_node: 'analysis_swarm',
+  end_nodes: ['analysis_swarm'], // Swarm nodes resolve internally
+});
+```
 
 ## Core concepts
 
-### The Synthesizer's Role
-The synthesizer node goes beyond simply concatenating text. Because it is powered by an LLM, its true value lies in intelligent aggregation:
-- **Deduplication**: Removing overlapping findings discovered independently by multiple workers.
-- **Conflict Resolution**: Identifying contradictions between workers and either resolving them or surfacing the discrepancy explicitly.
-- **Formatting**: Stitching fragmented research notes into a cohesive, fluid narrative or standardized JSON output.
+### Handoff Tool Injection
+When an agent is part of a `swarm` node, the orchestrator automatically intercepts its execution and injects a dynamic tool into its context (e.g., `handoff_to_peer`). The tool definition contains the IDs and descriptions of all available `peer_nodes`, allowing the LLM natively to decide when and who to pass control to. 
 
-### Peer Delegation
-While swarms are often managed top-down, worker agents in a swarm can dynamically delegate to peers by including `_peer_delegation` commands in their output payloads. This enables horizontal task redistribution on the fly without requiring a central orchestrator to intervene.
+### Max Handoffs Limit
+Swarm behavior is highly emergent, which means it can easily derail into infinite handoff loops if two agents continually pass a problem back and forth without resolving it. The `max_handoffs` configuration acts as a hard circuit-breaker: if the swarm exceeds this number of transitions, the orchestrator forcibly halts the run to protect your API budget.

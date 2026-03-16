@@ -1,33 +1,219 @@
 ---
 title: Evaluations
-description: Verify agent behavior with automated eval suites.
+description: Verify workflow behavior with automated eval suites.
 ---
 
-Unit tests check *code* (does the function crash?). Evals check *behavior* (did the agent solve the user's problem?).
+Unit tests check *code* — does the function crash? Evals check *behavior* — did the workflow produce the right result? MC-AI includes a built-in eval framework for defining test cases, running workflows, and asserting on the final state.
 
-## Unit tests (deterministic)
+## Quick start
 
-- **Scope**: Reducers, graph routing logic, tool inputs/outputs
-- **Tool**: Vitest
-- **Example**: "Given State X + Action Y, does the reducer produce State Z?"
+Define a suite, run it, and inspect the report:
 
-## Evals (probabilistic)
+```typescript
+import { runEval, EvalSuite } from '@mcai/orchestrator';
 
-MC-AI includes an eval framework for running assertions against workflow outputs.
+const suite: EvalSuite = {
+  name: 'My First Eval',
+  cases: [
+    {
+      name: 'Research pipeline completes',
+      graph: myGraph,
+      input: { goal: 'Summarize recent AI news' },
+      assertions: [
+        { type: 'status_equals', expected: 'completed' },
+        { type: 'node_visited', node_id: 'researcher' },
+        { type: 'memory_contains', key: 'summary' },
+      ],
+    },
+  ],
+};
 
-### Dataset
+const report = await runEval(suite);
 
-A trusted set of inputs and expected outcomes:
-- **Input**: "Create a React Button component."
-- **Expected criteria**: ["Has TypeScript interfaces", "Uses proper props", "No syntax errors"]
+console.log(`Score: ${report.overall_score}`);   // 0.0–1.0
+console.log(`Passed: ${report.passed}/${report.total}`);
+```
 
-### The evaluator loop
+## How it works
 
-1. **Run**: The system processes the input → output artifact
-2. **Evaluate**: A separate "Judge Agent" reads the output and criteria
-3. **Score**: The judge returns pass/fail and reasoning
+For each case in the suite:
 
-### Running evals
+1. **Build state** — `goal`, `constraints`, and `max_token_budget` are extracted from `input`. The entire `input` object is seeded into `memory`.
+2. **Run workflow** — A `GraphRunner` executes the graph to completion (or failure/timeout).
+3. **Assert** — Each assertion is checked against the final `WorkflowState`.
+4. **Score** — Case score = passed assertions / total assertions. Overall score = mean of all case scores.
+
+Cases run sequentially to avoid LLM provider contention. If a workflow crashes, the case gets a score of 0 and an `error` field — other cases continue unaffected.
+
+## Assertion types
+
+### `status_equals`
+
+Check the workflow's final status:
+
+```typescript
+{ type: 'status_equals', expected: 'completed' }
+{ type: 'status_equals', expected: 'waiting' }  // for HITL workflows
+```
+
+### `node_visited`
+
+Verify a specific node executed:
+
+```typescript
+{ type: 'node_visited', node_id: 'researcher' }
+```
+
+### `memory_contains`
+
+Check that a key exists in the final state memory:
+
+```typescript
+{ type: 'memory_contains', key: 'summary' }
+```
+
+### `memory_matches`
+
+Inspect a memory value with three matching modes:
+
+```typescript
+// Exact match (JSON equality)
+{ type: 'memory_matches', key: 'count', mode: 'exact', expected: 42, pattern: '' }
+
+// Substring match
+{ type: 'memory_matches', key: 'output', mode: 'contains', expected: 'hello', pattern: '' }
+
+// Regex match (against stringified value)
+{ type: 'memory_matches', key: 'output', mode: 'regex', pattern: '^hello\\s\\w+$' }
+```
+
+### `token_budget_respected`
+
+Verify the workflow stayed within its token budget:
+
+```typescript
+{ type: 'token_budget_respected' }
+```
+
+### `llm_judge`
+
+Use an LLM evaluator agent to score the output against criteria. This is the only probabilistic assertion — all others are deterministic.
+
+```typescript
+{
+  type: 'llm_judge',
+  criteria: 'Is the summary accurate, well-structured, and under 300 words?',
+  threshold: 0.75,                    // minimum passing score (0.0–1.0)
+  evaluator_agent_id: EVALUATOR_ID,   // UUID of a registered evaluator agent
+}
+```
+
+The evaluator agent calls `generateText()` with a structured output schema and returns a score (0.0–1.0), reasoning, and optional suggestions. The assertion passes if `score >= threshold`.
+
+## EvalSuite structure
+
+```typescript
+interface EvalSuite {
+  name: string;
+  cases: EvalCase[];
+}
+
+interface EvalCase {
+  name: string;                             // Human-readable case name
+  graph: Graph;                             // The graph to execute
+  input: Record<string, unknown>;           // Initial memory (goal, constraints, etc.)
+  assertions: EvalAssertion[];              // What to check
+  timeout_ms?: number;                      // Workflow timeout (default: 60000ms)
+}
+```
+
+## EvalReport structure
+
+`runEval()` returns a detailed report:
+
+```typescript
+interface EvalReport {
+  suite_name: string;
+  cases: EvalCaseResult[];
+  overall_score: number;     // Mean of all case scores (0.0–1.0)
+  total: number;             // Total cases
+  passed: number;            // Cases where all assertions passed
+  failed: number;            // Cases with at least one failure
+  duration_ms: number;       // Wall-clock duration
+}
+
+interface EvalCaseResult {
+  name: string;
+  passed: boolean;           // All assertions passed?
+  score: number;             // Fraction of assertions that passed
+  duration_ms: number;
+  assertions: AssertionResult[];
+  error?: string;            // Set if workflow crashed
+}
+
+interface AssertionResult {
+  assertion: EvalAssertion;
+  passed: boolean;
+  actual?: unknown;          // Observed value
+  message?: string;          // Failure explanation
+}
+```
+
+## Example eval suites
+
+MC-AI ships with three example suites that demonstrate common patterns.
+
+### Linear completion
+
+Tests a 2-node tool pipeline (`fetch` → `transform`):
+
+```typescript
+const suite: EvalSuite = {
+  name: 'Linear Completion',
+  cases: [
+    {
+      name: 'Two tool nodes complete successfully',
+      graph: linearGraph,
+      input: { goal: 'Fetch and transform data' },
+      assertions: [
+        { type: 'status_equals', expected: 'completed' },
+        { type: 'node_visited', node_id: 'fetch' },
+        { type: 'node_visited', node_id: 'transform' },
+        { type: 'memory_contains', key: 'fetch_result' },
+        { type: 'memory_contains', key: 'transform_result' },
+      ],
+    },
+  ],
+};
+```
+
+### Supervisor routing
+
+Tests a router dispatching to a worker:
+
+```typescript
+assertions: [
+  { type: 'status_equals', expected: 'completed' },
+  { type: 'node_visited', node_id: 'router' },
+  { type: 'node_visited', node_id: 'worker' },
+  { type: 'memory_contains', key: 'worker_result' },
+],
+```
+
+### Human-in-the-loop approval
+
+Tests that the workflow pauses at an approval gate (status is `waiting`, not `completed`):
+
+```typescript
+assertions: [
+  { type: 'status_equals', expected: 'waiting' },
+  { type: 'node_visited', node_id: 'prepare' },
+  { type: 'node_visited', node_id: 'review' },
+  { type: 'memory_contains', key: 'prepare_result' },
+],
+```
+
+### Running the examples
 
 ```bash
 cd packages/orchestrator
@@ -36,19 +222,15 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/evals/supervisor-routing.ts
 ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/evals/hitl-approval.ts
 ```
 
-See the [evals examples](https://github.com/wmcmahan/mc-ai/tree/main/packages/orchestrator/examples/evals) for complete eval suite implementations.
+## Scoring
 
-## Cost tracking
-
-Every workflow run tracks token usage and cost:
-
-- `total_tokens_used` — cumulative tokens across all nodes
-- `total_cost_usd` — estimated cost based on model pricing
-- `budget_usd` — optional per-agent budget cap
-
-Budget enforcement throws `BudgetExceededError` immediately if costs exceed the configured limit.
+- A case with 3/5 passing assertions scores **0.6** and is marked `passed: false`.
+- A case with 0 assertions scores **1.0** (all assertions trivially pass).
+- The suite's `overall_score` is the mean of all case scores.
+- A case that crashes before assertions are checked scores **0** with the error captured in `error`.
 
 ## Next steps
 
-- [Tracing](/observability/tracing/) — see workflow execution in real-time
+- [Tracing](/observability/tracing/) — see workflow execution in real-time with OpenTelemetry
+- [Cost & Budget Tracking](/concepts/cost-tracking/) — token and cost budgets
 - [Security](/security/) — economic guardrails and denial-of-wallet prevention

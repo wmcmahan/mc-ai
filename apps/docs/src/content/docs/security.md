@@ -1,113 +1,220 @@
 ---
 title: Security
-description: Zero Trust model, sandboxing, state slicing, and taint tracking.
+description: Zero Trust model, state slicing, permission enforcement, and economic guardrails.
 ---
 
-MC-AI operates under a **Zero Trust** model. We assume:
+MC-AI operates under a **Zero Trust** security model built on three assumptions:
 
-1. **Input is malicious** — users and external data will try to inject attacks
-2. **Agents are fallible** — LLMs can be jailbroken or duped
-3. **State is leaky** — agents should only know what they need to know
+1. **Input is malicious** — users and external data may contain injection attacks
+2. **Agents are fallible** — LLMs can be jailbroken or manipulated
+3. **State is leaky** — agents should only see what they need to see
+
+Every layer of the engine enforces these assumptions through concrete mechanisms described below.
 
 ## State slicing (least privilege)
 
-Agents are denied access to the global `WorkflowState` by default. Each agent declares its permissions:
+Agents never see the full `WorkflowState`. Each agent and node declares explicit permissions:
 
 ```typescript
-{
-  read_keys: ['goal', 'notes'],  // Can only read these keys
-  write_keys: ['draft'],          // Can only write this key
-}
+const WRITER_ID = registry.register({
+  name: 'Writer',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: '...',
+  tools: [],
+  permissions: {
+    read_keys: ['goal', 'research_notes'],   // can only read these
+    write_keys: ['draft'],                    // can only write this
+  },
+});
 ```
 
-The orchestrator creates a filtered view — an agent trying to access `state.db_credentials` receives `undefined` unless explicitly authorized.
+At runtime, the engine creates a **state view** — a filtered projection of `WorkflowState.memory` containing only the keys listed in `read_keys`. An agent configured with `read_keys: ['goal', 'research_notes']` receives `undefined` for every other key, including `db_credentials`, `api_keys`, or any other sensitive data in state.
+
+The wildcard `read_keys: ['*']` grants access to all non-internal memory keys. Internal keys (prefixed with `_`, such as `_taint_registry`) are always excluded from state views.
+
+## Write permission enforcement
+
+Write permissions are enforced at two levels:
+
+1. **Agent executor** — After the LLM call completes, `validateMemoryUpdatePermissions()` checks every key the agent wrote against its `write_keys`. Unauthorized writes throw `PermissionDeniedError`.
+
+2. **Graph runner** — Before any action is applied to state, `validateAction()` re-validates the action against the node's `write_keys`. This second check catches edge cases where actions are constructed outside the agent executor.
+
+```
+Agent LLM call → validateMemoryUpdatePermissions() → validateAction() → Reducer → State
+                  ↑ PermissionDeniedError             ↑ PermissionDeniedError
+```
+
+Internal keys (prefixed with `_`) are reserved for the engine and exempt from agent write checks — only system-level reducers can modify them.
 
 ## Taint tracking
 
-The most dangerous attack vector: an agent reads a malicious website.
+External data is the most dangerous attack vector. MC-AI automatically tracks the provenance of data entering the system from external tools.
 
-- **Flagging**: Any string entering the system from an external tool (web search, file read) is marked as **tainted**
-- **Propagation**: If a node reads tainted data and writes to state, the output key inherits the taint flag
-- **Downstream decisions**: Critical nodes can check taint status before trusting their inputs
+**How it works:**
+
+1. **Flagging** — All MCP tool results are automatically wrapped with taint metadata (source type, tool name, server ID, timestamp) via `wrapToolWithTaint()`.
+2. **Propagation** — When an agent reads tainted input keys and writes output, `propagateDerivedTaint()` marks the outputs as `derived`-tainted, preserving the chain of custody.
+3. **Inspection** — Downstream nodes can call `isTainted(memory, key)` or `getTaintInfo(memory, key)` to check provenance before trusting inputs.
+
+Taint metadata is stored in `memory._taint_registry` (a protected internal key invisible to agents).
+
+See [Taint Tracking](/concepts/taint-tracking/) for the full API reference.
 
 ## Economic guardrails
 
-Prevent infinite loops and "denial of wallet" attacks:
+Prevent runaway costs, infinite loops, and denial-of-wallet attacks with layered limits:
 
-| Guard | Default |
-|-------|---------|
-| **Global budget** | Per-run cap (e.g., $1.00 or 50k tokens) |
-| **Step limit** | Max 50 total graph iterations (`max_iterations`) |
-| **Execution timeout** | Configurable via `max_execution_time_ms` |
-| **Recursive depth** | Subgraphs cannot nest beyond 2 layers |
+### Token budget
 
-## Immutable history
+Set `max_token_budget` on the workflow state. The engine tracks `total_tokens_used` across all LLM calls and throws `BudgetExceededError` when the limit is hit.
 
-Critical state transitions are logged as actions. Every state change is tied to:
-- Which node produced it
-- When it was applied
-- What the previous state was
+```typescript
+const state = createWorkflowState({
+  workflow_id: graph.id,
+  goal: '...',
+  max_token_budget: 50_000,
+});
+```
 
-This enables full audit trails and time-travel debugging.
+### Cost budget (USD)
 
-## Runtime isolation
+Set `budget_usd` for dollar-denominated limits. The engine calculates costs using a per-model pricing table and fires threshold alerts at **50%**, **75%**, **90%**, and **100%** of the budget:
 
-For production deployments where agents execute untrusted code:
+```typescript
+const state = createWorkflowState({
+  workflow_id: graph.id,
+  goal: '...',
+  budget_usd: 1.00,
+});
+```
 
-- **No local execution** — agents never run code on the host OS
-- **Container isolation** — code execution happens in ephemeral containers (Docker, Firecracker, E2B)
-- **Network isolation** — sandboxes have no access to internal networks
+At 100%, execution halts with `BudgetExceededError`. Listen for threshold events to add monitoring:
 
-## Human-in-the-loop as security
+```typescript
+runner.on('budget:threshold_reached', ({ percentage, total_cost_usd }) => {
+  console.warn(`Budget ${percentage}% reached: $${total_cost_usd}`);
+});
+```
 
-For high-stakes actions:
+See [Cost & Budget Tracking](/concepts/cost-tracking/) for model pricing details and the `UsageRecorder` interface.
 
-1. The agent proposes an action but does not execute
-2. The workflow pauses (via an `approval` node)
-3. A human reviews and approves or rejects
-4. Only then does execution continue
+### Iteration limit
 
-See [Human-in-the-Loop](/patterns/human-in-the-loop/) for the implementation pattern.
+`max_iterations` (default: **50**) caps the total number of graph loop iterations. This prevents cyclic graphs from running forever:
+
+```typescript
+const state = createWorkflowState({
+  workflow_id: graph.id,
+  goal: '...',
+  max_iterations: 20,
+});
+```
+
+### Execution timeout
+
+`max_execution_time_ms` (default: **1 hour**) sets a wall-clock deadline. The engine checks elapsed time before each node execution and throws `WorkflowTimeoutError` if exceeded:
+
+```typescript
+const state = createWorkflowState({
+  workflow_id: graph.id,
+  goal: '...',
+  max_execution_time_ms: 120_000,  // 2 minutes
+});
+```
+
+### Agent step limit
+
+Each agent has a `max_steps` setting (default: **10**, maximum: **50**) that limits the number of tool-call iterations within a single LLM invocation. This prevents agents from entering infinite tool-call loops.
+
+### Agent timeout
+
+Each agent invocation has a **2-minute** timeout (configurable via `timeout_ms`). If the LLM call doesn't complete within the limit, an `AgentTimeoutError` is thrown and the node fails (subject to its retry policy).
 
 ## MCP tool security
 
-Agents never see MCP server transport configurations or secrets. The security model has two layers:
+Agents never see MCP server transport configurations or secrets.
 
 ### Trusted MCP Server Registry
 
 Server connection configs (URLs, commands, auth headers) live in the **MCP Server Registry** — an admin-only data store. Agent configs reference servers by ID only:
 
-```json
-// Agent config — references server by ID, no transport details
-{ "type": "mcp", "server_id": "web-search" }
+```typescript
+// Agent config — no transport details, no secrets
+tools: [
+  { type: 'mcp', server_id: 'web-search' },
+]
 ```
 
-### Access control (`allowed_agents`)
+### Access control
 
-Each server entry can restrict which agents may use it:
+Each server entry can restrict which agents may use it via `allowed_agents`:
 
 ```typescript
-{
+await registry.saveServer({
   id: 'admin-tools',
   name: 'Admin Tools',
   transport: { type: 'http', url: 'https://internal.example.com/admin' },
-  allowed_agents: ['admin-agent-001'],  // only this agent can access
-}
+  allowed_agents: ['admin-agent-001'],
+});
 ```
 
-When `allowed_agents` is set, an `MCPAccessDeniedError` is thrown if an unauthorized agent attempts to resolve tools from that server.
-
-### Taint wrapping
-
-All MCP tool results are automatically wrapped with taint metadata (source, tool name, server ID, timestamp). This enables downstream nodes to check provenance before trusting inputs.
+When `allowed_agents` is set, the `MCPConnectionManager` validates the requesting agent's ID before resolving tools. Unauthorized access throws `MCPAccessDeniedError`.
 
 ### Transport restrictions
 
-- **stdio**: Only allowlisted commands (`npx`, `node`, `python3`, `python`, `uvx`) — no arbitrary execution
-- **http/sse**: URLs stored in the registry, not in agent configs — secrets stay server-side
+- **stdio** — Only allowlisted commands (`npx`, `node`, `python3`, `python`, `uvx`). No arbitrary shell execution.
+- **http/sse** — URLs stored in the registry, never in agent configs. Secrets stay server-side.
+
+### Automatic taint wrapping
+
+All MCP tool results are wrapped with taint metadata before being returned to agents, ensuring every piece of external data is tracked from the moment it enters the system.
+
+See [Tools & MCP](/concepts/tools-and-mcp/) for the full MCP integration guide.
+
+## Supervisor routing validation
+
+Supervisor nodes validate every LLM routing decision against their `managed_nodes` allowlist. If the LLM attempts to route to a node not in the list, a `SupervisorRoutingError` is thrown. This prevents prompt injection attacks from hijacking workflow control flow.
+
+## Human-in-the-loop as security
+
+For high-stakes actions, use `approval` nodes to pause execution for human review:
+
+1. A preceding node proposes an action and saves it to state
+2. The workflow pauses at the approval gate (status becomes `waiting`)
+3. A human reviews and approves or rejects
+4. Execution resumes only after approval
+
+See [Human-in-the-Loop](/patterns/human-in-the-loop/) for the implementation pattern.
+
+## Immutable audit trail
+
+Every state transition is logged as an action with:
+- Which node produced it
+- When it was applied
+- What the previous state was
+- An idempotency key (`{node_id}:{iteration_count}`) to prevent duplicate execution on retries
+
+This enables full audit trails and time-travel debugging via the event log.
+
+## Error classes
+
+All security-related errors are typed and exported from `@mcai/orchestrator`:
+
+| Error | Thrown when |
+|-------|------------|
+| `PermissionDeniedError` | Agent writes to unauthorized memory key |
+| `BudgetExceededError` | Token or cost budget exceeded |
+| `WorkflowTimeoutError` | Execution time exceeds `max_execution_time_ms` |
+| `AgentTimeoutError` | Single agent call exceeds timeout |
+| `MCPAccessDeniedError` | Agent not in server's `allowed_agents` list |
+| `MCPServerNotFoundError` | Server ID not found in registry |
+| `SupervisorRoutingError` | Supervisor routes to unauthorized node |
 
 ## Next steps
 
-- [Workflow State](/concepts/workflow-state/) — state slicing and taint details
-- [Agents](/concepts/agents/) — agent permissions model
-- [Tracing](/observability/tracing/) — audit workflow execution
+- [Taint Tracking](/concepts/taint-tracking/) — full taint API reference
+- [Cost & Budget Tracking](/concepts/cost-tracking/) — pricing tables and usage recording
+- [Tools & MCP](/concepts/tools-and-mcp/) — MCP server registry and access control
+- [Persistence](/concepts/persistence/) — state versioning and event log

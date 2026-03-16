@@ -3,96 +3,140 @@ title: Custom LLM Providers
 description: Register Groq, Ollama, or any Vercel AI SDK-compatible provider.
 ---
 
-By default, OpenAI and Anthropic are pre-registered. The `ProviderRegistry` lets you add any Vercel AI SDK-compatible provider at runtime — no engine code changes required.
+MC-AI ships with **OpenAI** and **Anthropic** pre-registered. To use a different LLM provider (Groq, Ollama, Google, Mistral, etc.), register it at startup. Any provider with a [Vercel AI SDK](https://sdk.vercel.ai/providers/ai-sdk-providers) adapter works.
 
-## Registering a provider
+## Quick start
+
+Two steps: create a provider registry and wire it into the engine. The built-in providers are included automatically.
 
 ```typescript
-import { createGroq } from '@ai-sdk/groq';
-import { createProviderRegistry, configureProviderRegistry } from '@mcai/orchestrator';
+import {
+  createProviderRegistry,
+  configureProviderRegistry,
+} from '@mcai/orchestrator';
 
-// Start with built-in OpenAI + Anthropic
-const providers = createProviderRegistry();
-
-// Wire into the engine
+const providers = createProviderRegistry(); // includes openai + anthropic
 configureProviderRegistry(providers);
 ```
 
-## Using providers in agent configs
+That's it for the defaults. Agents using `provider: 'openai'` or `provider: 'anthropic'` will resolve correctly as long as the corresponding `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` environment variable is set.
 
-Once registered, agents can reference the provider by name:
+## Adding a custom provider
 
-```json
-{
-  "id": "fast-researcher",
-  "model": "llama-3.3-70b-versatile",
-  "provider": "groq",
-  "system_prompt": "You are a research specialist...",
-  "tools": [{ "type": "mcp", "server_id": "web-search" }]
-}
+Use `providers.register()` with three arguments: a name, a factory function, and a list of known models.
+
+### Groq
+
+```typescript
+import { createGroq } from '@ai-sdk/groq';
+
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+
+providers.register('groq', (modelId) => groq(modelId), {
+  models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+});
 ```
 
-## Using provider options in agent configs
+### Ollama (local)
 
-Once registered, agents can reference the provider by name:
+```typescript
+import { createOllama } from 'ollama-ai-provider';
 
-```json
-{
-  "id": "fast-researcher",
-  "model": "claude-opus-4-20250514",
-  "provider": "anthropic",
-  "provider_options": {
-    "effort": "max",
-    "thinking": {
-      "type": "enabled",
-      "budgetTokens": 12000
-    }
+const ollama = createOllama({ baseURL: 'http://localhost:11434/api' });
+
+providers.register('ollama', (modelId) => ollama(modelId), {
+  models: ['llama3.2', 'mistral', 'codellama'],
+});
+```
+
+### Google
+
+```typescript
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+
+const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY });
+
+providers.register('google', (modelId) => google(modelId), {
+  models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+});
+```
+
+## Using a custom provider in agents
+
+Reference your provider by name in the agent config:
+
+```typescript
+const FAST_AGENT = registry.register({
+  name: 'Fast Researcher',
+  model: 'llama-3.3-70b-versatile',
+  provider: 'groq',
+  system_prompt: 'You are a research specialist...',
+  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  permissions: { read_keys: ['goal'], write_keys: ['notes'] },
+});
+```
+
+## Provider options
+
+Some providers support additional options (extended thinking, structured output modes, etc.). Pass these via `provider_options` on the agent config:
+
+```typescript
+const THINKING_AGENT = registry.register({
+  name: 'Deep Thinker',
+  model: 'claude-opus-4-20250514',
+  provider: 'anthropic',
+  provider_options: {
+    thinking: {
+      type: 'enabled',
+      budgetTokens: 12000,
+    },
   },
-  "system_prompt": "You are a research specialist...",
-  "tools": [{ "type": "mcp", "server_id": "web-search" }]
-}
+  system_prompt: 'You solve complex problems step by step...',
+  tools: [],
+  permissions: { read_keys: ['*'], write_keys: ['*'] },
+});
 ```
 
-## Model inference and validation
+Provider options are passed directly to the Vercel AI SDK `generateText`/`streamText` call, so any option your provider's SDK supports can be used here.
 
-Each provider declares a list of known `models` during registration. When an agent config omits the `provider` field, the engine infers it by exact match against these lists:
+## Provider inference
 
-| Model Name | Inferred Provider |
-|------------|-------------------|
-| `gpt-4-turbo` | `openai` |
-| `claude-sonnet-4-20250514` | `anthropic` |
-| `llama-3.3-70b-versatile` | `groq` |
+If an agent config omits the `provider` field, the engine infers it by matching the `model` against each provider's known model list. If no match is found, it defaults to `anthropic`.
 
-If no match is found, the default provider (`anthropic`) is used.
+```typescript
+// provider is inferred as 'groq' because 'llama-3.3-70b-versatile'
+// was registered in the groq provider's model list
+const AGENT = registry.register({
+  name: 'Inferred Provider Agent',
+  model: 'llama-3.3-70b-versatile',
+  // provider: omitted — inferred automatically
+  system_prompt: '...',
+  tools: [],
+  permissions: { read_keys: ['*'], write_keys: ['*'] },
+});
+```
 
-:::note
-The model list is **advisory, not a strict allowlist**. When `resolveModel()` is called with an unrecognised model ID, the engine logs a warning but still forwards the request to the provider. This allows using newly released models before the known list is updated.
-:::
-
-Use `addModel()` to register new model names at runtime without re-registering the entire provider:
+To register new model names at runtime without re-registering the entire provider:
 
 ```typescript
 providers.addModel('openai', 'gpt-5');
 ```
 
-Use `supportsModel()` to check if a model is in the known list:
+:::note
+The model list is **advisory, not a strict allowlist**. If you use a model ID that isn't in the known list, the engine logs a warning but still forwards the request to the provider. This means newly released models work immediately — you just won't get provider inference for them until they're added.
+:::
 
-```typescript
-providers.supportsModel('openai', 'gpt-4o'); // true
-```
+## Built-in models
 
-## API reference
+These models are pre-registered and available out of the box:
 
-| Export | Description |
-|--------|-------------|
-| `ProviderRegistry` | Class — register, unregister, list, resolve models, validate |
-| `LanguageModelFactory` | Type — `(modelId: string) => LanguageModel` |
-| `ProviderOptions` | Type — `{ models: string[] }` |
-| `createProviderRegistry()` | Returns a registry with built-ins pre-registered |
-| `configureProviderRegistry(registry)` | Wires a registry into the global agent factory |
+| Provider | Models |
+|----------|--------|
+| `openai` | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4`, `o1-preview`, `o1-mini`, `o3`, `o3-mini`, `o4-mini` |
+| `anthropic` | `claude-opus-4-20250514`, `claude-sonnet-4-20250514`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229` |
 
 ## Next steps
 
-- [Agents](/concepts/agents/) — how agents use providers
-- [Adding MCP Tools](/guides/adding-tools/) — give agents external capabilities
-
+- [Agents](/concepts/agents/) — how agents reference providers and models
+- [Tools & MCP](/concepts/tools-and-mcp/) — give agents external capabilities
+- [Cost & Budget Tracking](/concepts/cost-tracking/) — per-model pricing and budget enforcement

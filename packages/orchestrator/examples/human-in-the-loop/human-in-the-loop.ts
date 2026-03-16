@@ -134,8 +134,8 @@ const graph = createGraph({
   ],
 
   edges: [
-    { id: 'write-to-review', source: 'write', target: 'review', condition: { type: 'always' } },
-    { id: 'review-to-publish', source: 'review', target: 'publish', condition: { type: 'always' } },
+    { source: 'write', target: 'review' },
+    { source: 'review', target: 'publish' },
   ],
 
   start_node: 'write',

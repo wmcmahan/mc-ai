@@ -1,10 +1,12 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
+import Analytics from '@vercel/analytics/astro';
 
 export default defineConfig({
   integrations: [
     mermaid({ autoTheme: true }), // must come before starlight
+    Analytics(),
     starlight({
       title: 'MC-AI',
       description:
@@ -27,10 +29,16 @@ export default defineConfig({
           label: 'Core Concepts',
           items: [
             { label: 'How MC-AI Works', slug: 'concepts/overview' },
-            { label: 'Graphs & Nodes', slug: 'concepts/graphs-and-nodes' },
-            { label: 'Workflow State', slug: 'concepts/workflow-state' },
+            { label: 'Graphs', slug: 'concepts/graphs' },
+            { label: 'Nodes', slug: 'concepts/nodes' },
             { label: 'Agents', slug: 'concepts/agents' },
-            { label: 'Reducers', slug: 'concepts/reducers' },
+            { label: 'Workflow State', slug: 'concepts/workflow-state' },
+            { label: 'Tools & MCP', slug: 'concepts/tools-and-mcp' },
+            { label: 'Streaming', slug: 'concepts/streaming' },
+            { label: 'Middleware', slug: 'concepts/middleware' },
+            { label: 'Cost & Budget Tracking', slug: 'concepts/cost-tracking' },
+            { label: 'Taint Tracking', slug: 'concepts/taint-tracking' },
+            { label: 'Persistence', slug: 'concepts/persistence' },
             { label: 'Error Handling', slug: 'concepts/error-handling' },
           ],
         },
@@ -62,7 +70,6 @@ export default defineConfig({
           ],
         },
         { label: 'Security', slug: 'security' },
-        { label: 'Contributing', slug: 'contributing' },
       ],
     }),
   ],

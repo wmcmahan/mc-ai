@@ -88,8 +88,14 @@ All errors extend `Error` and set `this.name` to their class name, enabling reli
 ### Circuit breaker — automatic recovery
 
 `CircuitBreakerManager` handles the state machine:
-```
-CLOSED → (failures ≥ threshold) → OPEN → (timeout) → HALF-OPEN → (success) → CLOSED
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    CLOSED --> OPEN : failures ≥ threshold
+    OPEN --> HALF_OPEN : timeout
+    HALF_OPEN --> CLOSED : success
+    HALF_OPEN --> OPEN : failure
 ```
 
 `CircuitBreakerOpenError` is thrown when the breaker is `OPEN` and timeout hasn't elapsed. After timeout, one probe attempt is allowed (`HALF-OPEN` state).
@@ -114,28 +120,26 @@ Any success resets the counter to 0.
 
 ## Error propagation flow
 
-```
-Node Executor throws
-  │
-  ├─ NodeConfigError / UnsupportedNodeTypeError
-  │    → GraphRunner catches → dispatch _fail → workflow status = 'failed'
-  │
-  ├─ AgentTimeoutError / AgentExecutionError
-  │    → GraphRunner catches → check retry policy
-  │      ├─ retries remaining → backoff → re-execute node
-  │      └─ retries exhausted → dispatch _fail → workflow status = 'failed'
-  │
-  ├─ CircuitBreakerOpenError
-  │    → GraphRunner catches → skip node → advance to fallback edge
-  │
-  ├─ PermissionDeniedError
-  │    → GraphRunner catches → dispatch _fail → workflow status = 'failed'
-  │
-  ├─ BudgetExceededError
-  │    → GraphRunner catches → dispatch _budget_exceeded → workflow status = 'failed'
-  │
-  └─ PersistenceUnavailableError
-       → Bubbles up to Worker → Worker marks job as failed
+```mermaid
+graph TD
+    Throw[Node Executor throws] --> Type{Error Type}
+    
+    Type --> |Config / Unsupported| Fail[Dispatch _fail]
+    Type --> |Permission Denied| Fail
+    
+    Type --> |Agent Timeout / Execution| Retries{Retries left?}
+    Retries -->|Yes| Retry[Backoff & Retry node]
+    Retries -->|No| Fail
+    
+    Type --> |Circuit Breaker Open| Fallback[Skip node & advance to fallback edge]
+    
+    Type --> |Budget Exceeded| Budget[Dispatch _budget_exceeded]
+    
+    Type --> |Persistence Unavailable| Worker[Bubbles up to Worker]
+    
+    Fail --> StatusFailed[status = 'failed']
+    Budget --> StatusFailed
+    Worker --> JobFailed[Worker marks job as failed]
 ```
 
 ## Next steps

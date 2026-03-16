@@ -56,8 +56,8 @@ export type EdgeCondition = z.infer<typeof EdgeConditionSchema>;
  * Directed edge connecting two graph nodes.
  */
 export const GraphEdgeSchema = z.object({
-  /** Unique edge identifier. */
-  id: z.string(),
+  /** Unique edge identifier (auto-generated if omitted). */
+  id: z.string().default(() => crypto.randomUUID()),
   /** Source node ID. */
   source: z.string(),
   /** Target node ID. */

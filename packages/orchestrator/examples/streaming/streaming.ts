@@ -104,7 +104,7 @@ const graph = createGraph({
     },
   ],
   edges: [
-    { id: 'research-to-write', source: 'research', target: 'write', condition: { type: 'always' } },
+    { source: 'research', target: 'write' },
   ],
   start_node: 'research',
   end_nodes: ['write'],

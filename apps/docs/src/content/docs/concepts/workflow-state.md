@@ -1,116 +1,126 @@
 ---
 title: Workflow State
-description: The shared blackboard that all nodes read from and write to.
+description: The shared state object that all nodes read from and write to.
 ---
 
-The **WorkflowState** is the shared blackboard at the heart of every workflow. All nodes communicate through it — reading context, writing results, and coordinating behavior.
+The **WorkflowState** is the single source of truth for a running workflow. Every node reads from it, writes to it, and the engine persists it after each step for crash recovery.
 
-## Schema
+## Creating state
 
 ```typescript
-interface WorkflowState {
-  // Identity
-  workflow_id: string;
-  run_id: string;
+import { createWorkflowState } from '@mcai/orchestrator';
 
-  // Input
-  goal: string;
-  constraints?: string[];
-
-  // Working memory — shared between all nodes
-  memory: Record<string, unknown>;
-
-  // Status and control
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'waiting' | 'cancelled';
-  iteration_count: number;
-  max_iterations: number;
-  max_execution_time_ms: number;
-
-  // Resilience
-  retry_count: number;
-  max_retries: number;
-  compensation_stack: CompensationEntry[];
-  visited_nodes: string[];
-
-  // Cost tracking
-  total_tokens_used?: number;
-  total_cost_usd?: number;
-
-  // Timestamps
-  created_at: Date;
-  updated_at: Date;
-}
+const state = createWorkflowState({
+  workflow_id: graph.id,
+  goal: 'Research and summarize quantum computing',
+  constraints: ['Under 500 words'],
+  max_execution_time_ms: 120_000,
+});
 ```
+
+## Schema reference
+
+### Identity and input
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `workflow_id` | `string` (UUID) | *required* | Graph definition this run belongs to. |
+| `run_id` | `string` (UUID) | auto-generated | Unique identifier for this execution. |
+| `goal` | `string` | *required* | High-level objective for the workflow. |
+| `constraints` | `string[]` | `[]` | Rules the workflow must respect. |
+
+### Control flow
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `status` | `WorkflowStatus` | `'pending'` | Current lifecycle status. |
+| `current_node` | `string` | — | Node currently being executed. |
+| `iteration_count` | `number` | `0` | Total reducer dispatches so far (loop guard). |
+| `max_iterations` | `number` | `50` | Hard cap — the run fails if exceeded. |
+| `started_at` | `Date` | — | When `run()` was first invoked. |
+| `max_execution_time_ms` | `number` | `3600000` (1h) | Wall-clock timeout for the entire run. |
+
+### Retry and resilience
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `retry_count` | `number` | `0` | Retries on the current node so far. |
+| `max_retries` | `number` | `3` | Maximum retries before the node fails permanently. |
+| `last_error` | `string` | — | Error message from the most recent failure. |
+| `compensation_stack` | `CompensationEntry[]` | `[]` | Stack of compensating actions for saga rollback. |
+
+### Waiting (human-in-the-loop)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `waiting_for` | `WaitingReason` | — | Why the workflow is paused (e.g. `'human_approval'`). |
+| `waiting_since` | `Date` | — | When the workflow entered the waiting state. |
+| `waiting_timeout_at` | `Date` | — | Deadline after which the wait times out. |
+
+### Cost and token tracking
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `total_tokens_used` | `number` | `0` | Cumulative tokens consumed across all LLM calls. |
+| `max_token_budget` | `number` | — | If set, the run fails when token usage exceeds this. |
+| `total_cost_usd` | `number` | `0` | Cumulative estimated cost in USD. |
+| `budget_usd` | `number` | — | Per-run cost budget (run fails when exceeded). |
+
+### Memory and tracking
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `memory` | `Record<string, unknown>` | `{}` | Shared key-value store. See [Memory](#memory) below. |
+| `visited_nodes` | `string[]` | `[]` | Node IDs visited in execution order. |
+| `supervisor_history` | `object[]` | `[]` | Routing decisions made by supervisor nodes (for debugging). |
+| `created_at` | `Date` | now | When this run was created. |
+| `updated_at` | `Date` | now | Last state mutation timestamp. |
+
+### Status lifecycle
+
+The workflow status transitions denote the lifecycle of a workflow. All terminal states (`completed`, `failed`, `cancelled`, `timeout`) are final.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    pending --> scheduled
+    scheduled --> running
+    running --> completed
+    running --> waiting
+    running --> retrying
+    waiting --> running
+    retrying --> running
+    retrying --> failed
+    running --> cancelled
+    running --> timeout
+```
+
+---
 
 ## Memory
 
-The `memory` object is the primary data exchange mechanism. Agents read from it and write to it via the `save_to_memory` tool:
+The `memory` object is the primary data exchange between nodes. It's an arbitrary key-value store — you define the keys based on your workflow's needs. Agents write to it via the built-in `save_to_memory` tool and read from it via their filtered state view (controlled by `read_keys` on the node).
 
-```typescript
-memory: {
-  topic: "Future of Autonomous Agents",  // set by initial state
-  notes: "...",                            // written by researcher agent
-  draft: "...",                            // written by writer agent
-  review_score: 0.85,                     // written by evaluator agent
-}
-```
+- **Use descriptive keys** — `research_notes` is better than `data` or `result`
+- **Reference, don't store** — avoid large blobs in memory; store them externally and keep a reference
+- **Keep it flat** — deeply nested objects are harder to debug
 
-### Best practices
-
-- **Reference, don't store**: Never put large blobs in memory. Store them externally and keep a path/ID reference.
-- **Use descriptive keys**: `research_output` is better than `data` or `result`.
-- **Typed reducers**: Agents emit proposals (`{ type: 'submit_draft', content: '...' }`). A reducer function merges them safely.
-
-## Memory layers
-
-The system distinguishes between different memory scopes:
+### Memory layers
 
 | Layer | Scope | Persistence | Purpose |
 |-------|-------|-------------|---------|
-| **Graph State** | Global (shared) | Persisted (checkpoint) | Source of truth — goal, results, artifacts |
-| **Thread Context** | Local (per-node) | Ephemeral | Raw `messages[]` from the current agent's LLM conversation |
+| **Graph State** | Shared across all nodes | Persisted after every step | Source of truth — goal, results, artifacts |
+| **Thread Context** | Local to a single agent | Ephemeral | Raw LLM conversation for the current agent |
 
-### Graph State (explicit memory)
+**Graph State** is the `memory` object. It's persisted after every node execution, enabling crash recovery and time-travel debugging.
 
-The shared `memory` object on `WorkflowState`. This is the **only** way agents communicate. It's persisted after every node execution, enabling time-travel debugging and crash recovery.
+**Thread Context** is the raw LLM conversation history within a single agent execution. Each agent has its own thread — agents don't see each other's raw messages. The agent extracts what matters via `save_to_memory`, and the thread is discarded.
 
-### Thread Context (implicit memory)
+## Taint tracking
 
-The raw LLM conversation history within a single agent execution. Each agent has its own thread — agents don't see each other's raw messages, only the shared state.
-
-**Why ephemeral?** Keeping 50 agents' full chat histories would cause token overflow. The agents extract what matters via `save_to_memory` and the thread is discarded.
-
-## State slicing
-
-Nodes never receive the full `WorkflowState`. The orchestrator creates a filtered view based on each node's `read_keys`:
-
-```typescript
-// Node config
-{ read_keys: ['goal', 'notes'], write_keys: ['draft'] }
-
-// Agent sees only:
-{ goal: "Write a blog post", notes: "..." }
-
-// Agent cannot access: review_score, topic, or any other keys
-```
-
-This is the **Zero Trust** model — no node sees more than it needs to.
-
-## Subgraph isolation
-
-When a subgraph executes:
-
-1. **Input mapping**: Parent state → Child state (explicit key mapping)
-2. **Execution**: Child operates with its own isolated memory
-3. **Output mapping**: Child result → Parent state (explicit key mapping)
-4. **Cleanup**: Internal loop counters and temporary values are discarded
-
-## Tainted data
-
-Any data entering the system from external tools (web search, file reads) is flagged as **tainted**. Taint propagates — if a node reads tainted data and writes to state, the output key inherits the taint flag. This enables downstream nodes to make trust decisions about their inputs.
+Data entering the system from external tools (web search, file reads) is flagged as **tainted**. Taint propagates automatically — if a node reads tainted data and writes to state, the output key inherits the taint flag. This lets downstream nodes make trust decisions about their inputs.
 
 ## Next steps
 
 - [Agents](/concepts/agents/) — how agents read and write state
-- [Reducers](/concepts/reducers/) — how state mutations are applied
-- [Security](/security/) — Zero Trust model and taint tracking
+- [Nodes](/concepts/nodes/) — node types and configuration

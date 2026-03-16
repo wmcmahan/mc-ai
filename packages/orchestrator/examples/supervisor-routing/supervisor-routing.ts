@@ -180,13 +180,13 @@ const graph = createGraph({
 
   edges: [
     // Supervisor → specialists (outbound)
-    { id: 'supervisor-to-research', source: 'supervisor', target: 'research', condition: { type: 'always' } },
-    { id: 'supervisor-to-write', source: 'supervisor', target: 'write', condition: { type: 'always' } },
-    { id: 'supervisor-to-edit', source: 'supervisor', target: 'edit', condition: { type: 'always' } },
+    { source: 'supervisor', target: 'research' },
+    { source: 'supervisor', target: 'write' },
+    { source: 'supervisor', target: 'edit' },
     // Specialists → supervisor (return)
-    { id: 'research-to-supervisor', source: 'research', target: 'supervisor', condition: { type: 'always' } },
-    { id: 'write-to-supervisor', source: 'write', target: 'supervisor', condition: { type: 'always' } },
-    { id: 'edit-to-supervisor', source: 'edit', target: 'supervisor', condition: { type: 'always' } },
+    { source: 'research', target: 'supervisor' },
+    { source: 'write', target: 'supervisor' },
+    { source: 'edit', target: 'supervisor' },
   ],
 
   start_node: 'supervisor',
