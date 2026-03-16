@@ -1,13 +1,17 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
-import Analytics from '@vercel/analytics/astro';
 
 export default defineConfig({
   integrations: [
     mermaid({ autoTheme: true }), // must come before starlight
-    Analytics(),
     starlight({
+      head: [
+        {
+          tag: 'script',
+          attrs: { defer: true, src: '/_vercel/insights/script.js' },
+        },
+      ],
       title: 'MC-AI',
       description:
         'Agentic orchestration built on a Cyclic State Graph architecture.',
