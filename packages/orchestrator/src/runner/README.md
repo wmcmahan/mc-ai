@@ -725,6 +725,8 @@ Discriminated union on the `type` field. Uses `node_type` and `action_type` to a
 | `action:applied` | `action_id`, `action_type`, `node_id` | Reducer applied action |
 | `state:persisted` | `run_id`, `iteration` | State saved to storage |
 | `agent:token_delta` | `run_id`, `node_id`, `token` | Real-time LLM token |
+| `tool:call_start` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `args` | Tool execution begins |
+| `tool:call_finish` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `duration_ms`, `success`, `error?` | Tool execution completes |
 | `budget:threshold_reached` | `threshold_pct`, `cost_usd`, `budget_usd` | Cost threshold crossed |
 
 **Terminal events** (carry full `state: WorkflowState`):

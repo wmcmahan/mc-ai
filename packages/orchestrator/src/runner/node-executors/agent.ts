@@ -72,6 +72,12 @@ export async function executeAgentNode(
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
+  const onToolCall = ctx.onToolCall
+    ? (event: { toolName: string; toolCallId: string; args: unknown }) => ctx.onToolCall!(event, node.id)
+    : undefined;
+  const onToolCallComplete = ctx.onToolCallComplete
+    ? (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }) => ctx.onToolCallComplete!(event, node.id)
+    : undefined;
 
   // Node-level tools override agent config tools
   const toolSources = ensureSaveToMemory(node.tools ?? agentConfig.tools, agentConfig.write_keys);
@@ -80,6 +86,8 @@ export async function executeAgentNode(
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,
+    onToolCall,
+    onToolCallComplete,
     drainTaintEntries: ctx.deps.drainTaintEntries,
   });
 }

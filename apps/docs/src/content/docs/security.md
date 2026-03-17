@@ -66,7 +66,7 @@ Agent LLM call → validateMemoryUpdatePermissions() → validateAction() → Re
                   ↑ PermissionDeniedError             ↑ PermissionDeniedError
 ```
 
-Internal keys (prefixed with `_`) are reserved for the engine and exempt from agent write checks — only system-level reducers can modify them.
+Internal keys (prefixed with `_`) are reserved for the engine. Agents are blocked from writing `_`-prefixed keys by the agent executor's validation layer (`extractMemoryUpdates` rejects them). The GraphRunner's `validateAction()` skips `_`-prefixed keys during permission checks — they are treated as trusted system metadata injected by the executor (e.g. `_taint_registry`), not as agent-authored writes.
 
 ## Prompt injection sanitization
 

@@ -85,6 +85,8 @@ interface AgentStep {
  * @param options.timeout_ms - Override the default agent timeout.
  * @param options.abortSignal - External cancellation signal (e.g. workflow cancellation).
  * @param options.onToken - Callback invoked for each streamed token (best-effort).
+ * @param options.onToolCall - Callback invoked when a tool call starts executing. Receives tool name, args, and call ID.
+ * @param options.onToolCallComplete - Callback invoked when a tool call finishes. Receives tool name, call ID, duration, and success/error.
  * @returns The resulting {@link Action} containing memory updates and metadata.
  * @throws {AgentTimeoutError} If the LLM call exceeds the configured timeout.
  * @throws {AgentExecutionError} If the LLM call fails for any other reason.
@@ -100,6 +102,8 @@ export async function executeAgent(
     timeout_ms?: number;
     abortSignal?: AbortSignal;
     onToken?: (token: string) => void;
+    onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }) => void;
+    onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }) => void;
     drainTaintEntries?: () => Map<string, TaintMetadata>;
   }
 ): Promise<Action> {
@@ -156,6 +160,32 @@ export async function executeAgent(
         abortSignal: combinedSignal,
         ...(options?.temperature_override !== undefined ? { temperature: options.temperature_override } : {}),
         ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
+        // Real-time tool call callbacks — fire as tools execute, not post-hoc
+        ...(options?.onToolCall ? {
+          experimental_onToolCallStart: (event) => {
+            try {
+              const tc = event.toolCall;
+              options.onToolCall!({
+                toolName: tc.toolName,
+                toolCallId: tc.toolCallId,
+                args: 'args' in tc ? tc.args : ('input' in tc ? tc.input : undefined),
+              });
+            } catch { /* best-effort */ }
+          },
+        } : {}),
+        ...(options?.onToolCallComplete ? {
+          experimental_onToolCallFinish: (event) => {
+            try {
+              options.onToolCallComplete!({
+                toolName: event.toolCall.toolName,
+                toolCallId: event.toolCall.toolCallId,
+                durationMs: event.durationMs,
+                success: event.success,
+                ...(!event.success ? { error: String(event.error) } : {}),
+              });
+            } catch { /* best-effort */ }
+          },
+        } : {}),
       });
 
       // When onToken is provided, consume the textStream for token-by-token
@@ -213,15 +243,6 @@ export async function executeAgent(
     const toolCalls = steps.flatMap((step) => step.toolCalls ?? []);
     const toolResults = steps.flatMap((step) => step.toolResults ?? []);
 
-    // Log individual tool calls for observability
-    for (const call of toolCalls) {
-      logger.info('tool_called', {
-        agent_id,
-        tool_name: call.toolName,
-        tool_call_id: call.toolCallId,
-      });
-    }
-
     // Build a lookup map for tool results by toolCallId (not index).
     // Index-based alignment breaks when a call has no result or steps
     // have variable numbers of calls.
@@ -230,6 +251,21 @@ export async function executeAgent(
       if (tr.toolCallId) {
         toolResultById.set(tr.toolCallId, tr.result);
       }
+    }
+
+    // Log individual tool calls for observability
+    for (const call of toolCalls) {
+      logger.info('tool_called', {
+        agent_id,
+        tool_name: call.toolName,
+        tool_call_id: call.toolCallId,
+      });
+      logger.debug('tool_call_detail', {
+        agent_id,
+        tool_name: call.toolName,
+        tool_call_id: call.toolCallId,
+        args: call.input ?? call.args,
+      });
     }
 
     // Extract memory updates from tool results
@@ -256,7 +292,7 @@ export async function executeAgent(
           const [, firstEntry] = mcpTaintEntries.entries().next().value as [string, TaintMetadata];
           taintUpdates[key] = {
             source: 'mcp_tool',
-            tool_name: mcpToolCalls.map((c) => c.toolName).join(','),
+            tool_name: [...new Set(mcpToolCalls.map((c) => c.toolName))].join(','),
             server_id: firstEntry.server_id,
             agent_id,
             created_at: new Date().toISOString(),
@@ -306,7 +342,7 @@ export async function executeAgent(
       agent_id,
       duration_ms: duration,
       tool_calls: toolCalls.length,
-      tool_names: toolCalls.map((c) => c.toolName),
+      tool_names: [...new Set(toolCalls.map((c) => c.toolName))].join(','),
       input_tokens: tokenUsage.inputTokens,
       output_tokens: tokenUsage.outputTokens,
       total_tokens: tokenUsage.totalTokens,

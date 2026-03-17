@@ -467,16 +467,22 @@ describe('Reducers', () => {
       expect(isValid).toBe(false); // Unknown types are always rejected (deny-by-default)
     });
 
-    test('should block wildcard write to _taint_registry via update_memory', () => {
+    test('should skip _-prefixed system keys during validation (executor handles agent blocking)', () => {
+      // _-prefixed keys like _taint_registry are injected by the executor as
+      // trusted system metadata. validateAction skips them — the agent-level
+      // check in validateMemoryUpdatePermissions blocks agents from writing
+      // _-prefixed keys directly.
       const action: Action = {
         id: uuidv4(),
         idempotency_key: uuidv4(),
         type: 'update_memory',
-        payload: { updates: { _taint_registry: { evil: true } } },
+        payload: { updates: { _taint_registry: { source: 'mcp_tool' } } },
         metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
       };
 
-      expect(validateAction(action, ['*'])).toBe(false);
+      // Only system keys — no user keys to validate, so passes
+      expect(validateAction(action, ['*'])).toBe(true);
+      expect(validateAction(action, ['some_key'])).toBe(true);
     });
 
     test('should allow wildcard write to normal keys via update_memory', () => {
@@ -491,16 +497,17 @@ describe('Reducers', () => {
       expect(validateAction(action, ['*'])).toBe(true);
     });
 
-    test('should block _-prefixed key in merge_parallel_results', () => {
+    test('should skip _-prefixed keys in merge_parallel_results', () => {
       const action: Action = {
         id: uuidv4(),
         idempotency_key: uuidv4(),
         type: 'merge_parallel_results',
-        payload: { updates: { result: 'ok', _internal: 'bad' } },
+        payload: { updates: { result: 'ok', _internal: 'system' } },
         metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
       };
 
-      expect(validateAction(action, ['*'])).toBe(false);
+      // _internal is skipped, result is allowed by wildcard
+      expect(validateAction(action, ['*'])).toBe(true);
     });
 
     test('should allow merge_parallel_results with normal keys and wildcard', () => {
@@ -515,7 +522,7 @@ describe('Reducers', () => {
       expect(validateAction(action, ['*'])).toBe(true);
     });
 
-    test('should block update_memory with any _-prefixed key even with explicit permission', () => {
+    test('should validate user keys alongside _-prefixed system keys', () => {
       const action: Action = {
         id: uuidv4(),
         idempotency_key: uuidv4(),
@@ -524,7 +531,9 @@ describe('Reducers', () => {
         metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
       };
 
-      expect(validateAction(action, ['_taint_registry', 'normal'])).toBe(false);
+      // _taint_registry skipped; 'normal' checked against allowedKeys
+      expect(validateAction(action, ['normal'])).toBe(true);
+      expect(validateAction(action, ['other_key'])).toBe(false);
     });
   });
 

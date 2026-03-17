@@ -130,7 +130,33 @@ Schema conversion never throws — malformed schemas fall back to `z.any()`.
 
 ---
 
-## 4. Error Taxonomy
+## 4. Default MCP Servers
+
+### Module: `default-servers.ts`
+
+Pre-configured MCP server entries for common capabilities. Registered via `registerDefaultMCPServers()`.
+
+| Server ID | Package | Transport | Command | Requires |
+|-----------|---------|-----------|---------|----------|
+| `web-search` | `@modelcontextprotocol/server-brave-search` | stdio | `npx --silent -y @modelcontextprotocol/server-brave-search` | `BRAVE_API_KEY` |
+| `fetch` | `mcp-server-fetch` (Python/PyPI) | stdio | `uvx mcp-server-fetch` | `uvx` (uv package manager) |
+
+**`npx --silent`**: The `--silent` flag is required to prevent npm audit/fund messages from polluting stdout, which would corrupt the JSON-RPC stdio transport.
+
+### `registerDefaultMCPServers(registry, options?)`
+
+Registers default servers into any `MCPServerRegistry`. Options:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `only` | `string[]` | Register only these server IDs |
+| `exclude` | `string[]` | Skip these server IDs (applied after `only`) |
+| `allowed_agents` | `string[]` | Override `allowed_agents` for all registered servers |
+| `brave_api_key` | `string` | Override `BRAVE_API_KEY` for web-search (falls back to env var) |
+
+---
+
+## 5. Error Taxonomy
 
 | Error Class | Thrown By | When |
 |-------------|----------|------|

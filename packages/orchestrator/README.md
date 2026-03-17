@@ -135,8 +135,8 @@ See [examples/](./examples/) for complete, runnable versions.
 | **Node Types** | `agent` `tool` `router` `supervisor` `approval` `map` `synthesizer` `voting` `subgraph` `evolution` |
 | **Resilience** | Retry with backoff (linear/exponential/fixed), circuit breakers, saga rollback, durable execution via event sourcing |
 | **Security** | Zero Trust state slicing (`read_keys`/`write_keys`), taint tracking for external data, permission-enforced reducers |
-| **Streaming** | `stream()` async generator, real-time token deltas, typed `StreamEvent` union, `isTerminalEvent()` guard, `AbortSignal` cancellation |
-| **Observability** | 14 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token streaming |
+| **Streaming** | `stream()` async generator, real-time token deltas, tool call start/finish events, typed `StreamEvent` union, `isTerminalEvent()` guard, `AbortSignal` cancellation |
+| **Observability** | 16 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
 | **Cost Control** | Token budgets, per-run cost tracking, workflow and node-level timeouts |
 
 ## Examples

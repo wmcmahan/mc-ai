@@ -67,10 +67,26 @@ export function extractMemoryUpdates(
   }
 
   // Fallback: Store raw response if no memory updates.
-  // Uses node-specific key (e.g. "research_output") so agents don't overwrite each other.
+  // Prefers the node-specific fallback key (e.g. "research_output"). If that
+  // isn't in write_keys and the agent has exactly one non-wildcard write key,
+  // uses that key instead (unambiguous intent). For multi-key agents we don't
+  // guess — the response is dropped and logged.
   if (Object.keys(updates).length === 0 && agentResponse.trim()) {
-    if (allowedKeys.includes('*') || allowedKeys.includes(fallbackKey)) {
-      updates[fallbackKey] = sanitizeString(agentResponse);
+    let targetKey = fallbackKey;
+    if (!allowedKeys.includes('*') && !allowedKeys.includes(fallbackKey)) {
+      const concreteKeys = allowedKeys.filter((k) => k !== '*');
+      if (concreteKeys.length === 1) {
+        targetKey = concreteKeys[0];
+      } else {
+        logger.warn('fallback_key_not_in_write_keys', {
+          fallbackKey,
+          allowedKeys,
+          reason: 'ambiguous — agent has multiple write keys, cannot auto-select',
+        });
+      }
+    }
+    if (allowedKeys.includes('*') || allowedKeys.includes(targetKey)) {
+      updates[targetKey] = sanitizeString(agentResponse);
     }
   }
 

@@ -142,8 +142,8 @@ sequenceDiagram
 | **Model Create** | Provider SDK instantiated with API key from env | Missing API key → hard `Error`; unsupported provider → `UnsupportedProviderError` |
 | **Prompt Build** | Memory sanitized, bounded to `MAX_MEMORY_PROMPT_BYTES`, injected into template | Truncation warning logged if memory exceeds limit |
 | **LLM Call** | `streamText()` with `AbortController` timeout | Timeout → `AgentTimeoutError`; SDK error → `AgentExecutionError` |
-| **Memory Extract** | `save_to_memory` tool calls parsed; `_`-prefixed keys blocked; permissions checked | Unauthorized key → `PermissionDeniedError` |
-| **Taint Propagate** | If any input memory was tainted, outputs get `derived` taint | Silent — taint registry updated in `_taint_registry` |
+| **Memory Extract** | `save_to_memory` tool calls parsed; `_`-prefixed keys blocked; permissions checked. If no `save_to_memory` calls and agent has exactly one write key, raw text response is stored there as a fallback | Unauthorized key → `PermissionDeniedError` |
+| **Taint Propagate** | If any input memory was tainted, outputs get `derived` taint. MCP tool names are deduplicated in taint metadata | Silent — taint registry updated in `_taint_registry` |
 
 ---
 

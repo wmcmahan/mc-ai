@@ -45,6 +45,8 @@ Events are a discriminated union on the `type` field. They split into two catego
 | `action:applied` | `action_id`, `action_type`, `node_id` | A reducer has applied an action to state. |
 | `state:persisted` | `run_id`, `iteration` | State has been persisted (via `persistStateFn`). |
 | `agent:token_delta` | `run_id`, `node_id`, `token` | A single token from an LLM response (real-time streaming). |
+| `tool:call_start` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `args` | A tool has started executing. |
+| `tool:call_finish` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `duration_ms`, `success`, `error?` | A tool has finished executing. |
 | `budget:threshold_reached` | `run_id`, `threshold_pct`, `cost_usd`, `budget_usd` | Cost has crossed a budget threshold (50%, 75%, 90%, 100%). |
 
 All events include a `timestamp` field (Unix ms).
@@ -82,6 +84,24 @@ for await (const event of runner.stream()) {
 ```
 
 Token deltas are only emitted for agent nodes that use `streamText` (the default execution mode).
+
+## Tool call streaming
+
+The `tool:call_start` and `tool:call_finish` events fire in real-time as tools execute within an agent node. These events are powered by the AI SDK's `experimental_onToolCallStart` and `experimental_onToolCallFinish` callbacks, so they fire *during* the LLM interaction — not post-hoc.
+
+```typescript
+for await (const event of runner.stream()) {
+  if (event.type === 'tool:call_start') {
+    console.log(`Calling ${event.tool_name}...`);
+  }
+  if (event.type === 'tool:call_finish') {
+    const status = event.success ? 'done' : `failed: ${event.error}`;
+    console.log(`  ${event.tool_name} ${status} (${event.duration_ms}ms)`);
+  }
+}
+```
+
+Tool call events are also available via the event listener API (see below).
 
 ## Event listeners (non-streaming)
 

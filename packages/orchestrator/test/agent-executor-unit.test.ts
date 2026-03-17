@@ -218,6 +218,38 @@ describe('extractMemoryUpdates', () => {
     );
     expect(Object.keys(result)).toHaveLength(0);
   });
+
+  it('falls back to sole write key when fallback key is not in allowedKeys', () => {
+    const result = extractMemoryUpdates(
+      'Research findings about quantum computing',
+      [],
+      ['research_notes'],  // single write key
+      'research_output',   // not in allowedKeys
+    );
+    expect(result).toHaveProperty('research_notes');
+    expect(result['research_notes']).toContain('Research findings');
+  });
+
+  it('does not guess when multiple write keys and fallback key is missing', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['research_notes', 'summary'],  // ambiguous — two keys
+      'research_output',              // not in allowedKeys
+    );
+    expect(Object.keys(result)).toHaveLength(0);
+  });
+
+  it('prefers the explicit fallback key when it IS in allowedKeys', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['research_output', 'research_notes'],
+      'research_output',
+    );
+    expect(result).toHaveProperty('research_output');
+    expect(result).not.toHaveProperty('research_notes');
+  });
 });
 
 // ─── validateMemoryUpdatePermissions ───────────────────────────────────

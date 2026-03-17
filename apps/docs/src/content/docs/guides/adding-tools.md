@@ -5,6 +5,33 @@ description: Wire MCP tools into your workflow execution pipeline and build cust
 
 This guide covers the practical steps for connecting tools to a running workflow. For background on tool source types, the MCP Server Registry, transport configuration, and taint tracking, see [Tools & MCP](/concepts/tools-and-mcp/).
 
+## Quick start with default servers
+
+The fastest way to add web search and URL fetching to your workflow:
+
+```typescript
+import {
+  InMemoryMCPServerRegistry,
+  registerDefaultMCPServers,
+  MCPConnectionManager,
+  GraphRunner,
+} from '@mcai/orchestrator';
+
+const mcpRegistry = new InMemoryMCPServerRegistry();
+await registerDefaultMCPServers(mcpRegistry);
+
+const mcpManager = new MCPConnectionManager(mcpRegistry);
+const runner = new GraphRunner(graph, state, { toolResolver: mcpManager });
+
+try {
+  const result = await runner.run();
+} finally {
+  await mcpManager.closeAll();
+}
+```
+
+This registers two servers: `web-search` (Brave Search via `npx`, requires `BRAVE_API_KEY`) and `fetch` (URL content extraction via `uvx`). See [Tools & MCP — Default MCP Servers](/concepts/tools-and-mcp/#default-mcp-servers) for configuration options.
+
 ## Wiring into the execution pipeline
 
 To execute a workflow with MCP tools, inject an `MCPConnectionManager` (configured with your registry) into the `GraphRunner`.

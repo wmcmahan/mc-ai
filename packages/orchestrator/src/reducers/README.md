@@ -81,16 +81,18 @@ Checks that an action only writes to keys the node is authorized to modify.
 
 | Action Type | Permission Requirement |
 |-------------|----------------------|
-| `update_memory` | Each key in `payload.updates` must be in `allowedKeys` |
+| `update_memory` | Each non-`_`-prefixed key in `payload.updates` must be in `allowedKeys` |
 | `set_status` | Requires `'status'` in `allowedKeys` |
 | `goto_node` | Requires `'control_flow'` in `allowedKeys` |
 | `handoff` | Requires `'control_flow'` in `allowedKeys` |
 | `request_human_input` | Requires `'control_flow'` in `allowedKeys` |
 | `resume_from_human` | Requires `'control_flow'` in `allowedKeys` |
-| `merge_parallel_results` | Each key in `payload.updates` must be in `allowedKeys` |
+| `merge_parallel_results` | Each non-`_`-prefixed key in `payload.updates` must be in `allowedKeys` |
 | Unknown types | Rejected by default |
 
 The wildcard `'*'` in `allowedKeys` grants all permissions.
+
+Keys prefixed with `_` (e.g. `_taint_registry`) are **excluded from validation** — they are trusted system metadata injected by the executor, not agent-authored writes. Agent-level blocking of `_`-prefixed keys happens earlier, in `extractMemoryUpdates()`.
 
 ---
 

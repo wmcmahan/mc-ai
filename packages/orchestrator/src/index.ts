@@ -83,6 +83,13 @@ export type { JSONSchema } from './mcp/json-schema-converter.js';
 export { MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
 export { MCPConnectionManager } from './mcp/connection-manager.js';
 export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult } from './mcp/connection-manager.js';
+export {
+  registerDefaultMCPServers,
+  DEFAULT_MCP_SERVERS,
+  WEB_SEARCH_SERVER,
+  FETCH_SERVER,
+} from './mcp/default-servers.js';
+export type { RegisterDefaultMCPServersOptions } from './mcp/default-servers.js';
 
 // ─── Workflow Architect ─────────────────────────────────────────────
 

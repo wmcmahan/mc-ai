@@ -81,6 +81,28 @@ export interface AgentTokenDeltaEvent {
   timestamp: number;
 }
 
+export interface ToolCallStartEvent {
+  type: 'tool:call_start';
+  run_id: string;
+  node_id: string;
+  tool_name: string;
+  tool_call_id: string;
+  args: unknown;
+  timestamp: number;
+}
+
+export interface ToolCallFinishEvent {
+  type: 'tool:call_finish';
+  run_id: string;
+  node_id: string;
+  tool_name: string;
+  tool_call_id: string;
+  duration_ms: number;
+  success: boolean;
+  error?: string;
+  timestamp: number;
+}
+
 export interface BudgetThresholdReachedEvent {
   type: 'budget:threshold_reached';
   run_id: string;
@@ -160,6 +182,8 @@ export type StreamEvent =
   | ActionAppliedEvent
   | StatePersistedEvent
   | AgentTokenDeltaEvent
+  | ToolCallStartEvent
+  | ToolCallFinishEvent
   | BudgetThresholdReachedEvent;
 
 /**

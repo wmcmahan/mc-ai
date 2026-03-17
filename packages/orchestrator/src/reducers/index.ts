@@ -431,9 +431,11 @@ export function validateAction(
   switch (action.type) {
     case 'update_memory': {
       const { updates } = UpdateMemoryPayloadSchema.parse(action.payload);
-      const keys = Object.keys(updates);
-      // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
-      if (keys.some(k => k.startsWith('_'))) return false;
+      // Exclude _-prefixed system keys (e.g. _taint_registry) from permission
+      // checks — they are injected by the executor, not authored by the agent.
+      // Agent-level validation in validateMemoryUpdatePermissions already
+      // blocks agents from writing _-prefixed keys directly.
+      const keys = Object.keys(updates).filter(k => !k.startsWith('_'));
       return allowedKeys.includes('*') || keys.every(k => allowedKeys.includes(k));
     }
 
@@ -448,9 +450,7 @@ export function validateAction(
 
     case 'merge_parallel_results': {
       const { updates: parallelUpdates } = MergeParallelResultsPayloadSchema.parse(action.payload);
-      const parallelKeys = Object.keys(parallelUpdates);
-      // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
-      if (parallelKeys.some(k => k.startsWith('_'))) return false;
+      const parallelKeys = Object.keys(parallelUpdates).filter(k => !k.startsWith('_'));
       return allowedKeys.includes('*') || parallelKeys.every(k => allowedKeys.includes(k));
     }
 

@@ -75,6 +75,8 @@ export interface ExecutorDependencies {
       node_id?: string;
       abortSignal?: AbortSignal;
       onToken?: (token: string) => void;
+      onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }) => void;
+      onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }) => void;
       drainTaintEntries?: () => Map<string, TaintMetadata>;
     },
   ) => Promise<Action>;
@@ -140,4 +142,8 @@ export interface NodeExecutorContext {
   abortSignal?: AbortSignal;
   /** Token streaming callback — fires for each text delta with the originating node ID. */
   onToken?: (token: string, nodeId: string) => void;
+  /** Tool call start callback — fires when a tool begins executing. */
+  onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }, nodeId: string) => void;
+  /** Tool call finish callback — fires when a tool completes. */
+  onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }, nodeId: string) => void;
 }

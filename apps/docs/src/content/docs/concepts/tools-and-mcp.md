@@ -144,6 +144,40 @@ This design ensures:
 
 See [Taint Tracking](/concepts/taint-tracking/) for the full taint propagation model and API reference.
 
+## Default MCP servers
+
+MC-AI includes pre-configured entries for two common MCP reference servers. Use `registerDefaultMCPServers()` for one-line setup:
+
+```typescript
+import {
+  InMemoryMCPServerRegistry,
+  registerDefaultMCPServers,
+  MCPConnectionManager,
+} from '@mcai/orchestrator';
+
+const mcpRegistry = new InMemoryMCPServerRegistry();
+await registerDefaultMCPServers(mcpRegistry);
+// Registers: web-search (Brave Search via npx) and fetch (URL content via uvx)
+```
+
+| Server ID | Package | Command | Requires |
+|-----------|---------|---------|----------|
+| `web-search` | `@modelcontextprotocol/server-brave-search` | `npx` | `BRAVE_API_KEY` env var |
+| `fetch` | `mcp-server-fetch` (Python) | `uvx` | `uv` package manager |
+
+Options for selective registration:
+
+```typescript
+// Only fetch (no web search)
+await registerDefaultMCPServers(mcpRegistry, { only: ['fetch'] });
+
+// Override the Brave API key
+await registerDefaultMCPServers(mcpRegistry, { brave_api_key: 'BSA-...' });
+
+// Restrict to specific agents
+await registerDefaultMCPServers(mcpRegistry, { allowed_agents: [RESEARCHER_ID] });
+```
+
 ## Next steps
 
 - [Adding MCP Tools](/guides/adding-tools/) — wiring tools into the execution pipeline and building custom MCP servers

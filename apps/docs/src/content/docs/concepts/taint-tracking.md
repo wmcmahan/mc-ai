@@ -7,7 +7,7 @@ Any data that enters a workflow from an external source (MCP tools, web searches
 
 ## How it works
 
-Taint metadata is stored in a hidden registry at `memory._taint_registry`. This key is protected — agents cannot read or write keys starting with `_`, so the registry cannot be tampered with by LLM-generated actions.
+Taint metadata is stored in a hidden registry at `memory._taint_registry`. This key is protected at two levels: the **agent executor** blocks agents from writing `_`-prefixed keys in `save_to_memory` calls, and the **state view** excludes `_`-prefixed keys from agent-visible memory. The executor itself injects `_taint_registry` as trusted system metadata after agent-level validation, and `validateAction()` in the GraphRunner skips `_`-prefixed keys during permission checks (since they are system-internal, not agent-authored).
 
 When an MCP tool returns a result, the `MCPConnectionManager` accumulates taint metadata internally (keyed by `serverId:toolName`). After agent execution completes, the executor drains accumulated taint entries via `drainTaintEntries()` and calls `markTainted()` on any memory keys that received MCP tool results. The raw tool result is returned directly to the LLM — no taint wrapper is visible to the model. When an agent reads tainted inputs and produces outputs, `propagateDerivedTaint()` marks those outputs as `derived`-tainted.
 

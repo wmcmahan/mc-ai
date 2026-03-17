@@ -151,6 +151,10 @@ export interface GraphRunnerEvents {
   'state:persisted': { run_id: string; iteration: number };
   /** Emitted for each token delta during agent streaming. */
   'agent:token_delta': { run_id: string; node_id: string; token: string };
+  /** Emitted when a tool call begins executing. */
+  'tool:call_start': { run_id: string; node_id: string; tool_name: string; tool_call_id: string; args: unknown; timestamp: number };
+  /** Emitted when a tool call finishes executing. */
+  'tool:call_finish': { run_id: string; node_id: string; tool_name: string; tool_call_id: string; duration_ms: number; success: boolean; error?: string; timestamp: number };
   /** Emitted when cost crosses a budget threshold (50%, 75%, 90%, 100%). */
   'budget:threshold_reached': {
     run_id: string;
@@ -423,6 +427,43 @@ export class GraphRunner extends EventEmitter {
       }
       : undefined;
 
+    // Tool call callbacks — emit events and push to streaming channel
+    const onToolCall = (event: { toolName: string; toolCallId: string; args: unknown }, nodeId: string) => {
+      const streamEvent = {
+        type: 'tool:call_start' as const,
+        run_id: this.state.run_id,
+        node_id: nodeId,
+        tool_name: event.toolName,
+        tool_call_id: event.toolCallId,
+        args: event.args,
+        timestamp: Date.now(),
+      };
+      this.emit('tool:call_start', streamEvent);
+      if (this.isStreaming) {
+        this.tokenChannel.push(streamEvent);
+        this.tokenNotify?.();
+      }
+    };
+
+    const onToolCallComplete = (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }, nodeId: string) => {
+      const streamEvent = {
+        type: 'tool:call_finish' as const,
+        run_id: this.state.run_id,
+        node_id: nodeId,
+        tool_name: event.toolName,
+        tool_call_id: event.toolCallId,
+        duration_ms: event.durationMs,
+        success: event.success,
+        ...(event.error ? { error: event.error } : {}),
+        timestamp: Date.now(),
+      };
+      this.emit('tool:call_finish', streamEvent);
+      if (this.isStreaming) {
+        this.tokenChannel.push(streamEvent);
+        this.tokenNotify?.();
+      }
+    };
+
     return {
       state: this.state,
       graph: this.graph,
@@ -430,6 +471,8 @@ export class GraphRunner extends EventEmitter {
       createStateView: (node: GraphNode) => createStateView(this.state, node),
       abortSignal: this.abortController.signal,
       onToken,
+      onToolCall,
+      onToolCallComplete,
       deps: {
         executeAgent,
         executeSupervisor,
