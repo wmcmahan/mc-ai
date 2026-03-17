@@ -162,6 +162,7 @@ export class AgentFactory {
         maxSteps: dbAgent.max_steps,
         tools: dbAgent.tools,
         ...(dbAgent.provider_options ? { providerOptions: { [dbAgent.provider]: dbAgent.provider_options } } : {}),
+        ...(dbAgent.model_preference ? { model_preference: dbAgent.model_preference } : {}),
         read_keys: permissions.read_keys ?? [],
         write_keys: permissions.write_keys ?? [],
       };

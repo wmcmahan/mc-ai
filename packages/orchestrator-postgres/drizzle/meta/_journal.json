@@ -85,6 +85,13 @@
       "when": 1773850000000,
       "tag": "0011_add_provider_options",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1773792097104,
+      "tag": "0012_lively_ricochet",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@
 import { z } from 'zod';
 import type { JSONValue } from 'ai';
 import { ToolSourceSchema } from '../types/tools.js';
+import { ModelTierSchema } from './model-resolver.js';
 
 /**
  * Recursive Zod schema for JSON-safe values.
@@ -81,6 +82,17 @@ export const AgentConfigSchema = z.object({
    */
   providerOptions: z.record(z.string(), jsonObjectSchema).optional(),
 
+  // ── Budget-Aware Model Resolution ──
+
+  /**
+   * Capability tier preference for budget-aware model resolution.
+   *
+   * When set (and a {@link ModelResolver} is configured on the runner),
+   * the engine resolves to a concrete model at runtime based on
+   * remaining budget. When absent, `model` is used directly.
+   */
+  model_preference: ModelTierSchema.optional(),
+
   // ── Capabilities ──
 
   /** Structured tool source declarations. References built-in tools and registered MCP servers by ID. */
@@ -123,5 +135,12 @@ export interface AgentExecutionMetadata {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+  };
+  /** Model resolution info when budget-aware resolution was applied. */
+  model_resolution?: {
+    /** The agent's static fallback model. */
+    original_model: string;
+    /** The model actually used after resolution. */
+    resolved_model: string;
   };
 }

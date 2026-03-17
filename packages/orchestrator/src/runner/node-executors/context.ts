@@ -15,6 +15,7 @@ import type { GraphNode } from '../../types/graph.js';
 import type { Graph } from '../../types/graph.js';
 import type { WorkflowState, Action, StateView, TaintMetadata } from '../../types/state.js';
 import type { ToolSource } from '../../types/tools.js';
+import type { ModelResolver, ModelResolutionResult, ModelTier } from '../../agent/model-resolver.js';
 
 /**
  * Raw tool definition — description + parameters without an execute function.
@@ -53,6 +54,12 @@ export interface AgentConfigShape {
   tools: ToolSource[];
   /** Memory keys the agent may write. */
   write_keys: string[];
+  /** LLM provider (e.g. `'anthropic'`). */
+  provider: string;
+  /** Static fallback model identifier. */
+  model: string;
+  /** Capability tier preference for budget-aware model resolution. */
+  model_preference?: ModelTier;
   [key: string]: unknown;
 }
 
@@ -78,6 +85,8 @@ export interface ExecutorDependencies {
       onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }) => void;
       onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }) => void;
       drainTaintEntries?: () => Map<string, TaintMetadata>;
+      /** Override the model from agent config (used by budget-aware model resolution). */
+      model_override?: string;
     },
   ) => Promise<Action>;
 
@@ -93,7 +102,7 @@ export interface ExecutorDependencies {
       timestamp: Date;
     }>,
     attempt: number,
-    options?: { abortSignal?: AbortSignal },
+    options?: { abortSignal?: AbortSignal; model_override?: string },
   ) => Promise<Action>;
 
   /** Evaluate output quality via an LLM-as-judge. */
@@ -138,6 +147,12 @@ export interface NodeExecutorContext {
   createStateView: (node: GraphNode) => StateView;
   /** Injected runtime dependencies. */
   deps: ExecutorDependencies;
+  /** Budget-aware model resolver (from GraphRunnerOptions). */
+  modelResolver?: ModelResolver;
+  /** Remaining workflow budget in USD, or `undefined` if unlimited (static snapshot — prefer getRemainingBudgetUsd). */
+  remainingBudgetUsd?: number;
+  /** Lazy budget getter — reads current state at call time (avoids TOCTOU). */
+  getRemainingBudgetUsd?: () => number | undefined;
   /** Abort signal for workflow cancellation — propagated to LLM calls. */
   abortSignal?: AbortSignal;
   /** Token streaming callback — fires for each text delta with the originating node ID. */
@@ -146,4 +161,6 @@ export interface NodeExecutorContext {
   onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }, nodeId: string) => void;
   /** Tool call finish callback — fires when a tool completes. */
   onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }, nodeId: string) => void;
+  /** Model resolution callback — fires when a model is dynamically resolved for an agent. */
+  onModelResolved?: (event: { agentId: string; originalModel: string; resolution: ModelResolutionResult }, nodeId: string) => void;
 }

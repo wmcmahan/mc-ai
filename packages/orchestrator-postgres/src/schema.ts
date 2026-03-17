@@ -167,6 +167,7 @@ export const agents = pgTable('agents', {
     budget_usd?: number;
   }>(),
   provider_options: jsonb('provider_options').$type<Record<string, Record<string, import('@mcai/orchestrator').JsonValue>>>(),
+  model_preference: text('model_preference'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

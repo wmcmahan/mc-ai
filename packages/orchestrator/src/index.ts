@@ -28,7 +28,7 @@ export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from 
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
-export type { StreamEvent, TerminalStreamEvent } from './runner/stream-events.js';
+export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent } from './runner/stream-events.js';
 export { isTerminalEvent } from './runner/stream-events.js';
 
 export * from './runner/helpers.js';
@@ -60,6 +60,22 @@ export { PermissionDeniedError, AgentTimeoutError, AgentExecutionError } from '.
 export type { TokenUsage } from './agent/agent-executor/executor.js';
 export { AgentConfigSchema } from './agent/types.js';
 export type { AgentConfig, AgentExecutionMetadata } from './agent/types.js';
+
+// ─── Budget-Aware Model Resolution ────────────────────────────────
+export {
+  ModelTierSchema,
+  ModelResolutionReasonSchema,
+  ESTIMATED_TOKENS_PER_CALL,
+  estimateCallCost,
+  defaultModelResolver,
+} from './agent/model-resolver.js';
+export type {
+  ModelTier,
+  ModelResolutionReason,
+  ModelTierMap,
+  ModelResolutionResult,
+  ModelResolver,
+} from './agent/model-resolver.js';
 export { ProviderRegistry, createProviderRegistry, registerBuiltInProviders } from './agent/provider-registry.js';
 export type { LanguageModelFactory, ProviderOptions } from './agent/provider-registry.js';
 export { UnsupportedProviderError } from './agent/agent-factory/errors.js';

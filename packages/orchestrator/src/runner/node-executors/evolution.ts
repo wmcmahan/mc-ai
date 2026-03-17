@@ -6,6 +6,9 @@
  * and breeds the next generation using the winner as parent context.
  * Temperature controls diversity vs exploitation.
  *
+ * Note: Evolution nodes do not yet support budget-aware model resolution (Phase 1 limitation).
+ * Candidate and evaluator agents use their statically configured models.
+ *
  * @module runner/node-executors/evolution
  */
 

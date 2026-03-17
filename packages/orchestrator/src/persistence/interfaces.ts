@@ -13,6 +13,7 @@
 import type { Graph } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
 import type { MCPServerEntry, ToolSource } from '../types/tools.js';
+import type { ModelTier } from '../agent/model-resolver.js';
 
 /** JSON-serializable value. Structurally compatible with AI SDK's `JSONValue`. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -229,6 +230,14 @@ export interface AgentRegistryEntry {
   tools: ToolSource[];
   /** Provider-specific options, namespaced by provider name. */
   provider_options?: Record<string, Record<string, JsonValue>> | null;
+  /**
+   * Capability tier preference for budget-aware model resolution.
+   *
+   * When set (and a `ModelResolver` is configured on the runner),
+   * the engine resolves to a concrete model at runtime based on
+   * remaining budget. When absent, `model` is used directly.
+   */
+  model_preference?: ModelTier;
   /** Zero-trust permissions (deny-all when `null`). */
   permissions: {
     /** Whether the agent runs in a sandboxed environment. */

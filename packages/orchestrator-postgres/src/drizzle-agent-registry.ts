@@ -32,6 +32,7 @@ export class DrizzleAgentRegistry implements AgentRegistry {
       tools: row.tools,
       permissions: row.permissions,
       ...(row.provider_options ? { provider_options: row.provider_options } : {}),
+      ...(row.model_preference ? { model_preference: row.model_preference as 'high' | 'medium' | 'low' } : {}),
     };
   }
 
@@ -69,6 +70,7 @@ export class DrizzleAgentRegistry implements AgentRegistry {
           ...(input.permissions?.budget_usd !== undefined ? { budget_usd: input.permissions.budget_usd } : {}),
         },
         ...(input.provider_options ? { provider_options: input.provider_options } : {}),
+        ...(input.model_preference ? { model_preference: input.model_preference } : {}),
       })
       .returning({ id: agents.id });
 
@@ -88,6 +90,7 @@ export class DrizzleAgentRegistry implements AgentRegistry {
     if (updates.tools !== undefined) set.tools = updates.tools;
     if (updates.permissions !== undefined) set.permissions = updates.permissions;
     if (updates.provider_options !== undefined) set.provider_options = updates.provider_options;
+    if (updates.model_preference !== undefined) set.model_preference = updates.model_preference;
 
     await db.update(agents).set(set).where(eq(agents.id, id));
   }
@@ -114,6 +117,7 @@ export class DrizzleAgentRegistry implements AgentRegistry {
       tools: row.tools,
       permissions: row.permissions,
       ...(row.provider_options ? { provider_options: row.provider_options } : {}),
+      ...(row.model_preference ? { model_preference: row.model_preference as 'high' | 'medium' | 'low' } : {}),
     }));
   }
 

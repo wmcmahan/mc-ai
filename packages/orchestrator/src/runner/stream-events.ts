@@ -9,6 +9,7 @@
  */
 
 import type { WorkflowState } from '../types/state.js';
+import type { ModelResolutionReason, ModelTier } from '../agent/model-resolver.js';
 
 // ─── Non-terminal Events ────────────────────────────────────────────
 
@@ -103,6 +104,24 @@ export interface ToolCallFinishEvent {
   timestamp: number;
 }
 
+export interface ModelResolvedEvent {
+  type: 'model:resolved';
+  run_id: string;
+  node_id: string;
+  agent_id: string;
+  /** Why this model was chosen. */
+  reason: ModelResolutionReason;
+  /** The concrete model that will be used. */
+  resolved_model: string;
+  /** The agent's static fallback model. */
+  original_model: string;
+  /** The agent's declared capability tier. */
+  preference: ModelTier;
+  /** Remaining budget at resolution time (undefined = unlimited). */
+  remaining_budget_usd?: number;
+  timestamp: number;
+}
+
 export interface BudgetThresholdReachedEvent {
   type: 'budget:threshold_reached';
   run_id: string;
@@ -184,7 +203,8 @@ export type StreamEvent =
   | AgentTokenDeltaEvent
   | ToolCallStartEvent
   | ToolCallFinishEvent
-  | BudgetThresholdReachedEvent;
+  | BudgetThresholdReachedEvent
+  | ModelResolvedEvent;
 
 /**
  * Type guard: narrows to terminal events that carry `state: WorkflowState`.

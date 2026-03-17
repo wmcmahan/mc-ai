@@ -45,6 +45,7 @@ import { executeSupervisor } from '../agent/supervisor-executor/executor.js';
 import { evaluateQualityExecutor } from '../agent/evaluator-executor/executor.js';
 import type { ToolResolver } from '../mcp/connection-manager.js';
 import type { ToolSource } from '../types/tools.js';
+import type { ModelResolver } from '../agent/model-resolver.js';
 import { agentFactory } from '../agent/agent-factory/index.js';
 import { getTaintRegistry } from '../utils/taint.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
@@ -165,6 +166,18 @@ export interface GraphRunnerEvents {
   };
   /** Emitted when the workflow is gracefully paused via shutdown(). */
   'workflow:paused': { workflow_id: string; run_id: string };
+  /** Emitted when budget-aware model resolution selects a model for an agent. */
+  'model:resolved': {
+    run_id: string;
+    node_id: string;
+    agent_id: string;
+    reason: string;
+    resolved_model: string;
+    original_model: string;
+    preference: string;
+    remaining_budget_usd?: number;
+    timestamp: number;
+  };
 }
 
 /**
@@ -196,6 +209,14 @@ export interface GraphRunnerOptions {
    * Defaults to false.
    */
   auto_rollback?: boolean;
+  /**
+   * Budget-aware model resolver.
+   *
+   * When provided, agents with `model_preference` will have their
+   * concrete model resolved at runtime based on remaining budget.
+   * Agents without `model_preference` always use their static `model`.
+   */
+  modelResolver?: ModelResolver;
 }
 
 /**
@@ -235,6 +256,9 @@ export class GraphRunner extends EventEmitter {
 
   // Auto-rollback on failure (saga compensation)
   private readonly autoRollback: boolean;
+
+  // Budget-aware model resolver (optional)
+  private readonly modelResolver?: ModelResolver;
 
   // Cancellation — allows external abort of in-flight agent/supervisor calls
   private abortController: AbortController = new AbortController();
@@ -286,6 +310,7 @@ export class GraphRunner extends EventEmitter {
       this.onToken = optionsOrPersistFn.onToken;
       this.middleware = optionsOrPersistFn.middleware ?? [];
       this.toolResolver = optionsOrPersistFn.toolResolver;
+      this.modelResolver = optionsOrPersistFn.modelResolver;
       this.autoRollback = optionsOrPersistFn.auto_rollback ?? false;
     } else {
       // No options or undefined persistFn — still check for legacy loadGraphFn 4th arg
@@ -464,15 +489,52 @@ export class GraphRunner extends EventEmitter {
       }
     };
 
+    // Compute remaining budget for model resolution (undefined = unlimited)
+    const remainingBudgetUsd = (this.state.budget_usd && this.state.budget_usd > 0)
+      ? Math.max(0, this.state.budget_usd - (this.state.total_cost_usd ?? 0))
+      : undefined;
+
     return {
       state: this.state,
       graph: this.graph,
       loadGraphFn: this.loadGraphFn,
       createStateView: (node: GraphNode) => createStateView(this.state, node),
       abortSignal: this.abortController.signal,
+      modelResolver: this.modelResolver,
+      remainingBudgetUsd,
+      getRemainingBudgetUsd: () => {
+        return (this.state.budget_usd && this.state.budget_usd > 0)
+          ? Math.max(0, this.state.budget_usd - (this.state.total_cost_usd ?? 0))
+          : undefined;
+      },
       onToken,
       onToolCall,
       onToolCallComplete,
+      onModelResolved: (event, nodeId) => {
+        const streamEvent = {
+          type: 'model:resolved' as const,
+          run_id: this.state.run_id,
+          node_id: nodeId,
+          agent_id: event.agentId,
+          reason: event.resolution.reason,
+          resolved_model: event.resolution.model,
+          original_model: event.originalModel,
+          preference: (() => {
+            switch (event.resolution.reason) {
+              case 'preferred': return event.resolution.tier;
+              case 'budget_downgrade': return event.resolution.original_tier;
+              case 'budget_critical': return event.resolution.original_tier;
+            }
+          })(),
+          remaining_budget_usd: remainingBudgetUsd,
+          timestamp: Date.now(),
+        };
+        this.emit('model:resolved', streamEvent);
+        if (this.isStreaming) {
+          this.tokenChannel.push(streamEvent);
+          this.tokenNotify?.();
+        }
+      },
       deps: {
         executeAgent,
         executeSupervisor,

@@ -11,6 +11,7 @@ import type { GraphNode } from '../../types/graph.js';
 import type { Action, StateView } from '../../types/state.js';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const logger = createLogger('runner.node.supervisor');
 
@@ -31,11 +32,20 @@ export async function executeSupervisorNode(
 ): Promise<Action> {
   logger.info('supervisor_routing', { node_id: node.id, supervisor_config: node.supervisor_config });
 
+  // ── Budget-Aware Model Resolution for Supervisors ──
+  const supervisorAgentId = node.supervisor_config?.agent_id ?? node.agent_id;
+  let modelOverride: string | undefined;
+  if (supervisorAgentId) {
+    const agentConfig = await ctx.deps.loadAgent(supervisorAgentId);
+    const result = resolveModelForAgent(agentConfig, supervisorAgentId, node.id, ctx);
+    modelOverride = result.modelOverride;
+  }
+
   return ctx.deps.executeSupervisor(
     node,
     stateView,
     ctx.state.supervisor_history,
     attempt,
-    { abortSignal: ctx.abortSignal },
+    { abortSignal: ctx.abortSignal, ...(modelOverride ? { model_override: modelOverride } : {}) },
   );
 }

@@ -105,6 +105,8 @@ export async function executeAgent(
     onToolCall?: (event: { toolName: string; toolCallId: string; args: unknown }) => void;
     onToolCallComplete?: (event: { toolName: string; toolCallId: string; durationMs: number; success: boolean; error?: string }) => void;
     drainTaintEntries?: () => Map<string, TaintMetadata>;
+    /** Override the model from agent config (used by budget-aware model resolution). */
+    model_override?: string;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -115,7 +117,24 @@ export async function executeAgent(
 
     // Load agent config from database (cached)
     const config = await agentFactory.loadAgent(agent_id);
-    const model = agentFactory.getModel(config);
+    // Budget-aware model resolution: use override if provided, else config.model
+    const validatedOverride = options?.model_override && typeof options.model_override === 'string' && options.model_override.trim().length > 0
+      ? options.model_override
+      : undefined;
+
+    if (options?.model_override && !validatedOverride) {
+      logger.warn('invalid_model_override', {
+        agent_id,
+        node_id: options?.node_id,
+        model_override: options.model_override,
+        fallback_model: config.model,
+      });
+    }
+
+    const effectiveConfig = validatedOverride
+      ? { ...config, model: validatedOverride }
+      : config;
+    const model = agentFactory.getModel(effectiveConfig);
 
     // Build context-aware prompt (with injection guards)
     const systemPrompt = buildSystemPrompt(config, stateView);
@@ -127,7 +146,8 @@ export async function executeAgent(
     logger.info('executing', {
       agent_id,
       agent_name: config.name,
-      model: config.model,
+      model: effectiveConfig.model,
+      ...(options?.model_override ? { original_model: config.model } : {}),
       attempt,
       tool_count: Object.keys(tools).length,
     });
@@ -329,7 +349,13 @@ export async function executeAgent(
       metadata: {
         node_id: agent_id,
         agent_id: agent_id,
-        model: config.model,
+        model: effectiveConfig.model,
+        ...(options?.model_override ? {
+          model_resolution: {
+            original_model: config.model,
+            resolved_model: options.model_override,
+          },
+        } : {}),
         timestamp: new Date(),
         attempt,
         duration_ms: duration,
@@ -350,7 +376,7 @@ export async function executeAgent(
     });
 
     // Add span attributes for observability
-    span.setAttribute('agent.model', config.model);
+    span.setAttribute('agent.model', effectiveConfig.model);
     span.setAttribute('agent.provider', config.provider);
     span.setAttribute('agent.duration_ms', duration);
     span.setAttribute('agent.tokens.input', tokenUsage.inputTokens);

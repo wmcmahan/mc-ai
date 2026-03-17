@@ -65,7 +65,7 @@ export async function executeSupervisor(
   stateView: StateView,
   supervisorHistory: WorkflowState['supervisor_history'],
   attempt: number,
-  options?: { abortSignal?: AbortSignal },
+  options?: { abortSignal?: AbortSignal; model_override?: string },
 ): Promise<Action> {
   return withSpan(tracer, 'supervisor.route', async (span) => {
     span.setAttribute('supervisor.id', node.id);
@@ -98,7 +98,24 @@ export async function executeSupervisor(
 
     // Load agent config for the supervisor LLM (cached)
     const agentConfig = await agentFactory.loadAgent(supervisorAgentId);
-    const model = agentFactory.getModel(agentConfig);
+    // Budget-aware model resolution: use override if provided
+    const validatedOverride = options?.model_override && typeof options.model_override === 'string' && options.model_override.trim().length > 0
+      ? options.model_override
+      : undefined;
+
+    if (options?.model_override && !validatedOverride) {
+      logger.warn('invalid_model_override', {
+        agent_id: supervisorAgentId,
+        node_id: node.id,
+        model_override: options.model_override,
+        fallback_model: agentConfig.model,
+      });
+    }
+
+    const effectiveConfig = validatedOverride
+      ? { ...agentConfig, model: validatedOverride }
+      : agentConfig;
+    const model = agentFactory.getModel(effectiveConfig);
 
     const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory);
 

@@ -15,6 +15,7 @@ import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { executeAnnealingLoop } from './annealing.js';
 import { executeSwarmAgentNode } from './swarm.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const SAVE_TO_MEMORY_SOURCE: ToolSource = { type: 'builtin', name: 'save_to_memory' };
 
@@ -60,6 +61,8 @@ export async function executeAgentNode(
     throw new NodeConfigError(node.id, 'agent', 'agent_id');
   }
 
+  // Note: Annealing and swarm executors do not perform budget-aware model resolution (Phase 1 limitation).
+  // These specialized executors manage their own agent calls internally.
   if (node.annealing_config) {
     return executeAnnealingLoop(node, stateView, attempt, ctx);
   }
@@ -71,6 +74,9 @@ export async function executeAgentNode(
   logger.info('agent_node_executing', { agent_id, node_id: node.id });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
+
+  const { modelOverride } = resolveModelForAgent(agentConfig, agent_id, node.id, ctx);
+
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
   const onToolCall = ctx.onToolCall
     ? (event: { toolName: string; toolCallId: string; args: unknown }) => ctx.onToolCall!(event, node.id)
@@ -89,5 +95,6 @@ export async function executeAgentNode(
     onToolCall,
     onToolCallComplete,
     drainTaintEntries: ctx.deps.drainTaintEntries,
+    ...(modelOverride ? { model_override: modelOverride } : {}),
   });
 }
