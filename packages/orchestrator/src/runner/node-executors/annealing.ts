@@ -13,6 +13,7 @@ import jp from 'jsonpath';
 import type { GraphNode } from '../../types/graph.js';
 import type { Action, StateView } from '../../types/state.js';
 import { v4 as uuidv4 } from 'uuid';
+import { ensureSaveToMemory } from './agent.js';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
 
@@ -47,7 +48,7 @@ export async function executeAnnealingLoop(
   });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
+  const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), agent_id);
 
   let bestAction: Action | null = null;
   let bestScore = -1;

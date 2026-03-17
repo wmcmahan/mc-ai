@@ -9,13 +9,30 @@
 
 import type { GraphNode } from '../../types/graph.js';
 import type { Action, StateView } from '../../types/state.js';
+import type { ToolSource } from '../../types/tools.js';
 import { createLogger } from '../../utils/logger.js';
 import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { executeAnnealingLoop } from './annealing.js';
 import { executeSwarmAgentNode } from './swarm.js';
 
+const SAVE_TO_MEMORY_SOURCE: ToolSource = { type: 'builtin', name: 'save_to_memory' };
+
 const logger = createLogger('runner.node.agent');
+
+/**
+ * Ensure `save_to_memory` is present in tool sources when the agent has write_keys.
+ *
+ * `save_to_memory` is the only mechanism for agents to write to the state
+ * blackboard. It's already gated by `write_keys` permissions, so requiring
+ * explicit declaration adds no security value — just boilerplate that's easy
+ * to forget.
+ */
+export function ensureSaveToMemory(sources: ToolSource[], writeKeys?: string[]): ToolSource[] {
+  if (!writeKeys || writeKeys.length === 0) return sources;
+  const already = sources.some((s) => s.type === 'builtin' && s.name === 'save_to_memory');
+  return already ? sources : [...sources, SAVE_TO_MEMORY_SOURCE];
+}
 
 /**
  * Execute an agent node.
@@ -57,7 +74,7 @@ export async function executeAgentNode(
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
 
   // Node-level tools override agent config tools
-  const toolSources = node.tools ?? agentConfig.tools;
+  const toolSources = ensureSaveToMemory(node.tools ?? agentConfig.tools, agentConfig.write_keys);
   const tools = await ctx.deps.resolveTools(toolSources, agent_id);
   return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
     node_id: node.id,

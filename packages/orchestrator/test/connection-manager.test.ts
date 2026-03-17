@@ -180,8 +180,8 @@ describe('MCPConnectionManager', () => {
 
   // ── Taint Wrapping ──
 
-  describe('taint wrapping', () => {
-    it('wraps MCP tool results with taint metadata', async () => {
+  describe('taint tracking', () => {
+    it('returns clean MCP tool results without taint wrapper', async () => {
       registry.register(httpServer);
       const sources: ToolSource[] = [{ type: 'mcp', server_id: 'server1' }];
 
@@ -189,13 +189,56 @@ describe('MCPConnectionManager', () => {
       const searchTool = tools.search as { execute: (args: unknown) => Promise<unknown> };
       const result = await searchTool.execute({ query: 'test' }) as Record<string, unknown>;
 
-      expect(result).toHaveProperty('result');
-      expect(result).toHaveProperty('taint');
-      const taint = result.taint as Record<string, unknown>;
-      expect(taint.source).toBe('mcp_tool');
-      expect(taint.tool_name).toBe('search');
-      expect(taint.server_id).toBe('server1');
-      expect(typeof taint.created_at).toBe('string');
+      // Result should be the raw tool output — no wrapper
+      expect(result).not.toHaveProperty('taint');
+      expect(result).toHaveProperty('results');
+      expect(result).toHaveProperty('query');
+    });
+
+    it('accumulates taint entries in drainTaintEntries()', async () => {
+      registry.register(httpServer);
+      const sources: ToolSource[] = [{ type: 'mcp', server_id: 'server1' }];
+
+      const tools = await manager.resolveTools(sources);
+      const searchTool = tools.search as { execute: (args: unknown) => Promise<unknown> };
+      const fetchTool = tools.fetch as { execute: (args: unknown) => Promise<unknown> };
+
+      // Execute both tools
+      await searchTool.execute({ query: 'test' });
+      await fetchTool.execute({ url: 'https://example.com' });
+
+      // Drain should return taint entries for both
+      const entries = manager.drainTaintEntries();
+      expect(entries.size).toBe(2);
+
+      const searchTaint = entries.get('server1:search');
+      expect(searchTaint).toBeDefined();
+      expect(searchTaint!.source).toBe('mcp_tool');
+      expect(searchTaint!.tool_name).toBe('search');
+      expect(searchTaint!.server_id).toBe('server1');
+      expect(typeof searchTaint!.created_at).toBe('string');
+
+      const fetchTaint = entries.get('server1:fetch');
+      expect(fetchTaint).toBeDefined();
+      expect(fetchTaint!.tool_name).toBe('fetch');
+      expect(fetchTaint!.server_id).toBe('server1');
+    });
+
+    it('drainTaintEntries() clears entries after draining', async () => {
+      registry.register(httpServer);
+      const sources: ToolSource[] = [{ type: 'mcp', server_id: 'server1' }];
+
+      const tools = await manager.resolveTools(sources);
+      const searchTool = tools.search as { execute: (args: unknown) => Promise<unknown> };
+      await searchTool.execute({ query: 'test' });
+
+      // First drain returns entries
+      const first = manager.drainTaintEntries();
+      expect(first.size).toBe(1);
+
+      // Second drain is empty
+      const second = manager.drainTaintEntries();
+      expect(second.size).toBe(0);
     });
 
     it('does not taint built-in tools', async () => {
@@ -206,6 +249,10 @@ describe('MCPConnectionManager', () => {
       const result = await tool.execute({ key: 'k', value: 'v' }) as Record<string, unknown>;
       expect(result).not.toHaveProperty('taint');
       expect(result).toHaveProperty('saved', true);
+
+      // No taint entries for built-in tools
+      const entries = manager.drainTaintEntries();
+      expect(entries.size).toBe(0);
     });
   });
 

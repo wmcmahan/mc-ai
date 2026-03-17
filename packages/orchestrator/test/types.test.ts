@@ -5,6 +5,15 @@ import {
   WaitingReasonSchema,
   ActionSchema,
   ActionTypeSchema,
+  UpdateMemoryPayloadSchema,
+  SetStatusPayloadSchema,
+  GotoNodePayloadSchema,
+  HandoffPayloadSchema,
+  RequestHumanInputPayloadSchema,
+  ResumeFromHumanPayloadSchema,
+  MergeParallelResultsPayloadSchema,
+  InternalActionTypeSchema,
+  narrowActionPayload,
 } from '../src/types/state.js';
 import {
   GraphSchema,
@@ -265,6 +274,116 @@ describe('Type Validation (Zod Schemas)', () => {
         const result = ActionSchema.safeParse(action);
         expect(result.success, `Expected type '${type}' to parse successfully`).toBe(true);
       }
+    });
+  });
+
+  // ─── Typed Action Payloads (Item 1.1) ────────────────────────────────
+
+  describe('Action Payload Schemas', () => {
+    test('UpdateMemoryPayloadSchema validates correct payload', () => {
+      const result = UpdateMemoryPayloadSchema.safeParse({ updates: { key: 'value' } });
+      expect(result.success).toBe(true);
+    });
+
+    test('UpdateMemoryPayloadSchema rejects missing updates', () => {
+      const result = UpdateMemoryPayloadSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    test('SetStatusPayloadSchema validates correct payload', () => {
+      const result = SetStatusPayloadSchema.safeParse({ status: 'running' });
+      expect(result.success).toBe(true);
+    });
+
+    test('SetStatusPayloadSchema rejects invalid status', () => {
+      const result = SetStatusPayloadSchema.safeParse({ status: 'invalid_status' });
+      expect(result.success).toBe(false);
+    });
+
+    test('GotoNodePayloadSchema validates correct payload', () => {
+      const result = GotoNodePayloadSchema.safeParse({ node_id: 'node-1' });
+      expect(result.success).toBe(true);
+    });
+
+    test('GotoNodePayloadSchema rejects missing node_id', () => {
+      const result = GotoNodePayloadSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    test('HandoffPayloadSchema validates correct payload', () => {
+      const result = HandoffPayloadSchema.safeParse({
+        node_id: 'worker',
+        supervisor_id: 'sup-1',
+        reasoning: 'Best match for this task',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('HandoffPayloadSchema rejects missing required fields', () => {
+      expect(HandoffPayloadSchema.safeParse({ node_id: 'worker' }).success).toBe(false);
+      expect(HandoffPayloadSchema.safeParse({ node_id: 'worker', supervisor_id: 'sup' }).success).toBe(false);
+    });
+
+    test('RequestHumanInputPayloadSchema validates with optional fields', () => {
+      const result = RequestHumanInputPayloadSchema.safeParse({
+        pending_approval: { question: 'approve?' },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('ResumeFromHumanPayloadSchema validates correct payload', () => {
+      const result = ResumeFromHumanPayloadSchema.safeParse({
+        response: 'approved',
+        decision: 'yes',
+        memory_updates: { extra: 'data' },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('MergeParallelResultsPayloadSchema validates with optional tokens', () => {
+      const result = MergeParallelResultsPayloadSchema.safeParse({
+        updates: { result_a: 'done', result_b: 'done' },
+        total_tokens: 150,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('MergeParallelResultsPayloadSchema validates without optional tokens', () => {
+      const result = MergeParallelResultsPayloadSchema.safeParse({
+        updates: { result_a: 'done' },
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('InternalActionTypeSchema', () => {
+    const internalTypes = [
+      '_init', '_fail', '_complete', '_advance', '_timeout', '_cancel',
+      '_track_tokens', '_track_cost', '_fire_cost_threshold',
+      '_budget_exceeded', '_push_compensation', '_increment_iteration',
+      '_pop_compensation',
+    ];
+
+    test('should accept all 13 internal action types', () => {
+      for (const type of internalTypes) {
+        expect(InternalActionTypeSchema.safeParse(type).success).toBe(true);
+      }
+    });
+
+    test('should reject non-internal types', () => {
+      expect(InternalActionTypeSchema.safeParse('update_memory').success).toBe(false);
+      expect(InternalActionTypeSchema.safeParse('_unknown').success).toBe(false);
+    });
+  });
+
+  describe('narrowActionPayload', () => {
+    test('should narrow update_memory payload', () => {
+      const result = narrowActionPayload('update_memory', { updates: { key: 'val' } });
+      expect(result).toHaveProperty('updates');
+    });
+
+    test('should throw on invalid payload', () => {
+      expect(() => narrowActionPayload('update_memory', {})).toThrow();
     });
   });
 

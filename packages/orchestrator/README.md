@@ -46,20 +46,17 @@ import {
   type WorkflowState,
 } from '@mcai/orchestrator';
 
-// 1. Register an agent (agents are config, not classes)
+// 1. Register an agent (agents are config, not classes — ID is auto-generated)
 const registry = new InMemoryAgentRegistry();
-const agentId = uuidv4();
-registry.register({
-  id: agentId,
+const agentId = registry.register({
   name: 'Writer',
   model: 'claude-sonnet-4-20250514',
   provider: 'anthropic',
-  system: 'Write a summary. Save it with save_to_memory key "draft".',
+  system_prompt: 'Write a summary. Save it with save_to_memory key "draft".',
   temperature: 0.7,
-  maxSteps: 3,
+  max_steps: 3,
   tools: [{ type: 'builtin', name: 'save_to_memory' }],
-  read_keys: ['goal'],
-  write_keys: ['draft'],
+  permissions: { read_keys: ['goal'], write_keys: ['draft'] },
 });
 configureAgentFactory(registry);
 
@@ -67,29 +64,24 @@ configureAgentFactory(registry);
 const providers = createProviderRegistry();
 configureProviderRegistry(providers);
 
-// 3. Define a graph
+// 3. Define a graph (version/created_at/updated_at are persistence-layer concerns)
 const graph: Graph = {
   id: uuidv4(),
   name: 'Simple',
-  version: '1.0.0',
+  description: 'Single-node writer workflow',
   nodes: [{ id: 'write', type: 'agent', agent_id: agentId, read_keys: ['goal'], write_keys: ['draft'] }],
   edges: [],
   start_node: 'write',
   end_nodes: ['write'],
-  created_at: new Date(),
-  updated_at: new Date(),
 };
 
-// 4. Run
-const state: WorkflowState = {
-  workflow_id: graph.id, run_id: uuidv4(),
+// 4. Run (use createWorkflowState — only workflow_id and goal are required)
+import { createWorkflowState } from '@mcai/orchestrator';
+
+const state = createWorkflowState({
+  workflow_id: graph.id,
   goal: 'Explain how transformers work',
-  status: 'pending', memory: {}, visited_nodes: [],
-  iteration_count: 0, retry_count: 0, max_retries: 3,
-  max_iterations: 50, max_execution_time_ms: 120_000,
-  compensation_stack: [],
-  created_at: new Date(), updated_at: new Date(),
-};
+});
 
 const persistence = new InMemoryPersistenceProvider();
 const runner = new GraphRunner(graph, state, {
@@ -265,7 +257,11 @@ Approval nodes with `timeout_ms` set a `waiting_timeout_at` deadline. If the wor
 
 ### Event Log Failure Policy
 
-The `EventLogWriter` is append-only and errors propagate to the runner. Failed event appends increment the runner's internal failure counter. The runner does **not** silently swallow persistence errors — they surface to the caller's error handling.
+The `EventLogWriter` is append-only with idempotent appends — duplicate `(run_id, sequence_id)` pairs are silently ignored via `ON CONFLICT DO NOTHING`, making retries after network timeouts safe. Other errors propagate to the runner and increment its internal failure counter.
+
+### Persistence Failure Escalation
+
+The GraphRunner tracks consecutive persistence failures. After 3 consecutive failures, it throws a `PersistenceUnavailableError` rather than continuing with divergent in-memory and storage state. The counter resets on any successful persist call.
 
 ### Graceful Shutdown
 

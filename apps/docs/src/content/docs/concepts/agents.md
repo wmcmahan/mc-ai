@@ -20,6 +20,7 @@ MC-AI treats agents as **configuration, not code**. There are no base classes to
 | `temperature` | `number` | `0.7` | Value between 0.0 (deterministic) and 1.0 (creative). |
 | `max_steps` | `number` | `10` | Safety limit for multi-step tool execution loops. |
 | `tools` | `ToolSource[]` | `[]` | MCP tools this agent can access (e.g. `[{ type: "mcp", name: "github" }]`). |
+| `provider_options` | `object` | — | Provider-specific options passed to `generateText`/`streamText` (e.g. extended thinking). |
 | `permissions` | `object` | *required* | Zero-trust state permissions (`read_keys`, `write_keys`). |
 
 ## Agent registry
@@ -31,18 +32,18 @@ import { InMemoryAgentRegistry } from '@mcai/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
-registry.register({
-  id: 'researcher-001',
+// register() auto-generates the UUID and returns it
+const researcherId = registry.register({
   name: 'Researcher',
-  model: 'claude-3-5-sonnet-latest',
+  model: 'claude-sonnet-4-20250514',
   provider: 'anthropic',
   system_prompt: 'You are a research specialist...',
   temperature: 0.5,
   max_steps: 5,
-  tools: [{ type: 'mcp', name: 'web_search' }],
-  permissions: { 
-    read_keys: ['topic'], 
-    write_keys: ['notes'] 
+  tools: [{ type: 'mcp', server_id: 'web-search' }],
+  permissions: {
+    read_keys: ['topic'],
+    write_keys: ['notes']
   },
 });
 ```
@@ -63,5 +64,5 @@ All external tool inputs are automatically flagged as **tainted**. The executor 
 
 ## Next steps
 
-- [Custom LLM Providers](/guides/custom-providers/) — use Groq, Ollama, or any provider
+- [Custom LLM Providers](/guides/custom-providers/) — use Groq, Ollama, or any provider; configure `provider_options`
 - [Your First Workflow](/guides/first-workflow/) — build an end-to-end workflow

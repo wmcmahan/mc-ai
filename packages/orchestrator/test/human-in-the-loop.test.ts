@@ -48,6 +48,7 @@ vi.mock('../src/utils/tracing', () => ({
 }));
 
 import { GraphRunner } from '../src/runner/graph-runner.js';
+import { InMemoryEventLogWriter } from '../src/db/event-log.js';
 import type { Graph } from '../src/types/graph.js';
 import type { WorkflowState } from '../src/types/state.js';
 
@@ -178,14 +179,15 @@ describe('Human-in-the-Loop', () => {
   test('applyHumanResponse with approval should resume workflow', async () => {
     const graph = createHITLGraph();
     const state = createState();
+    const eventLog = new InMemoryEventLogWriter();
 
     // First run: pause at approval
-    const runner1 = new GraphRunner(graph, state);
+    const runner1 = new GraphRunner(graph, state, { eventLog });
     const pausedState = await runner1.run();
     expect(pausedState.status).toBe('waiting');
 
-    // Resume with approval
-    const runner2 = new GraphRunner(graph, { ...pausedState });
+    // Resume with approval (share the same event log)
+    const runner2 = new GraphRunner(graph, { ...pausedState }, { eventLog });
     runner2.applyHumanResponse({ decision: 'approved', data: 'LGTM' });
 
     const resumedState = await runner2.run();
@@ -197,14 +199,15 @@ describe('Human-in-the-Loop', () => {
   test('applyHumanResponse with rejection should route to rejection node', async () => {
     const graph = createHITLGraph('revise');
     const state = createState();
+    const eventLog = new InMemoryEventLogWriter();
 
     // First run: pause at approval
-    const runner1 = new GraphRunner(graph, state);
+    const runner1 = new GraphRunner(graph, state, { eventLog });
     const pausedState = await runner1.run();
     expect(pausedState.status).toBe('waiting');
 
-    // Resume with rejection
-    const runner2 = new GraphRunner(graph, { ...pausedState });
+    // Resume with rejection (share the same event log)
+    const runner2 = new GraphRunner(graph, { ...pausedState }, { eventLog });
     runner2.applyHumanResponse({ decision: 'rejected', data: 'Needs work' });
 
     const resumedState = await runner2.run();
@@ -216,11 +219,12 @@ describe('Human-in-the-Loop', () => {
   test('applyHumanResponse should clear pending approval', async () => {
     const graph = createHITLGraph();
     const state = createState();
+    const eventLog = new InMemoryEventLogWriter();
 
-    const runner1 = new GraphRunner(graph, state);
+    const runner1 = new GraphRunner(graph, state, { eventLog });
     const pausedState = await runner1.run();
 
-    const runner2 = new GraphRunner(graph, { ...pausedState });
+    const runner2 = new GraphRunner(graph, { ...pausedState }, { eventLog });
     runner2.applyHumanResponse({ decision: 'approved' });
 
     const resumedState = await runner2.run();
@@ -230,11 +234,12 @@ describe('Human-in-the-Loop', () => {
   test('applyHumanResponse with memory_updates should merge them', async () => {
     const graph = createHITLGraph();
     const state = createState();
+    const eventLog = new InMemoryEventLogWriter();
 
-    const runner1 = new GraphRunner(graph, state);
+    const runner1 = new GraphRunner(graph, state, { eventLog });
     const pausedState = await runner1.run();
 
-    const runner2 = new GraphRunner(graph, { ...pausedState });
+    const runner2 = new GraphRunner(graph, { ...pausedState }, { eventLog });
     runner2.applyHumanResponse({
       decision: 'edited',
       data: 'Updated draft',

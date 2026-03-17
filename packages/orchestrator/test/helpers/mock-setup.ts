@@ -1,8 +1,12 @@
 /**
  * Shared Test Setup — canonical mock configurations for orchestrator tests.
  *
+ * WARNING: Vitest hoists vi.mock() calls from imported files. If you only
+ * need factories (createTestState, makeNode, etc.), import from
+ * './factories' instead to avoid triggering mock hoisting.
+ *
  * Usage:
- *   import { setupCoreMocks, setupAgentMocks, createTestState, createSimpleGraph } from './helpers/mock-setup';
+ *   import { setupCoreMocks, setupAgentMocks } from './helpers/mock-setup';
  *   setupCoreMocks();
  *   setupAgentMocks();
  *
@@ -11,9 +15,11 @@
 
 import { vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
-import type { Graph, GraphInput } from '../../src/types/graph.js';
-import type { WorkflowState } from '../../src/types/state.js';
-import { createWorkflowState } from '../../src/types/state.js';
+
+// Re-export pure factories for backward compatibility.
+// IMPORTANT: Prefer importing from './factories' directly in new tests
+// to avoid triggering vi.mock hoisting from this file.
+export { createTestState, makeNode, createSimpleGraph, createLinearGraph } from './factories.js';
 
 // ─── Core Mocks ──────────────────────────────────────────────────────
 
@@ -66,7 +72,7 @@ export function setupCoreMocks() {
 
 /**
  * Set up canonical mocks for agent runtime modules:
- * agent-executor, supervisor-executor, tool-adapter, agent-factory.
+ * agent-executor, supervisor-executor, evaluator, agent-factory.
  *
  * Returns mock references for customization.
  */
@@ -91,8 +97,6 @@ export function setupAgentMocks() {
     evaluateQualityExecutor: vi.fn(),
   }));
 
-  // tool-adapter.ts has been removed — tool resolution now goes through MCPConnectionManager
-
   vi.mock('../../src/agent/agent-factory', () => ({
     agentFactory: {
       loadAgent: vi.fn().mockResolvedValue({
@@ -105,41 +109,4 @@ export function setupAgentMocks() {
   }));
 
   return { mockExecuteAgent };
-}
-
-// ─── Test Factories ──────────────────────────────────────────────────
-
-/**
- * Create a test WorkflowState with sensible defaults.
- */
-export function createTestState(overrides: Partial<WorkflowState> = {}): WorkflowState {
-  return createWorkflowState({
-    workflow_id: uuidv4(),
-    goal: 'Test goal',
-    ...overrides,
-  });
-}
-
-/**
- * Create a simple single-node agent graph for testing.
- */
-export function createSimpleGraph(overrides: Partial<GraphInput> = {}): Graph {
-  return {
-    id: uuidv4(),
-    name: 'Test Graph',
-    description: 'Simple test graph',
-    nodes: [{
-      id: 'agent-node',
-      type: 'agent',
-      agent_id: 'test-agent',
-      read_keys: ['*'],
-      write_keys: ['*'],
-      failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-      requires_compensation: false,
-    }],
-    edges: [],
-    start_node: 'agent-node',
-    end_nodes: ['agent-node'],
-    ...overrides,
-  } as Graph;
 }

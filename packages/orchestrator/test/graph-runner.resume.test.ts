@@ -74,6 +74,7 @@ vi.mock('../src/runner/helpers', async (importOriginal) => {
 });
 
 import { GraphRunner } from '../src/runner/graph-runner.js';
+import { InMemoryEventLogWriter } from '../src/db/event-log.js';
 import type { Graph, GraphNode } from '../src/types/graph.js';
 import type { WorkflowState } from '../src/types/state.js';
 
@@ -132,8 +133,11 @@ describe('GraphRunner — Resume from Checkpoint', () => {
       end_nodes: ['step-3'],
     };
 
+    const runId = uuidv4();
+
     // Simulate a checkpoint: step-1 already executed, currently at step-2
     const resumeState = createState({
+      run_id: runId,
       current_node: 'step-2',
       visited_nodes: ['step-1', 'step-2'],
       iteration_count: 1,
@@ -141,8 +145,18 @@ describe('GraphRunner — Resume from Checkpoint', () => {
       started_at: new Date(),
     });
 
+    // Provide an event log with the prior action_dispatched event
+    const eventLog = new InMemoryEventLogWriter();
+    await eventLog.append({
+      run_id: runId, sequence_id: 0, event_type: 'workflow_started',
+    });
+    await eventLog.append({
+      run_id: runId, sequence_id: 1, event_type: 'action_dispatched',
+      node_id: 'step-1', action: { metadata: { node_id: 'step-1' } },
+    });
+
     const persistSpy = vi.fn().mockResolvedValue(undefined);
-    const runner = new GraphRunner(graph, resumeState, persistSpy);
+    const runner = new GraphRunner(graph, resumeState, { persistStateFn: persistSpy, eventLog });
     const final = await runner.run();
 
     expect(final.status).toBe('completed');
@@ -169,8 +183,11 @@ describe('GraphRunner — Resume from Checkpoint', () => {
       end_nodes: ['node-b'],
     };
 
+    const runId = uuidv4();
+
     // Checkpoint: node-a completed at iteration 0, now at node-b (iteration 1)
     const resumeState = createState({
+      run_id: runId,
       current_node: 'node-b',
       visited_nodes: ['node-a', 'node-b'],
       iteration_count: 1,
@@ -179,7 +196,17 @@ describe('GraphRunner — Resume from Checkpoint', () => {
       memory: { 'good-agent_result': 'already done' },
     });
 
-    const runner = new GraphRunner(graph, resumeState);
+    // Provide an event log with the prior action_dispatched event
+    const eventLog = new InMemoryEventLogWriter();
+    await eventLog.append({
+      run_id: runId, sequence_id: 0, event_type: 'workflow_started',
+    });
+    await eventLog.append({
+      run_id: runId, sequence_id: 1, event_type: 'action_dispatched',
+      node_id: 'node-a', action: { metadata: { node_id: 'node-a' } },
+    });
+
+    const runner = new GraphRunner(graph, resumeState, { eventLog });
     const final = await runner.run();
 
     expect(final.status).toBe('completed');

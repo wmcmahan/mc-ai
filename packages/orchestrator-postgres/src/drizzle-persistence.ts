@@ -248,6 +248,48 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
     return (result[0]?.state as unknown as IWorkflowStateJson) ?? null;
   }
 
+  // ── Atomic Snapshot ──
+
+  async saveWorkflowSnapshot(state: WorkflowState): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Save workflow run
+      const isTerminal = TERMINAL_STATUSES.includes(state.status);
+      const status = state.status as WorkflowStatus;
+
+      await tx.insert(workflow_runs).values({
+        id: state.run_id,
+        graph_id: state.workflow_id,
+        status,
+        created_at: state.created_at ?? new Date(),
+        completed_at: isTerminal ? new Date() : null,
+      }).onConflictDoUpdate({
+        target: workflow_runs.id,
+        set: {
+          status,
+          completed_at: isTerminal ? new Date() : null,
+        },
+      });
+
+      // Save workflow state
+      const stateJson = toWorkflowStateJson(state);
+      const maxVersionResult = await tx
+        .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
+        .from(workflow_states)
+        .where(eq(workflow_states.run_id, state.run_id));
+      const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
+
+      await tx.insert(workflow_states).values({
+        run_id: state.run_id,
+        version: nextVersion,
+        state: stateJson,
+        current_node: state.current_node,
+        status: state.status as WorkflowStatus,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    });
+  }
+
   // ── Event Queries ──
 
   async loadEvents(run_id: string): Promise<IWorkflowEventRow[]> {

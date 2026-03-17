@@ -134,21 +134,15 @@ When `allowed_agents` is set, only the listed agents can resolve tools from that
 
 ## Taint tracking
 
-All results returned from MCP tools are automatically wrapped with "taint" metadata before being stored in the graph's state. This allows downstream nodes to verify data provenance.
+All results returned from MCP tools are automatically taint-tracked. The raw tool result is returned directly to the LLM (no wrapper), while taint metadata is accumulated internally by the `MCPConnectionManager`. After agent execution completes, taint entries are drained via `drainTaintEntries()` and applied to any memory keys that received MCP tool results.
 
-```typescript
-{
-  result: { /* original tool result */ },
-  taint: {
-    source: 'mcp_tool',
-    tool_name: 'search',
-    server_id: 'web-search',
-    created_at: '2026-03-10T14:32:01.000Z',
-  }
-}
-```
+This design ensures:
 
-Downstream nodes can check taint status before trusting inputs. See the [Security](/security/) documentation for details on taint tracking and authorization.
+- The **LLM sees clean results** — no taint metadata leaks into the model's context
+- The **taint registry is accurate** — provenance is tracked in `memory._taint_registry`
+- The **tool node executor** also correctly handles taint for `tool`-type nodes
+
+See [Taint Tracking](/concepts/taint-tracking/) for the full taint propagation model and API reference.
 
 ## Next steps
 

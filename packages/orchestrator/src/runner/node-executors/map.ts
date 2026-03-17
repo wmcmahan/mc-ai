@@ -13,6 +13,7 @@ import type { Action, StateView } from '../../types/state.js';
 import { executeParallel, type ParallelTask } from '../parallel-executor.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../../utils/logger.js';
+import { ensureSaveToMemory } from './agent.js';
 import { NodeConfigError, UnsupportedNodeTypeError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 
@@ -43,7 +44,7 @@ export async function executeWorkerWithStateView(
       const agent_id = node.agent_id;
       if (!agent_id) throw new NodeConfigError(node.id, 'agent', 'agent_id');
       const agentConfig = await ctx.deps.loadAgent(agent_id);
-      const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
+      const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), agent_id);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
       return ctx.deps.executeAgent(agent_id, stateView, tools, attempt, {
         node_id: node.id,

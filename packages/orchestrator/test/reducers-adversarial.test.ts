@@ -113,22 +113,19 @@ describe('Adversarial Reducer Tests', () => {
   });
 
   describe('handoff with missing fields', () => {
-    test('should handle missing supervisor_id gracefully', () => {
+    test('should reject missing supervisor_id with typed payload validation', () => {
       const state = createBaseState();
 
-      // supervisor_id is cast to string, undefined becomes "undefined"
       const action = makeAction('handoff', {
         node_id: 'worker',
         reasoning: 'test',
       });
 
-      const newState = handoffReducer(state, action);
-      expect(newState.current_node).toBe('worker');
-      // supervisor_history entry created with undefined supervisor_id
-      expect(newState.supervisor_history).toHaveLength(1);
+      // Typed payload schemas now reject malformed payloads (item 1.1)
+      expect(() => handoffReducer(state, action)).toThrow();
     });
 
-    test('should handle missing reasoning gracefully', () => {
+    test('should reject missing reasoning with typed payload validation', () => {
       const state = createBaseState();
 
       const action = makeAction('handoff', {
@@ -136,9 +133,8 @@ describe('Adversarial Reducer Tests', () => {
         supervisor_id: 'sup',
       });
 
-      const newState = handoffReducer(state, action);
-      expect(newState.current_node).toBe('worker');
-      expect(newState.supervisor_history).toHaveLength(1);
+      // Typed payload schemas now reject malformed payloads (item 1.1)
+      expect(() => handoffReducer(state, action)).toThrow();
     });
   });
 

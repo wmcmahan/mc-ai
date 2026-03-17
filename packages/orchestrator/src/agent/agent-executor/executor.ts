@@ -234,6 +234,12 @@ export async function executeAgent(
     const fallbackKey = options?.node_id ? `${options.node_id}_output` : 'agent_response';
     const memoryUpdates = extractMemoryUpdates(text, toolCalls, config.write_keys, fallbackKey);
 
+    // TODO (Phase 2): Once the executor has access to the ToolResolver, call
+    // `resolver.drainTaintEntries()` here and apply direct MCP taint to any
+    // memory keys that received MCP tool results. Currently, MCP tool results
+    // are returned clean to the LLM (no wrapper), and taint is accumulated in
+    // MCPConnectionManager.taintEntries for later retrieval.
+
     // Propagate taint: if any input memory keys were tainted, mark outputs as derived-tainted
     const outputKeys = Object.keys(memoryUpdates);
     if (outputKeys.length > 0) {

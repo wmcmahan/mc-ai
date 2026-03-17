@@ -238,6 +238,10 @@ export class GraphRunner extends EventEmitter {
   // Graceful shutdown — finish current node, then pause
   private _shuttingDown = false;
 
+  // Consecutive persistence failure tracking (Item 2.3)
+  private persistenceFailures = 0;
+  private static readonly MAX_PERSIST_FAILURES = 3;
+
   // Streaming — only active when stream() is called
   private isStreaming = false;
   private tokenChannel: StreamEvent[] = [];
@@ -563,7 +567,7 @@ export class GraphRunner extends EventEmitter {
         visited: this.state.visited_nodes.length,
       });
       this.dispatchInternal('_init', { resume: true });
-      this.reconstructIdempotencyKeys();
+      await this.reconstructIdempotencyKeys();
     } else {
       this.dispatchInternal('_init', { start_node: this.graph.start_node });
     }
@@ -707,8 +711,8 @@ export class GraphRunner extends EventEmitter {
           throw new PermissionDeniedError(`Node ${currentNode.id} tried to write to unauthorized keys`);
         }
 
-        // Check idempotency using deterministic key
-        const idempotencyKey = `${currentNode.id}:${this.state.iteration_count}`;
+        // Check idempotency using monotonically increasing sequence ID (unique per action)
+        const idempotencyKey = `${currentNode.id}:${this.sequenceId}`;
         if (this.executedActions.has(idempotencyKey)) {
           logger.warn('duplicate_action', { idempotency_key: idempotencyKey, node_id: currentNode.id });
           continue;
@@ -1363,6 +1367,7 @@ export class GraphRunner extends EventEmitter {
     if (this.persistStateFn) {
       try {
         await this.persistStateFn(this.state);
+        this.persistenceFailures = 0; // Reset on success
 
         this.emit('state:persisted', {
           run_id: this.state.run_id,
@@ -1378,10 +1383,18 @@ export class GraphRunner extends EventEmitter {
           });
         }
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.error('state_persist_failed', error, { run_id: this.state.run_id });
-        // Don't throw - persistence errors shouldn't stop execution
-        // But log for monitoring
+        this.persistenceFailures++;
+        logger.error('state_persist_failed', error, {
+          run_id: this.state.run_id,
+          consecutive_failures: this.persistenceFailures,
+        });
+
+        if (this.persistenceFailures >= GraphRunner.MAX_PERSIST_FAILURES) {
+          throw new Error(
+            `Persistence unavailable after ${this.persistenceFailures} consecutive failures. ` +
+            `Halting workflow to prevent data loss.`
+          );
+        }
       }
     }
   }
@@ -1459,18 +1472,14 @@ export class GraphRunner extends EventEmitter {
       const actionEvents = events.filter(e => e.event_type === 'action_dispatched');
 
       if (actionEvents.length > 0) {
-        // Each action_dispatched event carries the node_id and was logged
-        // at a specific iteration. Reconstruct the same keys the main loop uses.
+        // Each action_dispatched event carries the node_id and sequence_id.
+        // Reconstruct the same keys the main loop uses (nodeId:sequenceId).
         for (const event of actionEvents) {
           const nodeId = event.node_id;
-          // The action's metadata captures the iteration at dispatch time
           const action = event.action as { metadata?: { node_id?: string } } | undefined;
           const actionNodeId = action?.metadata?.node_id ?? nodeId;
           if (actionNodeId) {
-            // Use the event's position in the sequence as the iteration index
-            // (events are ordered by sequence_id, matching iteration order)
-            const iterIdx = actionEvents.indexOf(event);
-            this.executedActions.add(`${actionNodeId}:${iterIdx}`);
+            this.executedActions.add(`${actionNodeId}:${event.sequence_id}`);
           }
         }
 
@@ -1493,16 +1502,13 @@ export class GraphRunner extends EventEmitter {
       });
     }
 
-    // Fallback: heuristic reconstruction from visited_nodes
-    const completedCount = this.state.iteration_count;
-    for (let i = 0; i < completedCount && i < this.state.visited_nodes.length; i++) {
-      this.executedActions.add(`${this.state.visited_nodes[i]}:${i}`);
+    // Fallback: no event log available. If there are completed iterations,
+    // heuristic reconstruction is unreliable — throw instead of silently proceeding.
+    if (this.state.iteration_count > 0) {
+      throw new EventLogCorruptionError(this.state.run_id);
     }
-    logger.info('idempotency_reconstructed_heuristic', {
-      keys: this.executedActions.size,
-      completed_iterations: completedCount,
-      warning: 'Heuristic reconstruction may be inaccurate for loop workflows',
-    });
+    // No prior iterations — nothing to reconstruct
+    logger.info('idempotency_no_prior_iterations', { run_id: this.state.run_id });
   }
 
   /**

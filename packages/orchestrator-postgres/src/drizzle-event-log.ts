@@ -26,7 +26,7 @@ export class DrizzleEventLogWriter implements EventLogWriter {
       internal_type: event.internal_type ?? null,
       internal_payload: event.internal_payload ?? null,
       created_at: new Date(),
-    });
+    }).onConflictDoNothing();
   }
 
   async loadEvents(run_id: string): Promise<WorkflowEvent[]> {

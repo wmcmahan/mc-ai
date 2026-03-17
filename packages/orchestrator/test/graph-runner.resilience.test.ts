@@ -676,13 +676,69 @@ describe('GraphRunner — Graph Validation', () => {
 
 describe('GraphRunner — Persistence Resilience', () => {
   /**
-   * Persistence errors should NOT stop workflow execution.
-   * The runner should log the error but continue processing.
-   * This is critical — a transient DB failure shouldn't kill a workflow.
+   * After MAX_PERSIST_FAILURES (3) consecutive failures, the workflow halts
+   * to prevent data loss from unbounded in-memory-only execution.
    */
-  test('should continue execution even when persistence fails', async () => {
+  test('should throw after consecutive persistence failures exceed threshold', async () => {
     const graph: Graph = {
       id: uuidv4(), name: 'Persist Fail', description: '',
+      nodes: [
+        makeNode({ id: 'start', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'n2', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'n3', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'n4', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'end', type: 'agent', agent_id: 'finish-agent' }),
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'n2', condition: { type: 'always' } },
+        { id: 'e2', source: 'n2', target: 'n3', condition: { type: 'always' } },
+        { id: 'e3', source: 'n3', target: 'n4', condition: { type: 'always' } },
+        { id: 'e4', source: 'n4', target: 'end', condition: { type: 'always' } },
+      ],
+      start_node: 'start',
+      end_nodes: ['end'],
+    };
+
+    const brokenPersist = vi.fn().mockRejectedValue(new Error('DB connection failed'));
+    const runner = new GraphRunner(graph, createState(), brokenPersist);
+
+    await expect(runner.run()).rejects.toThrow('Persistence unavailable');
+    expect(brokenPersist).toHaveBeenCalled();
+  });
+
+  test('should reset persistence failure counter on success', async () => {
+    const graph: Graph = {
+      id: uuidv4(), name: 'Persist Recovery', description: '',
+      nodes: [
+        makeNode({ id: 'start', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'n2', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'n3', type: 'agent', agent_id: 'good-agent' }),
+        makeNode({ id: 'end', type: 'agent', agent_id: 'finish-agent' }),
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'n2', condition: { type: 'always' } },
+        { id: 'e2', source: 'n2', target: 'n3', condition: { type: 'always' } },
+        { id: 'e3', source: 'n3', target: 'end', condition: { type: 'always' } },
+      ],
+      start_node: 'start',
+      end_nodes: ['end'],
+    };
+
+    // Fail twice, succeed, fail twice, succeed — never hits 3 consecutive
+    let callCount = 0;
+    const intermittentPersist = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount % 3 !== 0) throw new Error('DB connection failed');
+    });
+    const runner = new GraphRunner(graph, createState(), intermittentPersist);
+    const final = await runner.run();
+
+    expect(final.status).toBe('completed');
+  });
+
+  test('should tolerate fewer than threshold consecutive failures', async () => {
+    const graph: Graph = {
+      id: uuidv4(), name: 'Persist Partial Fail', description: '',
       nodes: [
         makeNode({ id: 'start', type: 'agent', agent_id: 'good-agent' }),
         makeNode({ id: 'end', type: 'agent', agent_id: 'finish-agent' }),
@@ -694,16 +750,16 @@ describe('GraphRunner — Persistence Resilience', () => {
       end_nodes: ['end'],
     };
 
-    // Persistence always throws
-    const brokenPersist = vi.fn().mockRejectedValue(new Error('DB connection failed'));
-    const runner = new GraphRunner(graph, createState(), brokenPersist);
+    // Fail only the first 2 calls, then succeed — never reaches threshold of 3
+    let callCount = 0;
+    const partialPersist = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 2) throw new Error('DB connection failed');
+    });
+    const runner = new GraphRunner(graph, createState(), partialPersist);
     const final = await runner.run();
 
-    // Workflow should still complete despite persistence failures
     expect(final.status).toBe('completed');
-    expect(final.visited_nodes).toContain('start');
-    expect(final.visited_nodes).toContain('end');
-    // Persistence was attempted (and failed) multiple times
-    expect(brokenPersist).toHaveBeenCalled();
+    expect(partialPersist).toHaveBeenCalled();
   });
 });

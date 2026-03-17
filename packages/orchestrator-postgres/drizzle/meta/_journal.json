@@ -71,6 +71,20 @@
       "when": 1773350400000,
       "tag": "0009_add_mcp_servers",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773800000000,
+      "tag": "0010_migrate_agent_tools_to_tool_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773850000000,
+      "tag": "0011_add_provider_options",
+      "breakpoints": true
     }
   ]
 }

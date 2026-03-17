@@ -44,10 +44,9 @@ const agentId = await agentRegistry.register({
   name: 'Writer',
   model: 'claude-sonnet-4-20250514',
   provider: 'anthropic',
-  system: 'You are a writer.',
+  system_prompt: 'You are a writer.',
   tools: [{ type: 'builtin', name: 'save_to_memory' }],
-  read_keys: ['*'],
-  write_keys: ['draft'],
+  permissions: { read_keys: ['*'], write_keys: ['draft'] },
 });
 
 // Run a workflow with Postgres persistence
@@ -65,7 +64,7 @@ const result = await runner.run();
 |-------|-----------|---------|
 | `DrizzlePersistenceProvider` | `PersistenceProvider` | Graph, workflow run, and state CRUD with versioned snapshots |
 | `DrizzleEventLogWriter` | `EventLogWriter` | Append-only event log, checkpoints, compaction |
-| `DrizzleAgentRegistry` | `AgentRegistry` | Agent config storage and lookup |
+| `DrizzleAgentRegistry` | `AgentRegistry` | Agent config CRUD (register, load, update, list, delete) |
 | `DrizzleUsageRecorder` | `UsageRecorder` | Per-run token and cost tracking |
 | `DrizzleRetentionService` | `RetentionService` | Tiered archival (hot/warm/cold) with transactional safety |
 
@@ -80,7 +79,7 @@ Tables are defined in `src/schema.ts` and managed via Drizzle migrations in `dri
 | `workflow_states` | Versioned state snapshots (ordered by `version`, not timestamp) |
 | `workflow_events` | Append-only event log with sequence IDs and unique constraints |
 | `workflow_checkpoints` | State snapshots for event log compaction |
-| `agents` | Agent configuration registry |
+| `agents` | Agent configuration registry (includes `provider_options` JSONB column) |
 | `usage_records` | Token and cost tracking per run |
 
 ### Migrations
@@ -98,10 +97,11 @@ npx drizzle-kit push --config=packages/orchestrator-postgres/drizzle.config.ts
 
 ## Error Contracts
 
-- **Event log writes propagate errors** — failed appends are not silently swallowed. The caller (GraphRunner) receives the error and increments its failure counter.
+- **Event log writes propagate errors** — failed appends (other than duplicate conflicts) are not silently swallowed. The caller (GraphRunner) receives the error and increments its failure counter.
+- **Atomic snapshots** — `DrizzlePersistenceProvider.saveWorkflowSnapshot()` wraps both run and state saves in a single database transaction, preventing inconsistent state if one write fails.
 - **State versioning** — `loadLatestWorkflowState` sorts by `version` (not `created_at`) to handle sub-millisecond state saves correctly.
 - **Transactional archival** — `archiveCompletedWorkflows` wraps its two-phase update (run status + state status) in a database transaction. If either fails, both roll back.
-- **Duplicate event rejection** — appending an event with a duplicate `(run_id, sequence_id)` throws a constraint violation error.
+- **Idempotent event append** — appending an event with a duplicate `(run_id, sequence_id)` is silently ignored via `ON CONFLICT DO NOTHING`. This makes retries after network timeouts safe without risking duplicate events.
 
 ## Testing
 

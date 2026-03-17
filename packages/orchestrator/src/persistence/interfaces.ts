@@ -184,6 +184,17 @@ export interface PersistenceProvider {
   /** Load full state JSON at a specific version. */
   loadWorkflowStateAtVersion(run_id: string, version: number): Promise<WorkflowStateJson | null>;
 
+  // ── Atomic Snapshot ──
+
+  /**
+   * Atomically save both the workflow run record and state snapshot.
+   *
+   * Implementations should wrap both operations in a transaction to
+   * prevent inconsistent state if one fails. Optional — callers fall
+   * back to separate `saveWorkflowRun` + `saveWorkflowState` when absent.
+   */
+  saveWorkflowSnapshot?(state: WorkflowState): Promise<void>;
+
   // ── Event Queries ──
 
   /** Load raw event rows for a run (for API endpoints). */
@@ -250,6 +261,15 @@ export interface AgentRegistry {
 
   /** Register an agent config and return its auto-generated ID. */
   register(entry: AgentRegistryInput): string | Promise<string>;
+
+  /** Update an existing agent's configuration. */
+  updateAgent?(id: string, updates: Partial<AgentRegistryInput>): Promise<void>;
+
+  /** List registered agents with optional pagination. */
+  listAgents?(opts?: { limit?: number; offset?: number }): Promise<AgentRegistryEntry[]>;
+
+  /** Delete an agent by ID. Returns `true` if it existed. */
+  deleteAgent?(id: string): Promise<boolean>;
 }
 
 // ─── MCPServerRegistry ──────────────────────────────────────────────────

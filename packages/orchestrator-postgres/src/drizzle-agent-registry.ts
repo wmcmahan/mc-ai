@@ -6,7 +6,7 @@
 
 import { db } from './connection.js';
 import { agents } from './schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import type { AgentRegistry, AgentRegistryEntry, AgentRegistryInput } from '@mcai/orchestrator';
 
 export class DrizzleAgentRegistry implements AgentRegistry {
@@ -31,6 +31,7 @@ export class DrizzleAgentRegistry implements AgentRegistry {
       max_steps: row.max_steps,
       tools: row.tools,
       permissions: row.permissions,
+      ...(row.provider_options ? { provider_options: row.provider_options } : {}),
     };
   }
 
@@ -67,9 +68,58 @@ export class DrizzleAgentRegistry implements AgentRegistry {
           write_keys: input.permissions?.write_keys ?? [],
           ...(input.permissions?.budget_usd !== undefined ? { budget_usd: input.permissions.budget_usd } : {}),
         },
+        ...(input.provider_options ? { provider_options: input.provider_options } : {}),
       })
       .returning({ id: agents.id });
 
     return result[0].id;
+  }
+
+  /** Update an existing agent's configuration. */
+  async updateAgent(id: string, updates: Partial<AgentRegistryInput>): Promise<void> {
+    const set: Record<string, unknown> = { updated_at: new Date() };
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.description !== undefined) set.description = updates.description;
+    if (updates.model !== undefined) set.model = updates.model;
+    if (updates.provider !== undefined) set.provider = updates.provider;
+    if (updates.system_prompt !== undefined) set.system_prompt = updates.system_prompt;
+    if (updates.temperature !== undefined) set.temperature = updates.temperature;
+    if (updates.max_steps !== undefined) set.max_steps = updates.max_steps;
+    if (updates.tools !== undefined) set.tools = updates.tools;
+    if (updates.permissions !== undefined) set.permissions = updates.permissions;
+    if (updates.provider_options !== undefined) set.provider_options = updates.provider_options;
+
+    await db.update(agents).set(set).where(eq(agents.id, id));
+  }
+
+  /** List registered agents with optional pagination. */
+  async listAgents(opts: { limit?: number; offset?: number } = {}): Promise<AgentRegistryEntry[]> {
+    const { limit = 100, offset = 0 } = opts;
+    const rows = await db
+      .select()
+      .from(agents)
+      .orderBy(desc(agents.created_at))
+      .limit(limit)
+      .offset(offset);
+
+    return rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      model: row.model,
+      provider: row.provider,
+      system_prompt: row.system_prompt,
+      temperature: row.temperature,
+      max_steps: row.max_steps,
+      tools: row.tools,
+      permissions: row.permissions,
+      ...(row.provider_options ? { provider_options: row.provider_options } : {}),
+    }));
+  }
+
+  /** Delete an agent by ID. Returns `true` if it existed. */
+  async deleteAgent(id: string): Promise<boolean> {
+    const result = await db.delete(agents).where(eq(agents.id, id)).returning({ id: agents.id });
+    return result.length > 0;
   }
 }

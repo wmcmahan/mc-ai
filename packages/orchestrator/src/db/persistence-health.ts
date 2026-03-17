@@ -93,10 +93,15 @@ export async function persistWorkflow(
   provider: PersistenceProvider,
 ): Promise<void> {
   try {
-    await Promise.all([
-      provider.saveWorkflowRun(state),
-      provider.saveWorkflowState(state),
-    ]);
+    // Prefer atomic snapshot if available, fall back to parallel save
+    if (provider.saveWorkflowSnapshot) {
+      await provider.saveWorkflowSnapshot(state);
+    } else {
+      await Promise.all([
+        provider.saveWorkflowRun(state),
+        provider.saveWorkflowState(state),
+      ]);
+    }
 
     health.consecutiveFailures = 0;
     health.lastSuccessAt = new Date();

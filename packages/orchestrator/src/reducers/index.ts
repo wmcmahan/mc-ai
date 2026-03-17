@@ -18,7 +18,16 @@
  * @module reducers
  */
 
-import type { WorkflowState, Action, WaitingReason } from '../types/state.js';
+import type { WorkflowState, Action, WaitingReason, InternalActionType } from '../types/state.js';
+import {
+  UpdateMemoryPayloadSchema,
+  SetStatusPayloadSchema,
+  GotoNodePayloadSchema,
+  HandoffPayloadSchema,
+  RequestHumanInputPayloadSchema,
+  ResumeFromHumanPayloadSchema,
+  MergeParallelResultsPayloadSchema,
+} from '../types/state.js';
 
 /**
  * Reducer function signature.
@@ -48,11 +57,13 @@ function appendVisited(visited: string[], nodeId: string): string[] {
 export const updateMemoryReducer: Reducer = (state, action) => {
   if (action.type !== 'update_memory') return state;
 
+  const { updates } = UpdateMemoryPayloadSchema.parse(action.payload);
+
   return {
     ...state,
     memory: {
       ...state.memory,
-      ...(action.payload.updates as Record<string, unknown>),
+      ...updates,
     },
     updated_at: new Date(),
   };
@@ -67,9 +78,11 @@ export const updateMemoryReducer: Reducer = (state, action) => {
 export const setStatusReducer: Reducer = (state, action) => {
   if (action.type !== 'set_status') return state;
 
+  const { status } = SetStatusPayloadSchema.parse(action.payload);
+
   return {
     ...state,
-    status: action.payload.status as WorkflowState['status'],
+    status,
     updated_at: new Date(),
   };
 };
@@ -83,7 +96,7 @@ export const setStatusReducer: Reducer = (state, action) => {
 export const gotoNodeReducer: Reducer = (state, action) => {
   if (action.type !== 'goto_node') return state;
 
-  const node_id = action.payload.node_id as string;
+  const { node_id } = GotoNodePayloadSchema.parse(action.payload);
 
   return {
     ...state,
@@ -102,9 +115,7 @@ export const gotoNodeReducer: Reducer = (state, action) => {
 export const handoffReducer: Reducer = (state, action) => {
   if (action.type !== 'handoff') return state;
 
-  const node_id = action.payload.node_id as string;
-  const supervisor_id = action.payload.supervisor_id as string;
-  const reasoning = action.payload.reasoning as string;
+  const { node_id, supervisor_id, reasoning } = HandoffPayloadSchema.parse(action.payload);
 
   const newHistory = [
     ...state.supervisor_history,
@@ -139,18 +150,19 @@ export const handoffReducer: Reducer = (state, action) => {
 export const requestHumanInputReducer: Reducer = (state, action) => {
   if (action.type !== 'request_human_input') return state;
 
+  const parsed = RequestHumanInputPayloadSchema.parse(action.payload);
   const now = new Date();
-  const timeout_ms = (action.payload.timeout_ms as number) || 86_400_000;
+  const timeout_ms = parsed.timeout_ms || 86_400_000;
 
   return {
     ...state,
     status: 'waiting' as const,
-    waiting_for: (action.payload.waiting_for as WaitingReason) || 'human_approval',
+    waiting_for: (parsed.waiting_for as WaitingReason) || 'human_approval',
     waiting_since: now,
     waiting_timeout_at: new Date(now.getTime() + timeout_ms),
     memory: {
       ...state.memory,
-      _pending_approval: action.payload.pending_approval,
+      _pending_approval: parsed.pending_approval,
     },
     updated_at: now,
   };
@@ -168,13 +180,15 @@ export const requestHumanInputReducer: Reducer = (state, action) => {
 export const resumeFromHumanReducer: Reducer = (state, action) => {
   if (action.type !== 'resume_from_human') return state;
 
+  const parsed = ResumeFromHumanPayloadSchema.parse(action.payload);
+
   const memoryUpdates: Record<string, unknown> = {
-    human_response: action.payload.response,
-    human_decision: action.payload.decision,
+    human_response: parsed.response,
+    human_decision: parsed.decision,
   };
 
-  if (action.payload.memory_updates && typeof action.payload.memory_updates === 'object') {
-    Object.assign(memoryUpdates, action.payload.memory_updates);
+  if (parsed.memory_updates && typeof parsed.memory_updates === 'object') {
+    Object.assign(memoryUpdates, parsed.memory_updates);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructure to omit
@@ -203,8 +217,8 @@ export const resumeFromHumanReducer: Reducer = (state, action) => {
 export const mergeParallelResultsReducer: Reducer = (state, action) => {
   if (action.type !== 'merge_parallel_results') return state;
 
-  const updates = action.payload.updates as Record<string, unknown>;
-  const totalTokens = (action.payload.total_tokens as number) || 0;
+  const { updates, total_tokens } = MergeParallelResultsPayloadSchema.parse(action.payload);
+  const totalTokens = total_tokens || 0;
 
   return {
     ...state,
@@ -253,8 +267,8 @@ export const rootReducer: Reducer = (state, action) => {
 export const internalReducer: Reducer = (state, action) => {
   // Internal actions have `_`-prefixed types that are not in ActionTypeSchema.
   // They are constructed via dispatchInternal() with a type cast and bypass
-  // ActionSchema validation. We cast here to allow the switch to match them.
-  switch (action.type as string) {
+  // ActionSchema validation. We use InternalActionType for the switch.
+  switch (action.type as InternalActionType) {
     case '_init': {
       const now = new Date();
       if (action.payload.resume === true) {
@@ -386,7 +400,7 @@ export function validateAction(
 ): boolean {
   switch (action.type) {
     case 'update_memory': {
-      const updates = action.payload.updates as Record<string, unknown>;
+      const { updates } = UpdateMemoryPayloadSchema.parse(action.payload);
       const keys = Object.keys(updates);
       // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
       if (keys.some(k => k.startsWith('_'))) return false;
@@ -403,7 +417,7 @@ export function validateAction(
       return allowedKeys.includes('*') || allowedKeys.includes('control_flow');
 
     case 'merge_parallel_results': {
-      const parallelUpdates = action.payload.updates as Record<string, unknown>;
+      const { updates: parallelUpdates } = MergeParallelResultsPayloadSchema.parse(action.payload);
       const parallelKeys = Object.keys(parallelUpdates);
       // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
       if (parallelKeys.some(k => k.startsWith('_'))) return false;

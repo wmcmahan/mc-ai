@@ -222,6 +222,114 @@ export const ActionTypeSchema = z.enum([
 
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 
+// ─── Per-Action Payload Schemas ─────────────────────────────────────
+
+export const UpdateMemoryPayloadSchema = z.object({
+  updates: z.record(z.string(), z.unknown()),
+});
+export type UpdateMemoryPayload = z.infer<typeof UpdateMemoryPayloadSchema>;
+
+export const SetStatusPayloadSchema = z.object({
+  status: WorkflowStatusSchema,
+});
+export type SetStatusPayload = z.infer<typeof SetStatusPayloadSchema>;
+
+export const GotoNodePayloadSchema = z.object({
+  node_id: z.string(),
+});
+export type GotoNodePayload = z.infer<typeof GotoNodePayloadSchema>;
+
+export const HandoffPayloadSchema = z.object({
+  node_id: z.string(),
+  supervisor_id: z.string(),
+  reasoning: z.string(),
+});
+export type HandoffPayload = z.infer<typeof HandoffPayloadSchema>;
+
+export const RequestHumanInputPayloadSchema = z.object({
+  waiting_for: WaitingReasonSchema.optional(),
+  timeout_ms: z.number().optional(),
+  pending_approval: z.unknown(),
+});
+export type RequestHumanInputPayload = z.infer<typeof RequestHumanInputPayloadSchema>;
+
+export const ResumeFromHumanPayloadSchema = z.object({
+  response: z.unknown(),
+  decision: z.unknown(),
+  memory_updates: z.record(z.string(), z.unknown()).optional(),
+});
+export type ResumeFromHumanPayload = z.infer<typeof ResumeFromHumanPayloadSchema>;
+
+export const MergeParallelResultsPayloadSchema = z.object({
+  updates: z.record(z.string(), z.unknown()),
+  total_tokens: z.number().optional(),
+});
+export type MergeParallelResultsPayload = z.infer<typeof MergeParallelResultsPayloadSchema>;
+
+/**
+ * Map from action type to its payload schema.
+ * Used by {@link narrowActionPayload} for runtime validation.
+ */
+export const ActionPayloadSchemas = {
+  update_memory: UpdateMemoryPayloadSchema,
+  set_status: SetStatusPayloadSchema,
+  goto_node: GotoNodePayloadSchema,
+  handoff: HandoffPayloadSchema,
+  request_human_input: RequestHumanInputPayloadSchema,
+  resume_from_human: ResumeFromHumanPayloadSchema,
+  merge_parallel_results: MergeParallelResultsPayloadSchema,
+} as const satisfies Record<ActionType, z.ZodType>;
+
+/**
+ * Discriminated union of typed action payloads.
+ * Use with {@link narrowActionPayload} for type-safe payload access.
+ */
+export type TypedActionPayload =
+  | { type: 'update_memory'; payload: UpdateMemoryPayload }
+  | { type: 'set_status'; payload: SetStatusPayload }
+  | { type: 'goto_node'; payload: GotoNodePayload }
+  | { type: 'handoff'; payload: HandoffPayload }
+  | { type: 'request_human_input'; payload: RequestHumanInputPayload }
+  | { type: 'resume_from_human'; payload: ResumeFromHumanPayload }
+  | { type: 'merge_parallel_results'; payload: MergeParallelResultsPayload };
+
+/**
+ * Narrow an action's payload to the typed schema for its action type.
+ * Returns the parsed payload or throws a `ZodError` on mismatch.
+ *
+ * Usage: `const { updates } = narrowActionPayload('update_memory', action.payload);`
+ */
+export function narrowActionPayload(
+  type: ActionType,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return ActionPayloadSchemas[type].parse(payload) as Record<string, unknown>;
+}
+
+// ─── Internal Action Types ──────────────────────────────────────────
+
+/**
+ * Enum of `_`-prefixed internal action types dispatched by the GraphRunner.
+ * These bypass `ActionSchema` validation and are handled by `internalReducer`.
+ */
+export const InternalActionTypeSchema = z.enum([
+  '_init',
+  '_fail',
+  '_complete',
+  '_advance',
+  '_timeout',
+  '_cancel',
+  '_track_tokens',
+  '_track_cost',
+  '_fire_cost_threshold',
+  '_budget_exceeded',
+  '_push_compensation',
+  '_increment_iteration',
+  '_pop_compensation',
+]);
+
+export type InternalActionType = z.infer<typeof InternalActionTypeSchema>;
+
 /**
  * Action returned by agents and nodes.
  *

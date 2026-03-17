@@ -131,20 +131,22 @@ describe.skipIf(!isDatabaseAvailable())('DrizzleEventLogWriter', () => {
   });
 
   /**
-   * Validates fix 1.2: errors propagate instead of being swallowed.
-   * We can't easily mock the DB layer in an integration test, but
-   * we verify the method signature allows error propagation by checking
-   * that a constraint violation actually throws.
+   * Validates fix 1.3: ON CONFLICT DO NOTHING makes append idempotent.
+   * Retry after network timeout no longer throws on duplicate events.
    */
-  describe('error propagation (fix 1.2)', () => {
-    test('should propagate duplicate sequence_id error', async () => {
+  describe('idempotent append (fix 1.3)', () => {
+    test('should silently ignore duplicate sequence_id (idempotent append)', async () => {
       const rid = crypto.randomUUID();
       await writer.append({ run_id: rid, sequence_id: 0, event_type: 'workflow_started' });
 
-      // Duplicate sequence_id should throw (unique constraint or similar)
+      // Duplicate sequence_id should be silently ignored (idempotent)
       await expect(
         writer.append({ run_id: rid, sequence_id: 0, event_type: 'workflow_started' }),
-      ).rejects.toThrow();
+      ).resolves.not.toThrow();
+
+      // Should still have only one event
+      const events = await writer.loadEvents(rid);
+      expect(events).toHaveLength(1);
     });
   });
 });

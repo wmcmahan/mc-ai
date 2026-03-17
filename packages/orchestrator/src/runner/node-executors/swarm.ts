@@ -13,6 +13,7 @@ import type { Action, StateView } from '../../types/state.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../../utils/logger.js';
 import { NodeConfigError } from '../errors.js';
+import { ensureSaveToMemory } from './agent.js';
 import type { NodeExecutorContext } from './context.js';
 
 const logger = createLogger('runner.node.swarm');
@@ -62,7 +63,7 @@ export async function executeSwarmAgentNode(
   };
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
-  const tools = await ctx.deps.resolveTools(agentConfig.tools, agent_id);
+  const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), agent_id);
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
   const action = await ctx.deps.executeAgent(agent_id, swarmView, tools, attempt, {
     node_id: node.id,

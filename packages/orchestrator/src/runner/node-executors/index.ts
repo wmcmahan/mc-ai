@@ -8,7 +8,7 @@
  */
 
 export type { NodeExecutorContext } from './context.js';
-export { executeAgentNode } from './agent.js';
+export { executeAgentNode, ensureSaveToMemory } from './agent.js';
 export { executeToolNode } from './tool.js';
 export { executeRouterNode } from './router.js';
 export { executeSupervisorNode } from './supervisor.js';

@@ -51,6 +51,8 @@ export interface TaintedToolResultShape {
 export interface AgentConfigShape {
   /** Structured tool source declarations. */
   tools: ToolSource[];
+  /** Memory keys the agent may write. */
+  write_keys: string[];
   [key: string]: unknown;
 }
 

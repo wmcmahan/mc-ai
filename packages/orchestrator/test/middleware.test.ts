@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
+import { createTestState, makeNode } from './helpers/factories';
 
 // ─── Mocks ────────────────────────────────────────────────────────
 
@@ -19,7 +20,6 @@ vi.mock('@opentelemetry/api', () => ({
   SpanStatusCode: { OK: 0, ERROR: 2 },
   context: {},
 }));
-
 vi.mock('../src/agent/agent-executor/executor.js', () => ({
   executeAgent: vi.fn(async (agentId: string, _sv: any, _t: any, attempt: number) => ({
     id: uuidv4(),
@@ -54,66 +54,17 @@ import type { GraphRunnerMiddleware, MiddlewareContext } from '../src/runner/mid
 import type { Graph } from '../src/types/graph.js';
 import type { WorkflowState, Action } from '../src/types/state.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────
-
-const createState = (): WorkflowState => ({
-  workflow_id: uuidv4(),
-  run_id: uuidv4(),
-  created_at: new Date(),
-  updated_at: new Date(),
-  goal: 'Middleware test',
-  constraints: [],
-  status: 'pending',
-  iteration_count: 0,
-  retry_count: 0,
-  max_retries: 3,
-  memory: {},
-  visited_nodes: [],
-  max_iterations: 50,
-  compensation_stack: [],
-  max_execution_time_ms: 3600000,
-  total_tokens_used: 0,
-  supervisor_history: [],
-});
-
 const createGraph = (nodes?: any[]): Graph => ({
   id: 'mw-graph',
   name: 'Middleware Test',
   description: 'Test middleware hooks',
-  nodes: nodes ?? [{
-    id: 'node-a',
-    type: 'agent',
-    agent_id: 'test-agent',
-    read_keys: ['*'],
-    write_keys: ['*'],
-    failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-    requires_compensation: false,
-  }],
+  nodes: nodes ?? [
+    makeNode({ id: 'node-a', agent_id: 'test-agent', failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 } }),
+  ],
   edges: [],
   start_node: nodes?.[0]?.id ?? 'node-a',
   end_nodes: [nodes?.[nodes.length - 1]?.id ?? 'node-a'],
 });
-
-const createTwoNodeGraph = (): Graph => createGraph([
-  {
-    id: 'node-a',
-    type: 'agent',
-    agent_id: 'test-agent',
-    read_keys: ['*'],
-    write_keys: ['*'],
-    failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-    requires_compensation: false,
-  },
-  {
-    id: 'node-b',
-    type: 'agent',
-    agent_id: 'test-agent',
-    read_keys: ['*'],
-    write_keys: ['*'],
-    failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-    requires_compensation: false,
-  },
-]);
 
 // ─── Tests ────────────────────────────────────────────────────────
 
@@ -124,7 +75,7 @@ describe('GraphRunner Middleware', () => {
 
   test('no middleware — passthrough works', async () => {
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [] });
     const result = await runner.run();
     expect(result.status).toBe('completed');
@@ -137,7 +88,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     await runner.run();
 
@@ -161,7 +112,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     const result = await runner.run();
 
@@ -182,7 +133,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     const result = await runner.run();
 
@@ -198,7 +149,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     await runner.run();
 
@@ -207,38 +158,15 @@ describe('GraphRunner Middleware', () => {
   });
 
   test('beforeAdvance can override routing', async () => {
+    const fp = { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 };
     const graph: Graph = {
       id: 'route-graph',
       name: 'Route Test',
       description: 'Tests routing override',
       nodes: [
-        {
-          id: 'start',
-          type: 'agent',
-          agent_id: 'test-agent',
-          read_keys: ['*'],
-          write_keys: ['*'],
-          failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-          requires_compensation: false,
-        },
-        {
-          id: 'default-next',
-          type: 'agent',
-          agent_id: 'test-agent',
-          read_keys: ['*'],
-          write_keys: ['*'],
-          failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-          requires_compensation: false,
-        },
-        {
-          id: 'override-target',
-          type: 'agent',
-          agent_id: 'test-agent',
-          read_keys: ['*'],
-          write_keys: ['*'],
-          failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-          requires_compensation: false,
-        },
+        makeNode({ id: 'start', agent_id: 'test-agent', failure_policy: fp }),
+        makeNode({ id: 'default-next', agent_id: 'test-agent', failure_policy: fp }),
+        makeNode({ id: 'override-target', agent_id: 'test-agent', failure_policy: fp }),
       ],
       edges: [{ source: 'start', target: 'default-next', condition: { type: 'always' as const } }],
       start_node: 'start',
@@ -251,7 +179,7 @@ describe('GraphRunner Middleware', () => {
       },
     };
 
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     const result = await runner.run();
 
@@ -272,7 +200,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw1, mw2] });
     await runner.run();
 
@@ -301,7 +229,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw1, mw2] });
     await runner.run();
 
@@ -314,7 +242,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     await expect(runner.run()).rejects.toThrow('middleware boom');
   });
@@ -325,7 +253,7 @@ describe('GraphRunner Middleware', () => {
     };
 
     const graph = createGraph();
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     const result = await runner.run();
 
@@ -334,29 +262,14 @@ describe('GraphRunner Middleware', () => {
   });
 
   test('beforeAdvance returning void keeps default routing', async () => {
+    const fp = { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 };
     const graph: Graph = {
       id: 'route-graph',
       name: 'Route Test',
       description: 'Default routing',
       nodes: [
-        {
-          id: 'start',
-          type: 'agent',
-          agent_id: 'test-agent',
-          read_keys: ['*'],
-          write_keys: ['*'],
-          failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-          requires_compensation: false,
-        },
-        {
-          id: 'expected-next',
-          type: 'agent',
-          agent_id: 'test-agent',
-          read_keys: ['*'],
-          write_keys: ['*'],
-          failure_policy: { max_retries: 1, backoff_strategy: 'fixed' as const, initial_backoff_ms: 100, max_backoff_ms: 100 },
-          requires_compensation: false,
-        },
+        makeNode({ id: 'start', agent_id: 'test-agent', failure_policy: fp }),
+        makeNode({ id: 'expected-next', agent_id: 'test-agent', failure_policy: fp }),
       ],
       edges: [{ source: 'start', target: 'expected-next', condition: { type: 'always' as const } }],
       start_node: 'start',
@@ -367,7 +280,7 @@ describe('GraphRunner Middleware', () => {
       beforeAdvance: async () => { /* returns void — keep default */ },
     };
 
-    const state = createState();
+    const state = createTestState();
     const runner = new GraphRunner(graph, state, { middleware: [mw] });
     const result = await runner.run();
 

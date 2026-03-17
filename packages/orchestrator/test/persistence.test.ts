@@ -360,6 +360,130 @@ describe('InMemoryAgentRegistry', () => {
   });
 });
 
+// ─── InMemoryPersistenceProvider — Atomic Snapshot (Item 1.5) ─────────────────
+
+describe('InMemoryPersistenceProvider — saveWorkflowSnapshot', () => {
+  let provider: InMemoryPersistenceProvider;
+
+  beforeEach(() => {
+    provider = new InMemoryPersistenceProvider();
+  });
+
+  it('should atomically save both run and state', async () => {
+    const state = createWorkflowState();
+    await provider.saveWorkflowSnapshot(state);
+
+    const run = await provider.loadWorkflowRun(state.run_id);
+    expect(run).not.toBeNull();
+    expect(run!.id).toBe(state.run_id);
+    expect(run!.status).toBe(state.status);
+
+    const latestState = await provider.loadLatestWorkflowState(state.run_id);
+    expect(latestState).not.toBeNull();
+    expect(latestState!.run_id).toBe(state.run_id);
+  });
+
+  it('should create versioned state snapshots', async () => {
+    const state = createWorkflowState();
+    await provider.saveWorkflowSnapshot(state);
+    await provider.saveWorkflowSnapshot({ ...state, status: 'completed' });
+
+    const history = await provider.loadWorkflowStateHistory(state.run_id);
+    expect(history.length).toBe(2);
+    expect(history[0].version).toBe(1);
+    expect(history[1].version).toBe(2);
+  });
+});
+
+// ─── InMemoryAgentRegistry — CRUD (Items 2.4, 2.5) ───────────────────────────
+
+describe('InMemoryAgentRegistry — CRUD', () => {
+  let registry: InMemoryAgentRegistry;
+
+  const makeAgentInput = (overrides?: Record<string, unknown>) => ({
+    name: 'Test Agent',
+    description: 'A test agent' as string | null,
+    model: 'gpt-4',
+    provider: 'openai',
+    system_prompt: 'You are a test agent.',
+    temperature: 0.7,
+    max_steps: 10,
+    tools: [] as never[],
+    permissions: { read_keys: ['*'], write_keys: ['*'] },
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    registry = new InMemoryAgentRegistry();
+  });
+
+  it('should update an agent', async () => {
+    const id = registry.register(makeAgentInput({ name: 'Original' }));
+    await registry.updateAgent(id, { name: 'Updated' });
+
+    const agent = await registry.loadAgent(id);
+    expect(agent!.name).toBe('Updated');
+    // Other fields preserved
+    expect(agent!.model).toBe('gpt-4');
+  });
+
+  it('should throw when updating nonexistent agent', async () => {
+    await expect(registry.updateAgent('nonexistent', { name: 'X' })).rejects.toThrow('Agent not found');
+  });
+
+  it('should list agents with pagination', async () => {
+    registry.register(makeAgentInput({ name: 'Agent A' }));
+    registry.register(makeAgentInput({ name: 'Agent B' }));
+    registry.register(makeAgentInput({ name: 'Agent C' }));
+
+    const all = await registry.listAgents();
+    expect(all.length).toBe(3);
+
+    const page = await registry.listAgents({ limit: 2, offset: 1 });
+    expect(page.length).toBe(2);
+  });
+
+  it('should delete an agent', async () => {
+    const id = registry.register(makeAgentInput());
+
+    const deleted = await registry.deleteAgent(id);
+    expect(deleted).toBe(true);
+
+    const agent = await registry.loadAgent(id);
+    expect(agent).toBeNull();
+  });
+
+  it('should return false when deleting nonexistent agent', async () => {
+    const deleted = await registry.deleteAgent('nonexistent');
+    expect(deleted).toBe(false);
+  });
+
+  it('should round-trip provider_options', async () => {
+    const id = registry.register(makeAgentInput({
+      provider_options: {
+        openai: { response_format: 'json_object' as const },
+      },
+    }));
+
+    const agent = await registry.loadAgent(id);
+    expect(agent!.provider_options).toEqual({
+      openai: { response_format: 'json_object' },
+    });
+  });
+
+  it('should preserve provider_options through update', async () => {
+    const id = registry.register(makeAgentInput({
+      provider_options: { anthropic: { max_tokens: 4096 } },
+    }));
+
+    await registry.updateAgent(id, { name: 'Updated' });
+
+    const agent = await registry.loadAgent(id);
+    expect(agent!.name).toBe('Updated');
+    expect(agent!.provider_options).toEqual({ anthropic: { max_tokens: 4096 } });
+  });
+});
+
 // ─── InMemoryUsageRecorder ──────────────────────────────────────────────────
 
 describe('InMemoryUsageRecorder', () => {

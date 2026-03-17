@@ -31,6 +31,7 @@ The primary storage interface. Covers graph definitions, workflow runs, state sn
 | `listWorkflowRuns(opts?)` | List runs, ordered by creation time. |
 | `updateRunStatus(id, status)` | Update only the status of a run. |
 | `saveWorkflowState(state)` | Save a state snapshot (auto-incremented version). |
+| `saveWorkflowSnapshot(state)` | *(optional)* Atomically save both the run record and state snapshot in a single transaction. |
 | `loadLatestWorkflowState(run_id)` | Load the most recent state for crash recovery. |
 | `loadWorkflowStateHistory(run_id, opts?)` | Load version history (lightweight summaries). |
 | `loadWorkflowStateAtVersion(run_id, version)` | Load full state at a specific version. |
@@ -44,8 +45,11 @@ Stores and retrieves agent configurations. The `register()` method auto-generate
 |--------|-------------|
 | `register(input)` | Register an agent config (`AgentRegistryInput`, no `id` field). Returns the auto-generated UUID. |
 | `loadAgent(id)` | Load an agent config by ID. Returns `null` if not found. |
+| `updateAgent(id, updates)` | *(optional)* Update an existing agent's configuration fields. |
+| `listAgents(opts?)` | *(optional)* List registered agents with optional `limit`/`offset` pagination. |
+| `deleteAgent(id)` | *(optional)* Delete an agent by ID. Returns `true` if deleted, `false` if not found. |
 
-Both `InMemoryAgentRegistry` and `DrizzleAgentRegistry` implement the full `AgentRegistry` interface, including `register()`.
+Both `InMemoryAgentRegistry` and `DrizzleAgentRegistry` implement the full `AgentRegistry` interface, including `register()` and the optional CRUD methods.
 
 ### MCPServerRegistry
 
@@ -81,7 +85,7 @@ Manages workflow data lifecycle across Hot / Warm / Cold tiers:
 For development and testing, the core package provides:
 
 - `InMemoryPersistenceProvider` — full `PersistenceProvider` backed by `Map` objects
-- `InMemoryAgentRegistry` — agent registry with `register()` and `loadAgent()`
+- `InMemoryAgentRegistry` — agent registry with `register()`, `loadAgent()`, `updateAgent()`, `listAgents()`, and `deleteAgent()`
 - `InMemoryMCPServerRegistry` — MCP server registry backed by a `Map`
 
 ```typescript
@@ -118,11 +122,20 @@ The `GraphRunner` accepts a `persistStateFn` callback that is called after every
 ```typescript
 const runner = new GraphRunner(graph, state, {
   persistStateFn: async (state) => {
-    await persistence.saveWorkflowState(state);
-    await persistence.saveWorkflowRun(state);
+    // Prefer saveWorkflowSnapshot for atomic run + state saves
+    if (persistence.saveWorkflowSnapshot) {
+      await persistence.saveWorkflowSnapshot(state);
+    } else {
+      await persistence.saveWorkflowState(state);
+      await persistence.saveWorkflowRun(state);
+    }
   },
 });
 ```
+
+### Persistence failure escalation
+
+The GraphRunner tracks consecutive persistence failures. If `persistStateFn` fails 3 times in a row, the runner throws a `PersistenceUnavailableError` rather than silently continuing with divergent in-memory and storage state. The counter resets on any successful persist call.
 
 ## State versioning
 

@@ -13,6 +13,7 @@ import type { Action, StateView } from '../../types/state.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
+import { ensureSaveToMemory } from './agent.js';
 
 const logger = createLogger('runner.node.synthesizer');
 
@@ -36,7 +37,7 @@ export async function executeSynthesizerNode(
   // Delegate to agent for intelligent synthesis
   if (node.agent_id) {
     const agentConfig = await ctx.deps.loadAgent(node.agent_id);
-    const tools = await ctx.deps.resolveTools(agentConfig.tools, node.agent_id);
+    const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), node.agent_id);
     const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
     return ctx.deps.executeAgent(node.agent_id, stateView, tools, attempt, {
       node_id: node.id,

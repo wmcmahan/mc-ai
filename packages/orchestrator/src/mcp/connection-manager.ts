@@ -52,6 +52,13 @@ export interface ToolResolver {
    * Close all open MCP client connections and release resources.
    */
   closeAll(): Promise<void>;
+
+  /**
+   * Drain accumulated taint entries from MCP tool executions.
+   * Returns the accumulated entries (keyed by `serverId:toolName`) and clears the internal map.
+   * Optional — only implemented by MCPConnectionManager.
+   */
+  drainTaintEntries?(): Map<string, TaintMetadata>;
 }
 
 // ─── Lazy Imports ───────────────────────────────────────────────────
@@ -147,6 +154,7 @@ export class MCPConnectionManager implements ToolResolver {
   private readonly clients = new Map<string, MCPClientType>();
   private readonly pending = new Map<string, Promise<MCPClientType>>();
   private readonly registry: MCPServerRegistry;
+  private taintEntries = new Map<string, TaintMetadata>();
 
   constructor(registry: MCPServerRegistry) {
     this.registry = registry;
@@ -338,7 +346,9 @@ export class MCPConnectionManager implements ToolResolver {
   }
 
   /**
-   * Wrap a tool's execute function with taint metadata.
+   * Wrap a tool's execute function to accumulate taint metadata in the
+   * internal map while returning the raw result to the AI SDK (and thus
+   * to the LLM). This ensures the LLM never sees taint wrapper objects.
    * Creates a new tool object — never mutates the original.
    */
   private wrapToolWithTaint(
@@ -354,19 +364,29 @@ export class MCPConnectionManager implements ToolResolver {
 
     return {
       ...tool,
-      execute: async (args: unknown): Promise<TaintedToolResult> => {
+      execute: async (args: unknown): Promise<unknown> => {
         const result = await originalExecute(args);
-        return {
-          result,
-          taint: {
-            source: 'mcp_tool' as const,
-            tool_name: toolName,
-            server_id: serverId,
-            created_at: new Date().toISOString(),
-          },
-        };
+        const taintKey = `${serverId}:${toolName}`;
+        this.taintEntries.set(taintKey, {
+          source: 'mcp_tool' as const,
+          tool_name: toolName,
+          server_id: serverId,
+          created_at: new Date().toISOString(),
+        });
+        return result;
       },
     };
+  }
+
+  /**
+   * Drain accumulated taint entries from MCP tool executions.
+   * Returns the accumulated entries (keyed by `serverId:toolName`) and clears the internal map.
+   * Call this after an agent execution completes to retrieve taint metadata for post-processing.
+   */
+  drainTaintEntries(): Map<string, TaintMetadata> {
+    const entries = new Map(this.taintEntries);
+    this.taintEntries.clear();
+    return entries;
   }
 
   /**

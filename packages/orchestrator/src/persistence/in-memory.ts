@@ -209,6 +209,14 @@ export class InMemoryPersistenceProvider implements PersistenceProvider {
     return entry?.stateJson ?? null;
   }
 
+  // ── Atomic Snapshot ──
+
+  /** Atomically save both the workflow run record and state snapshot. */
+  async saveWorkflowSnapshot(state: WorkflowState): Promise<void> {
+    await this.saveWorkflowRun(state);
+    await this.saveWorkflowState(state);
+  }
+
   // ── Event Queries ──
 
   /** Load raw event rows for a run, ordered by `sequence_id` ascending. */
@@ -254,6 +262,24 @@ export class InMemoryAgentRegistry implements AgentRegistry {
     const full: AgentRegistryEntry = { ...entry, id };
     this.agents.set(id, full);
     return id;
+  }
+
+  /** Update an existing agent's configuration. Throws if not found. */
+  async updateAgent(id: string, updates: Partial<AgentRegistryInput>): Promise<void> {
+    const existing = this.agents.get(id);
+    if (!existing) throw new Error(`Agent not found: ${id}`);
+    this.agents.set(id, { ...existing, ...updates, id });
+  }
+
+  /** List registered agents with optional pagination. */
+  async listAgents(opts: { limit?: number; offset?: number } = {}): Promise<AgentRegistryEntry[]> {
+    const { limit = 100, offset = 0 } = opts;
+    return [...this.agents.values()].slice(offset, offset + limit);
+  }
+
+  /** Delete an agent by ID. Returns `true` if it existed. */
+  async deleteAgent(id: string): Promise<boolean> {
+    return this.agents.delete(id);
   }
 
   /** Clear all registered agents. */
