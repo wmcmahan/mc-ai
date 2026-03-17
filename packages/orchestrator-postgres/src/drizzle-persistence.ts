@@ -204,7 +204,7 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
       .select()
       .from(workflow_states)
       .where(eq(workflow_states.run_id, run_id))
-      .orderBy(desc(workflow_states.created_at))
+      .orderBy(desc(workflow_states.version))
       .limit(1);
 
     const state = result[0]?.state ?? null;

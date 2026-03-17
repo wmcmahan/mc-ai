@@ -17,6 +17,7 @@ import { compileExpression, useDotAccessOperatorAndOptionalChaining } from 'filt
 import type { EdgeCondition } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
 import { createLogger } from '../utils/logger.js';
+import { getTaintRegistry } from '../utils/taint.js';
 
 const logger = createLogger('runner.conditions');
 
@@ -81,11 +82,14 @@ function getCompiledExpression(expression: string): ReturnType<typeof compileExp
  *
  * @param condition - The edge condition to evaluate.
  * @param state - Current workflow state.
+ * @param options - Optional evaluation configuration.
+ * @param options.strict_taint - When `true`, reject conditions that reference tainted memory keys.
  * @returns `true` if the edge should be followed.
  */
 export function evaluateCondition(
   condition: EdgeCondition,
   state: WorkflowState,
+  options?: { strict_taint?: boolean },
 ): boolean {
   switch (condition.type) {
     case 'always':
@@ -100,6 +104,29 @@ export function evaluateCondition(
         // Legacy compat: strip leading "$." JSONPath prefix
         if (expression.startsWith('$.')) {
           expression = expression.slice(2);
+        }
+
+        // Check for tainted keys referenced in the condition expression
+        const taintRegistry = getTaintRegistry(state.memory);
+        if (Object.keys(taintRegistry).length > 0) {
+          const taintedKeysInExpr = Object.keys(taintRegistry).filter(
+            key => expression.includes(`memory.${key}`) || expression.includes(key),
+          );
+          if (taintedKeysInExpr.length > 0) {
+            if (options?.strict_taint) {
+              logger.warn('tainted_condition_rejected', {
+                condition: condition.condition,
+                tainted_keys: taintedKeysInExpr,
+                reason: 'strict_taint mode rejects conditions referencing tainted data',
+              });
+              return false;
+            }
+            logger.warn('tainted_condition_warning', {
+              condition: condition.condition,
+              tainted_keys: taintedKeysInExpr,
+              hint: 'Condition references tainted memory keys — result may be influenced by untrusted data',
+            });
+          }
         }
 
         // Filtrex uses double quotes for string literals; convert

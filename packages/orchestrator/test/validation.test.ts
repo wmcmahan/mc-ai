@@ -365,6 +365,56 @@ describe('Graph Validation', () => {
     });
   });
 
+  describe('agent_id empty string validation', () => {
+    test('should error if agent node has empty string agent_id', () => {
+      const graph = createValidGraph();
+      (graph.nodes[0] as any).agent_id = '';
+
+      const result = validateGraph(graph);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain("Agent node 'start' is missing agent_id");
+    });
+  });
+
+  describe('condition expression syntax validation', () => {
+    test('should warn on syntactically invalid condition expression', () => {
+      const graph = createValidGraph();
+      graph.edges[0].condition = { type: 'conditional', condition: '(((' };
+
+      const result = validateGraph(graph);
+
+      expect(result.valid).toBe(true); // warning, not error
+      expect(result.warnings.some(w =>
+        w.includes('edge-1') && w.includes('syntax error')
+      )).toBe(true);
+    });
+
+    test('should not warn on valid condition expression', () => {
+      const graph = createValidGraph();
+      graph.edges[0].condition = { type: 'conditional', condition: 'memory.approved == 1' };
+
+      const result = validateGraph(graph);
+
+      // No syntax error warnings for this edge
+      expect(result.warnings.some(w =>
+        w.includes('edge-1') && w.includes('syntax error')
+      )).toBe(false);
+    });
+
+    test('should still warn on conditional type with undefined condition', () => {
+      const graph = createValidGraph();
+      graph.edges[0].condition = { type: 'conditional' }; // no condition string
+
+      const result = validateGraph(graph);
+
+      expect(result.valid).toBe(true); // warning, not error
+      expect(result.warnings.some(w =>
+        w.includes('conditional') && w.includes('missing a condition')
+      )).toBe(true);
+    });
+  });
+
   describe('structural warnings', () => {
     test('should warn if graph has no end nodes', () => {
       const graph = createValidGraph();

@@ -42,9 +42,10 @@ Stores and retrieves agent configurations. The `register()` method auto-generate
 
 | Method | Description |
 |--------|-------------|
+| `register(input)` | Register an agent config (`AgentRegistryInput`, no `id` field). Returns the auto-generated UUID. |
 | `loadAgent(id)` | Load an agent config by ID. Returns `null` if not found. |
 
-The `InMemoryAgentRegistry` additionally provides `register(input)` which accepts an `AgentRegistryInput` (no `id` field) and returns the auto-generated UUID.
+Both `InMemoryAgentRegistry` and `DrizzleAgentRegistry` implement the full `AgentRegistry` interface, including `register()`.
 
 ### MCPServerRegistry
 
@@ -130,6 +131,8 @@ Every call to `saveWorkflowState()` creates a new version. This enables:
 - **Crash recovery** — `loadLatestWorkflowState()` returns the most recent snapshot
 - **State history** — `loadWorkflowStateHistory()` lists all versions for debugging
 - **Time travel** — `loadWorkflowStateAtVersion()` loads full state at any version
+
+`loadLatestWorkflowState()` sorts by `version` (not `created_at`) to handle sub-millisecond state saves correctly. Multiple state saves within the same millisecond are common during parallel node execution, so version ordering is the only reliable way to identify the latest state.
 
 ## Next steps
 

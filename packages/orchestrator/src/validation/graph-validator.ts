@@ -20,6 +20,7 @@
  * @module validation/graph-validator
  */
 
+import { compileExpression, useDotAccessOperatorAndOptionalChaining } from 'filtrex';
 import type { Graph, GraphNode, GraphEdge } from '../types/graph.js';
 
 /**
@@ -104,6 +105,19 @@ export function validateGraph(graph: Graph): ValidationResult {
 
     if (edge.condition?.type === 'conditional' && !edge.condition.condition) {
       warnings.push(`Edge '${edge.id}': conditional edge is missing a condition expression (will always evaluate to false)`);
+    }
+
+    // Try-parse conditional expressions to catch syntax errors early
+    if (edge.condition?.type === 'conditional' && edge.condition.condition) {
+      try {
+        compileExpression(edge.condition.condition, {
+          customProp: useDotAccessOperatorAndOptionalChaining,
+        });
+      } catch (e) {
+        warnings.push(
+          `Edge '${edge.id}': condition expression '${edge.condition.condition}' has syntax error: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
     }
 
     if (nodeMap.has(edge.source)) {

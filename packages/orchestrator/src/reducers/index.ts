@@ -251,7 +251,10 @@ export const rootReducer: Reducer = (state, action) => {
  * dispatched only by the {@link GraphRunner}.
  */
 export const internalReducer: Reducer = (state, action) => {
-  switch (action.type) {
+  // Internal actions have `_`-prefixed types that are not in ActionTypeSchema.
+  // They are constructed via dispatchInternal() with a type cast and bypass
+  // ActionSchema validation. We cast here to allow the switch to match them.
+  switch (action.type as string) {
     case '_init': {
       const now = new Date();
       if (action.payload.resume === true) {
@@ -381,26 +384,30 @@ export function validateAction(
   action: Action,
   allowedKeys: string[]
 ): boolean {
-  if (allowedKeys.includes('*')) return true;
-
   switch (action.type) {
     case 'update_memory': {
       const updates = action.payload.updates as Record<string, unknown>;
-      return Object.keys(updates).every(k => allowedKeys.includes(k));
+      const keys = Object.keys(updates);
+      // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
+      if (keys.some(k => k.startsWith('_'))) return false;
+      return allowedKeys.includes('*') || keys.every(k => allowedKeys.includes(k));
     }
 
     case 'set_status':
-      return allowedKeys.includes('status');
+      return allowedKeys.includes('*') || allowedKeys.includes('status');
 
     case 'goto_node':
     case 'handoff':
     case 'request_human_input':
     case 'resume_from_human':
-      return allowedKeys.includes('control_flow');
+      return allowedKeys.includes('*') || allowedKeys.includes('control_flow');
 
     case 'merge_parallel_results': {
       const parallelUpdates = action.payload.updates as Record<string, unknown>;
-      return Object.keys(parallelUpdates).every(k => allowedKeys.includes(k));
+      const parallelKeys = Object.keys(parallelUpdates);
+      // Block writes to internal keys (e.g., _taint_registry) — even with wildcard
+      if (parallelKeys.some(k => k.startsWith('_'))) return false;
+      return allowedKeys.includes('*') || parallelKeys.every(k => allowedKeys.includes(k));
     }
 
     default:

@@ -396,6 +396,12 @@ export const GraphSchema = z.object({
   start_node: z.string(),
   /** Terminal node IDs. */
   end_nodes: z.array(z.string()),
+
+  /**
+   * When `true`, reject routing decisions that reference tainted memory keys.
+   * Default is warning-only (false).
+   */
+  strict_taint: z.boolean().default(false),
 });
 
 /** Fully-populated graph definition (output of {@link GraphSchema.parse}). */

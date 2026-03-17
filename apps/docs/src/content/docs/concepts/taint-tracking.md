@@ -114,6 +114,42 @@ Agent "writer" reads summary, writes draft
 
 Once data is tainted, the taint follows it through every agent that processes it. This creates an auditable chain of provenance from the original external source through every transformation.
 
+## Taint enforcement at decision points
+
+Tainted data is tracked not only for auditing, but also enforced at routing decision points to prevent untrusted external data from controlling workflow control flow.
+
+### Conditional edge routing
+
+When a conditional edge expression references a tainted memory key, the engine logs a warning by default. This alerts operators that an external data source is influencing which path a workflow takes.
+
+### Strict taint mode
+
+Setting `strict_taint: true` on the graph upgrades warnings to hard rejections. When enabled, `evaluateCondition()` returns `false` for any condition that references a tainted key, forcing the workflow to take the fallback path instead of trusting external data:
+
+```typescript
+const graph = createGraph({
+  name: 'Strict Taint Example',
+  strict_taint: true, // reject tainted data in routing
+  nodes: [
+    { id: 'fetch', type: 'tool', tool_id: 'web_search', read_keys: ['*'], write_keys: ['search_results'] },
+    { id: 'analyze', type: 'agent', agent_id: ANALYST_ID, read_keys: ['search_results'], write_keys: ['analysis'] },
+    { id: 'fallback', type: 'agent', agent_id: FALLBACK_ID, read_keys: ['goal'], write_keys: ['analysis'] },
+  ],
+  edges: [
+    { source: 'fetch', target: 'analyze', condition: 'search_results.length > 0' },
+    { source: 'fetch', target: 'fallback' }, // taken when strict_taint rejects the condition
+  ],
+  start_node: 'fetch',
+  end_nodes: ['analyze', 'fallback'],
+});
+```
+
+In this example, `search_results` is tainted (from an MCP tool). With `strict_taint: true`, the condition `search_results.length > 0` evaluates to `false` regardless of the actual value, and the workflow routes to `fallback`.
+
+### Supervisor routing
+
+When a supervisor node receives input containing tainted keys, the engine injects an explicit warning into the supervisor's prompt: the supervisor is told which keys are tainted and that routing decisions should not rely on their content. This gives the LLM the context to make safer routing choices, even without `strict_taint` enabled.
+
 ## Next steps
 
 - [Tools & MCP](/concepts/tools-and-mcp/) — how MCP tool results are automatically tainted

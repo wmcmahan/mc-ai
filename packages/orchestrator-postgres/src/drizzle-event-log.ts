@@ -17,26 +17,16 @@ import type { NewWorkflowEvent, WorkflowEvent, Action, WorkflowState } from '@mc
  */
 export class DrizzleEventLogWriter implements EventLogWriter {
   async append(event: NewWorkflowEvent): Promise<void> {
-    try {
-      await db.insert(workflow_events).values({
-        run_id: event.run_id,
-        sequence_id: event.sequence_id,
-        event_type: event.event_type as 'workflow_started' | 'node_started' | 'action_dispatched' | 'internal_dispatched' | 'state_persisted',
-        node_id: event.node_id ?? null,
-        action: event.action ? toSerializable(event.action) : null,
-        internal_type: event.internal_type ?? null,
-        internal_payload: event.internal_payload ?? null,
-        created_at: new Date(),
-      });
-    } catch (error) {
-      // Log but don't throw — event log failures should not halt the workflow.
-      console.error('[drizzle-event-log] event_append_failed', {
-        run_id: event.run_id,
-        sequence_id: event.sequence_id,
-        event_type: event.event_type,
-        error: error instanceof Error ? error.message : error,
-      });
-    }
+    await db.insert(workflow_events).values({
+      run_id: event.run_id,
+      sequence_id: event.sequence_id,
+      event_type: event.event_type as 'workflow_started' | 'node_started' | 'action_dispatched' | 'internal_dispatched' | 'state_persisted',
+      node_id: event.node_id ?? null,
+      action: event.action ? toSerializable(event.action) : null,
+      internal_type: event.internal_type ?? null,
+      internal_payload: event.internal_payload ?? null,
+      created_at: new Date(),
+    });
   }
 
   async loadEvents(run_id: string): Promise<WorkflowEvent[]> {

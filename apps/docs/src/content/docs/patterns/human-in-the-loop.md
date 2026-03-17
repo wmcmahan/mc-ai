@@ -114,6 +114,27 @@ When the workflow resumes:
 - The human's `data` string is saved to state memory under `human_response`.
 - The downstream agents (like the Publisher) can read these fields to incorporate the feedback into their final output.
 
+## Approval gate timeouts
+
+When `timeout_ms` is set on an approval node, the engine sets `waiting_timeout_at` on the workflow state to the current time plus the timeout duration. This creates a hard deadline for human response.
+
+If the workflow is resumed after the deadline has expired, the engine transitions the workflow to `timeout` status immediately with a `WorkflowTimeoutError` — the human's response is discarded and execution does not continue. This prevents workflows from waiting indefinitely for human approval that may never come.
+
+```typescript
+{
+  id: 'review',
+  type: 'approval',
+  approval_config: {
+    approval_type: 'human_review',
+    prompt_message: 'Approve deployment to production?',
+    review_keys: ['deployment_plan'],
+    timeout_ms: 600_000,  // 10-minute deadline
+  },
+}
+```
+
+If no human responds within 10 minutes and a resume is attempted after that window, the workflow fails with `WorkflowTimeoutError`. To handle timeouts gracefully, check `state.status === 'timeout'` in your application code and trigger appropriate fallback logic.
+
 ## When to use this pattern
 
 - **High-stakes actions**: An agent proposes a production deployment, financial transaction, or email blast, but a human must sign off before execution.

@@ -29,13 +29,15 @@ export class DrizzleRetentionService implements RetentionService {
     const runIds = completedRuns.map(r => r.id);
     const now = new Date();
 
-    await db.update(workflow_runs)
-      .set({ archived_at: now })
-      .where(inArray(workflow_runs.id, runIds));
+    await db.transaction(async (tx) => {
+      await tx.update(workflow_runs)
+        .set({ archived_at: now })
+        .where(inArray(workflow_runs.id, runIds));
 
-    await db.update(workflow_states)
-      .set({ archived_at: now })
-      .where(inArray(workflow_states.run_id, runIds));
+      await tx.update(workflow_states)
+        .set({ archived_at: now })
+        .where(inArray(workflow_states.run_id, runIds));
+    });
 
     return completedRuns.length;
   }

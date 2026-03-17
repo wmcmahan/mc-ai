@@ -454,7 +454,7 @@ describe('Reducers', () => {
       expect(isValid).toBe(true);
     });
 
-    test('should block unknown action types', () => {
+    test('should block unknown action types even with wildcard', () => {
       const action: Action = {
         id: uuidv4(),
         idempotency_key: uuidv4(),
@@ -464,7 +464,67 @@ describe('Reducers', () => {
       };
 
       const isValid = validateAction(action, ['*']);
-      expect(isValid).toBe(true); // Wildcard grants all
+      expect(isValid).toBe(false); // Unknown types are always rejected (deny-by-default)
+    });
+
+    test('should block wildcard write to _taint_registry via update_memory', () => {
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: { updates: { _taint_registry: { evil: true } } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      expect(validateAction(action, ['*'])).toBe(false);
+    });
+
+    test('should allow wildcard write to normal keys via update_memory', () => {
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: { updates: { result: 'ok', count: 5 } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      expect(validateAction(action, ['*'])).toBe(true);
+    });
+
+    test('should block _-prefixed key in merge_parallel_results', () => {
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'merge_parallel_results',
+        payload: { updates: { result: 'ok', _internal: 'bad' } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      expect(validateAction(action, ['*'])).toBe(false);
+    });
+
+    test('should allow merge_parallel_results with normal keys and wildcard', () => {
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'merge_parallel_results',
+        payload: { updates: { result: 'ok' }, total_tokens: 100 },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      expect(validateAction(action, ['*'])).toBe(true);
+    });
+
+    test('should block update_memory with any _-prefixed key even with explicit permission', () => {
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: { updates: { _taint_registry: {}, normal: 'ok' } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      expect(validateAction(action, ['_taint_registry', 'normal'])).toBe(false);
     });
   });
 });

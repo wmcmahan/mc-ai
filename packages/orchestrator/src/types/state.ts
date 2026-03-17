@@ -204,6 +204,25 @@ export interface StateView {
 // ─── Action Schema ──────────────────────────────────────────────────
 
 /**
+ * Discriminated union of known public action types.
+ *
+ * Internal action types (prefixed with `_` like `_init`, `_fail`, `_complete`)
+ * are dispatched through `dispatchInternal()` in GraphRunner and bypass
+ * `ActionSchema` validation entirely — they are NOT included here.
+ */
+export const ActionTypeSchema = z.enum([
+  'update_memory',
+  'set_status',
+  'goto_node',
+  'handoff',
+  'request_human_input',
+  'resume_from_human',
+  'merge_parallel_results',
+]);
+
+export type ActionType = z.infer<typeof ActionTypeSchema>;
+
+/**
  * Action returned by agents and nodes.
  *
  * Dispatched through reducers to produce new workflow state. Includes
@@ -214,8 +233,8 @@ export const ActionSchema = z.object({
   // ── Identification ──
   /** Unique action identifier. */
   id: z.string().uuid(),
-  /** Action type (e.g. `"update_memory"`, `"set_status"`, `"goto_node"`). */
-  type: z.string(),
+  /** Action type — must be one of the known public action types. */
+  type: ActionTypeSchema,
   /** Action payload — shape depends on `type`. */
   payload: z.record(z.string(), z.unknown()),
 

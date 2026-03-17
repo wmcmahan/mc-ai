@@ -196,4 +196,57 @@ describe('Conditional Edge Evaluation', () => {
       expect(evaluateCondition(condition, state)).toBe(false);
     });
   });
+
+  describe('taint checking', () => {
+    test('should warn but allow tainted key references by default', () => {
+      const condition: EdgeCondition = {
+        type: 'conditional',
+        condition: 'memory.decision == "go"',
+      };
+      const state = createMockState({
+        decision: 'go',
+        _taint_registry: { decision: { source: 'mcp_tool', tool_name: 'web_search', created_at: new Date().toISOString() } },
+      });
+
+      // Default: warning only, still evaluates
+      expect(evaluateCondition(condition, state)).toBe(true);
+    });
+
+    test('should reject tainted key references when strict_taint is true', () => {
+      const condition: EdgeCondition = {
+        type: 'conditional',
+        condition: 'memory.decision == "go"',
+      };
+      const state = createMockState({
+        decision: 'go',
+        _taint_registry: { decision: { source: 'mcp_tool', tool_name: 'web_search', created_at: new Date().toISOString() } },
+      });
+
+      expect(evaluateCondition(condition, state, { strict_taint: true })).toBe(false);
+    });
+
+    test('should allow conditions not referencing tainted keys even in strict mode', () => {
+      const condition: EdgeCondition = {
+        type: 'conditional',
+        condition: 'memory.safe_count > 0',
+      };
+      const state = createMockState({
+        safe_count: 5,
+        tainted_data: 'evil',
+        _taint_registry: { tainted_data: { source: 'mcp_tool', tool_name: 'web_search', created_at: new Date().toISOString() } },
+      });
+
+      expect(evaluateCondition(condition, state, { strict_taint: true })).toBe(true);
+    });
+
+    test('should handle empty taint registry without issues', () => {
+      const condition: EdgeCondition = {
+        type: 'conditional',
+        condition: 'memory.value > 5',
+      };
+      const state = createMockState({ value: 10 });
+
+      expect(evaluateCondition(condition, state, { strict_taint: true })).toBe(true);
+    });
+  });
 });

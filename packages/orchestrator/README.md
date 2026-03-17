@@ -186,6 +186,91 @@ src/
   index.ts        Public API barrel export
 ```
 
+## Security Model
+
+The engine enforces a Zero Trust security model: agents are untrusted by default and receive only what they need.
+
+### State View Filtering
+
+Each node declares `read_keys` and `write_keys`. Before execution, the engine slices `WorkflowState.memory` so the agent only sees permitted keys:
+
+```typescript
+{ id: 'writer', type: 'agent', agent_id: '...', read_keys: ['draft', 'outline'], write_keys: ['draft'] }
+```
+
+- `['*']` grants access to all non-internal keys
+- Dot-notation paths (e.g. `'user.name'`) filter nested objects
+- Keys starting with `_` are **always** blocked regardless of permissions — these are reserved for internal bookkeeping (taint registry, etc.)
+
+### Taint Tracking
+
+Data originating from external tools (web search, browser, MCP tools) is automatically tagged in `memory._taint_registry`. This tracks which keys contain potentially untrusted content and their provenance (source tool, timestamp).
+
+- **Default behavior**: Tainted keys used in conditional edge routing produce a warning log
+- **Strict mode**: Set `strict_taint: true` on the graph to reject routing decisions based on tainted data entirely
+- Tainted data in supervisor routing inputs triggers an explicit warning in the supervisor's prompt
+
+### Permission-Enforced Reducers
+
+The reducer validates every state mutation against the acting node's `write_keys`:
+
+- `update_memory` payloads are checked key-by-key against the node's allowed writes
+- `_`-prefixed keys are rejected even with `write_keys: ['*']`
+- `merge_parallel_results` payloads follow the same rules
+
+### Prompt Injection Sanitization
+
+Agent inputs pass through sanitizers that:
+
+- Apply NFKC Unicode normalization (catches Cyrillic homograph attacks)
+- Strip carriage returns and normalize consecutive newlines
+- Remove Unicode directional overrides (`U+202A`–`U+202E`, `U+2066`–`U+2069`)
+- Detect base64-encoded injection phrases
+
+## Error Handling & Recovery
+
+### Retry with Backoff
+
+Each node can define a `failure_policy`:
+
+```typescript
+failure_policy: { max_retries: 3, backoff_strategy: 'exponential', initial_backoff_ms: 1000, max_backoff_ms: 30000 }
+```
+
+Strategies: `fixed`, `linear`, `exponential`. The runner retries the node up to `max_retries` times before marking it as failed.
+
+### Circuit Breaker
+
+The circuit breaker tracks failure rates per node and transitions through `closed → open → half_open` states. When open, the node is skipped with a `CircuitBreakerOpenError`. Configurable thresholds and reset timeouts.
+
+### Compensation / Rollback
+
+Nodes with `requires_compensation: true` push a compensation action onto `WorkflowState.compensation_stack`. On failure:
+
+- **`auto_rollback: true`** (GraphRunner option): Executes LIFO compensation actions automatically, setting status to `cancelled`
+- **`auto_rollback: false`** (default): Compensation stack is preserved but not executed — the host application decides
+
+### Workflow Timeouts
+
+Two timeout levels:
+
+- **Workflow-level**: `max_execution_time_ms` on WorkflowState. Checked between nodes and via `Promise.race` during node execution
+- **Node-level**: `timeout_ms` on individual nodes. Enforced per-execution
+
+When the workflow timeout fires during node execution, the `AbortSignal` is triggered and a `WorkflowTimeoutError` is thrown.
+
+### Approval Gate Timeouts
+
+Approval nodes with `timeout_ms` set a `waiting_timeout_at` deadline. If the workflow is resumed after the deadline expires, it transitions to `timeout` status immediately.
+
+### Event Log Failure Policy
+
+The `EventLogWriter` is append-only and errors propagate to the runner. Failed event appends increment the runner's internal failure counter. The runner does **not** silently swallow persistence errors — they surface to the caller's error handling.
+
+### Graceful Shutdown
+
+Call `runner.shutdown()` to signal the engine to stop after the current node completes. The workflow remains in `running` status (resumable) and emits a `workflow:paused` event.
+
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/wmcmahan/mc-ai/blob/main/CONTRIBUTING.md).

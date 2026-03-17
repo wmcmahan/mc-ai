@@ -139,7 +139,7 @@ describe('createStateView', () => {
       expect(view.memory).toEqual({ data: 'visible' });
     });
 
-    test('should not filter _-prefixed keys when explicitly requested', () => {
+    test('should block _-prefixed keys even when explicitly requested', () => {
       const state = makeState({
         data: 'visible',
         _taint_registry: { some: 'metadata' },
@@ -147,8 +147,140 @@ describe('createStateView', () => {
 
       const view = createStateView(state, makeNode(['data', '_taint_registry']));
 
-      expect(view.memory).toHaveProperty('_taint_registry');
+      expect(view.memory).not.toHaveProperty('_taint_registry');
       expect(view.memory).toHaveProperty('data');
+    });
+  });
+
+  describe('internal key blocking (non-wildcard)', () => {
+    test('read_keys with only _taint_registry returns empty memory', () => {
+      const state = makeState({
+        _taint_registry: { findings: { source: 'web_search' } },
+        public_key: 'visible',
+      });
+
+      const view = createStateView(state, makeNode(['_taint_registry']));
+
+      expect(view.memory).toEqual({});
+    });
+
+    test('read_keys with _taint_registry and public_key returns only public_key', () => {
+      const state = makeState({
+        _taint_registry: { findings: { source: 'web_search' } },
+        public_key: 'visible',
+      });
+
+      const view = createStateView(state, makeNode(['_taint_registry', 'public_key']));
+
+      expect(view.memory).toEqual({ public_key: 'visible' });
+      expect(view.memory).not.toHaveProperty('_taint_registry');
+    });
+
+    test('read_keys with multiple _-prefixed keys are all blocked', () => {
+      const state = makeState({
+        _taint_registry: {},
+        _internal_counter: 42,
+        data: 'visible',
+      });
+
+      const view = createStateView(state, makeNode(['_taint_registry', '_internal_counter', 'data']));
+
+      expect(view.memory).toEqual({ data: 'visible' });
+    });
+  });
+
+  describe('dot-notation nested key filtering', () => {
+    test('should pick a single nested path', () => {
+      const state = makeState({
+        user: { name: 'Alice', age: 30, api_key: 'secret' },
+      });
+
+      const view = createStateView(state, makeNode(['user.name']));
+
+      expect(view.memory).toEqual({ user: { name: 'Alice' } });
+    });
+
+    test('should pick multiple nested paths from same parent', () => {
+      const state = makeState({
+        user: { name: 'Alice', email: 'alice@example.com', api_key: 'secret' },
+      });
+
+      const view = createStateView(state, makeNode(['user.name', 'user.email']));
+
+      expect(view.memory).toEqual({
+        user: { name: 'Alice', email: 'alice@example.com' },
+      });
+      expect((view.memory.user as Record<string, unknown>).api_key).toBeUndefined();
+    });
+
+    test('should mix dot-notation and top-level keys', () => {
+      const state = makeState({
+        user: { name: 'Alice', secret: 'hidden' },
+        public_data: 'visible',
+      });
+
+      const view = createStateView(state, makeNode(['user.name', 'public_data']));
+
+      expect(view.memory).toEqual({
+        user: { name: 'Alice' },
+        public_data: 'visible',
+      });
+    });
+
+    test('should return top-level key as before when no dot', () => {
+      const state = makeState({
+        user: { name: 'Alice', api_key: 'secret' },
+      });
+
+      const view = createStateView(state, makeNode(['user']));
+
+      // Full object returned (backward compatible)
+      expect(view.memory).toEqual({
+        user: { name: 'Alice', api_key: 'secret' },
+      });
+    });
+
+    test('should silently omit non-existent nested paths', () => {
+      const state = makeState({
+        user: { name: 'Alice' },
+      });
+
+      const view = createStateView(state, makeNode(['user.nonexistent']));
+
+      expect(view.memory).toEqual({});
+    });
+
+    test('should handle deeply nested paths', () => {
+      const state = makeState({
+        config: { db: { host: 'localhost', password: 'secret' } },
+      });
+
+      const view = createStateView(state, makeNode(['config.db.host']));
+
+      expect(view.memory).toEqual({
+        config: { db: { host: 'localhost' } },
+      });
+    });
+
+    test('should block dot-notation paths with internal segments', () => {
+      const state = makeState({
+        _internal: { data: 'secret' },
+        config: { _secret: 'hidden', public: 'visible' },
+      });
+
+      const view = createStateView(state, makeNode(['_internal.data', 'config._secret']));
+
+      expect(view.memory).toEqual({});
+    });
+
+    test('should handle null/undefined in nested path gracefully', () => {
+      const state = makeState({
+        user: null,
+      });
+
+      const view = createStateView(state, makeNode(['user.name']));
+
+      expect(view.memory).toEqual({});
     });
   });
 

@@ -247,6 +247,9 @@ export type AgentRegistryInput = Omit<AgentRegistryEntry, 'id'>;
 export interface AgentRegistry {
   /** Load an agent by ID. Returns `null` if not found. */
   loadAgent(id: string): Promise<AgentRegistryEntry | null>;
+
+  /** Register an agent config and return its auto-generated ID. */
+  register(entry: AgentRegistryInput): string | Promise<string>;
 }
 
 // ─── MCPServerRegistry ──────────────────────────────────────────────────

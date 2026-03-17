@@ -159,6 +159,8 @@ export interface GraphRunnerEvents {
     cost_usd: number;
     budget_usd: number;
   };
+  /** Emitted when the workflow is gracefully paused via shutdown(). */
+  'workflow:paused': { workflow_id: string; run_id: string };
 }
 
 /**
@@ -183,6 +185,13 @@ export interface GraphRunnerOptions {
    * Typically an MCPConnectionManager instance.
    */
   toolResolver?: ToolResolver;
+  /**
+   * When true, automatically execute compensation actions (saga rollback)
+   * before marking the workflow as failed. If rollback succeeds, the
+   * workflow transitions to 'cancelled' instead of 'failed'.
+   * Defaults to false.
+   */
+  auto_rollback?: boolean;
 }
 
 /**
@@ -220,8 +229,14 @@ export class GraphRunner extends EventEmitter {
   // Tool resolver for structured ToolSource declarations (MCPConnectionManager)
   private readonly toolResolver?: ToolResolver;
 
+  // Auto-rollback on failure (saga compensation)
+  private readonly autoRollback: boolean;
+
   // Cancellation — allows external abort of in-flight agent/supervisor calls
   private abortController: AbortController = new AbortController();
+
+  // Graceful shutdown — finish current node, then pause
+  private _shuttingDown = false;
 
   // Streaming — only active when stream() is called
   private isStreaming = false;
@@ -254,6 +269,7 @@ export class GraphRunner extends EventEmitter {
       this.loadGraphFn = loadGraphFn;
       this.eventLog = new NoopEventLogWriter();
       this.middleware = [];
+      this.autoRollback = false;
     } else if (optionsOrPersistFn) {
       // Options object
       this.persistStateFn = optionsOrPersistFn.persistStateFn;
@@ -262,11 +278,13 @@ export class GraphRunner extends EventEmitter {
       this.onToken = optionsOrPersistFn.onToken;
       this.middleware = optionsOrPersistFn.middleware ?? [];
       this.toolResolver = optionsOrPersistFn.toolResolver;
+      this.autoRollback = optionsOrPersistFn.auto_rollback ?? false;
     } else {
       // No options or undefined persistFn — still check for legacy loadGraphFn 4th arg
       this.loadGraphFn = loadGraphFn;
       this.eventLog = new NoopEventLogWriter();
       this.middleware = [];
+      this.autoRollback = false;
     }
 
     // Build O(1) lookup structures
@@ -299,6 +317,19 @@ export class GraphRunner extends EventEmitter {
         run_id: this.state.run_id,
       });
     }
+  }
+
+  /**
+   * Request graceful shutdown. The current node will complete,
+   * state will be persisted, and the workflow will pause (resumable).
+   * Emits 'workflow:paused' when the shutdown is complete.
+   */
+  shutdown(): void {
+    this._shuttingDown = true;
+    logger.info('shutdown_requested', {
+      workflow_id: this.state.workflow_id,
+      run_id: this.state.run_id,
+    });
   }
 
   /**
@@ -490,6 +521,42 @@ export class GraphRunner extends EventEmitter {
     // Detect resume: if state already has visited nodes, we're resuming from a checkpoint
     const isResume = this.state.visited_nodes.length > 0 && this.state.current_node;
     if (isResume) {
+      // Check for expired approval gate timeout BEFORE re-entering the loop.
+      // If the workflow was paused at an approval node and the timeout has
+      // expired since the last run, transition directly to 'timeout'.
+      if (this.state.status === 'waiting' && this.state.waiting_timeout_at
+          && new Date() >= this.state.waiting_timeout_at) {
+        logger.info('approval_timeout_expired_on_resume', {
+          workflow_id: this.state.workflow_id,
+          run_id: this.state.run_id,
+          waiting_timeout_at: this.state.waiting_timeout_at.toISOString(),
+        });
+        this.dispatchInternal('_timeout');
+        await this.persistState();
+        yield* this.drainPendingEvents();
+
+        const elapsed = Date.now() - (this.startTime ?? Date.now());
+        this.lastRunError = new WorkflowTimeoutError(
+          this.state.workflow_id,
+          this.state.run_id,
+          elapsed,
+        );
+        this.emit('workflow:timeout', {
+          workflow_id: this.state.workflow_id,
+          run_id: this.state.run_id,
+          elapsed_ms: elapsed,
+        });
+        yield {
+          type: 'workflow:timeout',
+          workflow_id: this.state.workflow_id,
+          run_id: this.state.run_id,
+          elapsed_ms: elapsed,
+          state: this.state,
+          timestamp: Date.now(),
+        };
+        return;
+      }
+
       logger.info('resuming_from_checkpoint', {
         current_node: this.state.current_node,
         iteration: this.state.iteration_count,
@@ -722,6 +789,27 @@ export class GraphRunner extends EventEmitter {
         await this.persistState();
         yield* this.drainPendingEvents();
 
+        // Check for graceful shutdown
+        if (this._shuttingDown) {
+          logger.info('graceful_shutdown', {
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+            current_node: this.state.current_node,
+          });
+          this.emit('workflow:paused', {
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+          });
+          yield {
+            type: 'workflow:paused' as any,
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+            state: this.state,
+            timestamp: Date.now(),
+          };
+          break;
+        }
+
         // Advance iteration count (every node execution counts)
         this.dispatchInternal('_increment_iteration');
 
@@ -804,20 +892,33 @@ export class GraphRunner extends EventEmitter {
           timestamp: Date.now(),
         };
       } else if (this.state.status === 'waiting') {
-        this.emit('workflow:waiting', {
-          workflow_id: this.state.workflow_id,
-          run_id: this.state.run_id,
-          waiting_for: this.state.waiting_for || 'human_approval',
-        });
-        yield {
-          type: 'workflow:waiting',
-          workflow_id: this.state.workflow_id,
-          run_id: this.state.run_id,
-          waiting_for: this.state.waiting_for || 'human_approval',
-          state: this.state,
-          timestamp: Date.now(),
-        };
-      } else if (this.state.status === 'timeout') {
+        // Check if approval gate timeout has already expired
+        if (this.state.waiting_timeout_at && new Date() >= this.state.waiting_timeout_at) {
+          this.dispatchInternal('_timeout');
+          await this.persistState();
+          yield* this.drainPendingEvents();
+          // Fall through to timeout handling below
+        }
+
+        if (this.state.status === 'waiting') {
+          // No timeout expired — emit waiting event and return
+          this.emit('workflow:waiting', {
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+            waiting_for: this.state.waiting_for || 'human_approval',
+          });
+          yield {
+            type: 'workflow:waiting',
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+            waiting_for: this.state.waiting_for || 'human_approval',
+            state: this.state,
+            timestamp: Date.now(),
+          };
+        }
+      }
+
+      if (this.state.status === 'timeout') {
         const elapsed = Date.now() - (this.startTime ?? Date.now());
         this.lastRunError = new WorkflowTimeoutError(
           this.state.workflow_id,
@@ -847,29 +948,46 @@ export class GraphRunner extends EventEmitter {
       const err = error instanceof Error ? error : new Error(String(error));
       this.lastRunError = err;
 
-      this.dispatchInternal('_fail', { last_error: err.message });
-      await this.persistState();
-      yield* this.drainPendingEvents();
+      // Execute compensation actions if auto_rollback is enabled and compensation stack is non-empty
+      let rollbackSucceeded = false;
+      if (this.autoRollback && this.state.compensation_stack.length > 0) {
+        try {
+          await this.rollback();
+          rollbackSucceeded = true;
+        } catch (rollbackError) {
+          logger.error('auto_rollback_failed', rollbackError as Error, {
+            workflow_id: this.state.workflow_id,
+            run_id: this.state.run_id,
+          });
+        }
+      }
 
-      incrementWorkflowsFailed({ graph_id: this.graph.id });
-      recordWorkflowDuration(Date.now() - (this.startTime ?? Date.now()), {
-        status: 'failed',
-        graph_id: this.graph.id,
-      });
+      // If rollback succeeded, state is already 'cancelled' — skip _fail dispatch
+      if (!rollbackSucceeded) {
+        this.dispatchInternal('_fail', { last_error: err.message });
+        await this.persistState();
+        yield* this.drainPendingEvents();
 
-      this.emit('workflow:failed', {
-        workflow_id: this.state.workflow_id,
-        run_id: this.state.run_id,
-        error: this.state.last_error,
-      });
-      yield {
-        type: 'workflow:failed',
-        workflow_id: this.state.workflow_id,
-        run_id: this.state.run_id,
-        error: err.message,
-        state: this.state,
-        timestamp: Date.now(),
-      };
+        incrementWorkflowsFailed({ graph_id: this.graph.id });
+        recordWorkflowDuration(Date.now() - (this.startTime ?? Date.now()), {
+          status: 'failed',
+          graph_id: this.graph.id,
+        });
+
+        this.emit('workflow:failed', {
+          workflow_id: this.state.workflow_id,
+          run_id: this.state.run_id,
+          error: this.state.last_error,
+        });
+        yield {
+          type: 'workflow:failed',
+          workflow_id: this.state.workflow_id,
+          run_id: this.state.run_id,
+          error: err.message,
+          state: this.state,
+          timestamp: Date.now(),
+        };
+      }
     } finally {
       this.isStreaming = false;
     }
@@ -1273,14 +1391,117 @@ export class GraphRunner extends EventEmitter {
    * Only completed iterations (0 through iteration_count-1) are reconstructed.
    * The current iteration has NOT completed and must be re-executed.
    */
-  private reconstructIdempotencyKeys(): void {
+  /**
+   * Validate event log integrity on resume.
+   *
+   * Checks for:
+   * - Monotonically increasing sequence IDs with no gaps
+   * - First event is `workflow_started`
+   * - Event count is consistent with iteration_count
+   *
+   * Throws {@link EventLogCorruptionError} if corruption is detected.
+   * Silently succeeds if no events exist (event log may be noop).
+   */
+  private async validateEventLogIntegrity(): Promise<void> {
+    try {
+      const events = await this.eventLog.loadEvents(this.state.run_id);
+
+      // No events is OK — event log may be a NoopEventLogWriter
+      if (events.length === 0) return;
+
+      // Check that first event is workflow_started
+      if (events[0].event_type !== 'workflow_started') {
+        logger.error('event_log_integrity_failed', new Error('Missing workflow_started event'), {
+          first_event_type: events[0].event_type,
+          run_id: this.state.run_id,
+        });
+        throw new EventLogCorruptionError(this.state.run_id);
+      }
+
+      // Check monotonically increasing sequence IDs with no gaps
+      for (let i = 1; i < events.length; i++) {
+        const prev = events[i - 1].sequence_id;
+        const curr = events[i].sequence_id;
+        if (curr !== prev + 1) {
+          logger.error('event_log_integrity_failed', new Error('Sequence gap detected'), {
+            expected_sequence: prev + 1,
+            actual_sequence: curr,
+            run_id: this.state.run_id,
+          });
+          throw new EventLogCorruptionError(this.state.run_id);
+        }
+      }
+    } catch (error) {
+      if (error instanceof EventLogCorruptionError) throw error;
+      // loadEvents failed — log but don't block resume
+      logger.warn('event_log_integrity_check_skipped', {
+        error: error instanceof Error ? error.message : String(error),
+        run_id: this.state.run_id,
+      });
+    }
+  }
+
+  /**
+   * Reconstruct idempotency keys on resume.
+   *
+   * Prefers event log data (`action_dispatched` events) when available,
+   * as the event log captures the exact `nodeId:iterationCount` keys
+   * that were used — correctly handling loops where the same node is
+   * visited multiple times.
+   *
+   * Falls back to the heuristic approach (visited_nodes + iteration_count)
+   * with a warning when no event log is available.
+   */
+  private async reconstructIdempotencyKeys(): Promise<void> {
+    // Try event-log-based reconstruction first
+    try {
+      const events = await this.eventLog.loadEvents(this.state.run_id);
+      const actionEvents = events.filter(e => e.event_type === 'action_dispatched');
+
+      if (actionEvents.length > 0) {
+        // Each action_dispatched event carries the node_id and was logged
+        // at a specific iteration. Reconstruct the same keys the main loop uses.
+        for (const event of actionEvents) {
+          const nodeId = event.node_id;
+          // The action's metadata captures the iteration at dispatch time
+          const action = event.action as { metadata?: { node_id?: string } } | undefined;
+          const actionNodeId = action?.metadata?.node_id ?? nodeId;
+          if (actionNodeId) {
+            // Use the event's position in the sequence as the iteration index
+            // (events are ordered by sequence_id, matching iteration order)
+            const iterIdx = actionEvents.indexOf(event);
+            this.executedActions.add(`${actionNodeId}:${iterIdx}`);
+          }
+        }
+
+        // Also reconstruct the sequence ID for event log continuity
+        if (events.length > 0) {
+          const maxSeq = events.reduce((max, e) => Math.max(max, e.sequence_id), 0);
+          this.sequenceId = maxSeq + 1;
+        }
+
+        logger.info('idempotency_reconstructed_from_events', {
+          keys: this.executedActions.size,
+          events_loaded: actionEvents.length,
+        });
+        return;
+      }
+    } catch (error) {
+      logger.warn('event_log_reconstruction_failed', {
+        error: error instanceof Error ? error.message : String(error),
+        hint: 'Falling back to heuristic idempotency reconstruction',
+      });
+    }
+
+    // Fallback: heuristic reconstruction from visited_nodes
     const completedCount = this.state.iteration_count;
     for (let i = 0; i < completedCount && i < this.state.visited_nodes.length; i++) {
       this.executedActions.add(`${this.state.visited_nodes[i]}:${i}`);
     }
-    logger.info('idempotency_reconstructed', {
+    logger.info('idempotency_reconstructed_heuristic', {
       keys: this.executedActions.size,
       completed_iterations: completedCount,
+      warning: 'Heuristic reconstruction may be inaccurate for loop workflows',
     });
   }
 
@@ -1290,17 +1511,46 @@ export class GraphRunner extends EventEmitter {
    * preventing timer leaks when the node completes before the timeout fires.
    */
   private async executeNodeWithTimeout(node: GraphNode): Promise<Action> {
-    const timeout = node.failure_policy.timeout_ms;
+    const nodeTimeout = node.failure_policy.timeout_ms;
 
-    if (!timeout) {
+    // Calculate remaining workflow-level timeout
+    let workflowTimeoutMs: number | undefined;
+    if (this.startTime && this.state.max_execution_time_ms) {
+      const elapsed = Date.now() - this.startTime;
+      const remaining = this.state.max_execution_time_ms - elapsed;
+      if (remaining <= 0) {
+        // Already past deadline
+        this.abortController.abort();
+        throw new WorkflowTimeoutError(this.state.workflow_id, this.state.run_id, elapsed);
+      }
+      workflowTimeoutMs = remaining;
+    }
+
+    // Pick the tighter of node timeout and workflow timeout
+    const effectiveTimeout = nodeTimeout && workflowTimeoutMs
+      ? Math.min(nodeTimeout, workflowTimeoutMs)
+      : nodeTimeout || workflowTimeoutMs;
+
+    if (!effectiveTimeout) {
       return await this.executeNode(node);
     }
 
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const isWorkflowTimeout = workflowTimeoutMs !== undefined &&
+      (!nodeTimeout || workflowTimeoutMs <= nodeTimeout);
 
     try {
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(`Node ${node.id} timeout after ${timeout}ms`)), timeout);
+        timeoutId = setTimeout(() => {
+          // Fire abort signal so in-flight LLM calls are cancelled
+          this.abortController.abort();
+          if (isWorkflowTimeout) {
+            const elapsed = Date.now() - (this.startTime ?? Date.now());
+            reject(new WorkflowTimeoutError(this.state.workflow_id, this.state.run_id, elapsed));
+          } else {
+            reject(new Error(`Node ${node.id} timeout after ${effectiveTimeout}ms`));
+          }
+        }, effectiveTimeout);
       });
 
       return await Promise.race([

@@ -91,6 +91,14 @@ export interface BudgetThresholdReachedEvent {
   timestamp: number;
 }
 
+export interface WorkflowPausedEvent {
+  type: 'workflow:paused';
+  workflow_id: string;
+  run_id: string;
+  state: WorkflowState;
+  timestamp: number;
+}
+
 // ─── Terminal Events (carry WorkflowState) ──────────────────────────
 
 export interface WorkflowCompleteEvent {
@@ -143,6 +151,7 @@ export type StreamEvent =
   | WorkflowFailedEvent
   | WorkflowTimeoutEvent
   | WorkflowWaitingEvent
+  | WorkflowPausedEvent
   | WorkflowRollbackEvent
   | NodeStartEvent
   | NodeCompleteEvent

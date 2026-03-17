@@ -1,0 +1,78 @@
+/**
+ * Test Setup for orchestrator-postgres
+ *
+ * Connects to the Docker Compose Postgres instance (port 5433)
+ * and provides helpers for table truncation between tests.
+ *
+ * Tests are skipped automatically when DATABASE_URL is not set.
+ */
+
+import { sql } from 'drizzle-orm';
+import { getDb, closeDb } from '../src/connection.js';
+import {
+  graphs,
+  workflow_runs,
+  workflow_states,
+  workflow_events,
+  workflow_checkpoints,
+  agents,
+} from '../src/schema.js';
+import { beforeAll, afterAll, beforeEach } from 'vitest';
+
+/** All engine tables, in safe truncation order (respecting FK constraints). */
+const TRUNCATABLE_TABLES = [
+  workflow_checkpoints,
+  workflow_events,
+  workflow_states,
+  workflow_runs,
+  graphs,
+  agents,
+] as const;
+
+/**
+ * Check if the database is available for testing.
+ * Returns false when DATABASE_URL is not set.
+ */
+export function isDatabaseAvailable(): boolean {
+  return !!process.env.DATABASE_URL;
+}
+
+/**
+ * Standard test lifecycle hooks for database tests.
+ *
+ * Call this at the top of each test file:
+ * ```ts
+ * import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
+ * import { describe } from 'vitest';
+ *
+ * describe.skipIf(!isDatabaseAvailable())('MyTests', () => {
+ *   setupDatabaseTests();
+ *   // ... tests
+ * });
+ * ```
+ */
+export function setupDatabaseTests(): void {
+  beforeAll(async () => {
+    await getDb();
+  });
+
+  beforeEach(async () => {
+    await truncateAllTables();
+  });
+
+  afterAll(async () => {
+    await closeDb();
+  });
+}
+
+/**
+ * Truncate all engine tables (CASCADE) to ensure a clean state.
+ */
+async function truncateAllTables(): Promise<void> {
+  const db = await getDb();
+  for (const table of TRUNCATABLE_TABLES) {
+    await db.delete(table);
+  }
+}
+
+export { getDb, closeDb };

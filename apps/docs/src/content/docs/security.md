@@ -33,6 +33,26 @@ At runtime, the engine creates a **state view** — a filtered projection of `Wo
 
 The wildcard `read_keys: ['*']` grants access to all non-internal memory keys. Internal keys (prefixed with `_`, such as `_taint_registry`) are always excluded from state views.
 
+### Dot-notation nested key filtering
+
+State slicing supports **dot-notation paths** for fine-grained access to nested objects. Instead of granting access to an entire top-level key, you can restrict an agent to specific nested paths:
+
+```typescript
+const WRITER_ID = registry.register({
+  name: 'Writer',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: '...',
+  tools: [],
+  permissions: {
+    read_keys: ['user.name', 'user.email'],  // only these nested paths
+    write_keys: ['draft'],
+  },
+});
+```
+
+An agent with `read_keys: ['user.name', 'user.email']` receives a filtered `user` object containing only `{ name, email }` — all other fields (e.g. `user.ssn`, `user.api_key`) are excluded from its state view.
+
 ## Write permission enforcement
 
 Write permissions are enforced at two levels:
@@ -48,6 +68,18 @@ Agent LLM call → validateMemoryUpdatePermissions() → validateAction() → Re
 
 Internal keys (prefixed with `_`) are reserved for the engine and exempt from agent write checks — only system-level reducers can modify them.
 
+## Prompt injection sanitization
+
+All agent inputs pass through a sanitization pipeline before reaching the LLM. These sanitizers defend against known prompt injection techniques:
+
+- **NFKC Unicode normalization** — Converts lookalike characters (e.g. Cyrillic homographs like `а` → `a`) to their canonical forms, preventing visual spoofing attacks.
+- **Carriage return stripping** — Removes `\r` characters that can be used to hide injected instructions in terminal-style overwrite attacks.
+- **Consecutive newline normalization** — Collapses runs of 3+ newlines to 2, preventing whitespace-based prompt boundary confusion.
+- **Directional override stripping** — Removes Unicode bidirectional override characters (U+202A–U+202E, U+2066–U+2069) that can reverse visible text direction to disguise injected content.
+- **Base64-encoded injection detection** — Detects and rejects inputs containing base64-encoded strings that decode to known injection patterns (e.g. `ignore previous instructions`).
+
+These sanitizers run on all agent system prompts and user messages before LLM invocation.
+
 ## Taint tracking
 
 External data is the most dangerous attack vector. MC-AI automatically tracks the provenance of data entering the system from external tools.
@@ -59,6 +91,23 @@ External data is the most dangerous attack vector. MC-AI automatically tracks th
 3. **Inspection** — Downstream nodes can call `isTainted(memory, key)` or `getTaintInfo(memory, key)` to check provenance before trusting inputs.
 
 Taint metadata is stored in `memory._taint_registry` (a protected internal key invisible to agents).
+
+### Strict taint mode
+
+By default, tainted data in routing decisions produces a warning. Set `strict_taint: true` at the graph level to reject tainted data in routing decisions entirely:
+
+```typescript
+const graph = createGraph({
+  name: 'High Security Workflow',
+  strict_taint: true,  // reject tainted data in routing decisions
+  nodes: [ /* ... */ ],
+  edges: [ /* ... */ ],
+  start_node: 'start',
+  end_nodes: ['end'],
+});
+```
+
+When `strict_taint` is enabled, conditional edge expressions that reference tainted keys evaluate to `false`, and supervisor nodes that receive tainted routing inputs will refuse to route. See [Taint Tracking](/concepts/taint-tracking/) for details on taint enforcement at decision points.
 
 See [Taint Tracking](/concepts/taint-tracking/) for the full API reference.
 

@@ -57,6 +57,10 @@ function filterInternalKeys(
 
 /**
  * Build a memory object containing only the specified keys.
+ *
+ * Supports dot-notation for nested access (e.g. `'user.name'` returns
+ * `{ user: { name: '...' } }`). Keys without dots behave as before
+ * (backward compatible).
  */
 function filterMemory(
   memory: Record<string, unknown>,
@@ -64,9 +68,80 @@ function filterMemory(
 ): Record<string, unknown> {
   const filtered: Record<string, unknown> = {};
   for (const key of keys) {
-    if (key in memory) {
+    if (key.startsWith('_')) continue; // Block internal keys
+
+    if (key.includes('.')) {
+      // Dot-notation: deep pick a nested path
+      const picked = deepPick(memory, key);
+      if (picked !== undefined) {
+        deepMerge(filtered, picked);
+      }
+    } else if (key in memory) {
       filtered[key] = memory[key];
     }
   }
   return filtered;
+}
+
+/**
+ * Pick a single dot-notation path from an object.
+ *
+ * Returns a nested object containing only the specified path,
+ * or `undefined` if the path does not exist.
+ *
+ * @example
+ * ```ts
+ * deepPick({ user: { name: 'Alice', age: 30 } }, 'user.name')
+ * // => { user: { name: 'Alice' } }
+ * ```
+ */
+function deepPick(
+  obj: Record<string, unknown>,
+  path: string,
+): Record<string, unknown> | undefined {
+  const segments = path.split('.');
+  // Block any segment starting with '_'
+  if (segments.some(s => s.startsWith('_'))) return undefined;
+
+  // Walk down to verify the path exists and get the leaf value
+  let current: unknown = obj;
+  for (const segment of segments) {
+    if (current == null || typeof current !== 'object') return undefined;
+    if (!(segment in (current as Record<string, unknown>))) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  // Build the nested result from leaf to root
+  let result: unknown = current;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    result = { [segments[i]]: result };
+  }
+  return result as Record<string, unknown>;
+}
+
+/**
+ * Deep merge source into target (mutates target).
+ * Only merges plain objects; other values are overwritten.
+ */
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      target[key] !== null &&
+      typeof target[key] === 'object' &&
+      !Array.isArray(target[key])
+    ) {
+      deepMerge(
+        target[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      target[key] = value;
+    }
+  }
 }

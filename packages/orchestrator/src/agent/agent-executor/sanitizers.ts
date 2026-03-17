@@ -26,18 +26,40 @@ const MAX_SANITIZE_DEPTH = 10;
  */
 export function sanitizeString(input: string): string {
   if (!input) return '';
-  return input
-    // Prevent markdown header injection — catch both mid-string and start-of-string
-    .replace(/^## /gm, '### ')
-    .replace(/^# /gm, '### ')
-    // Strip all XML/HTML-style tags that could escape <data> boundaries
-    .replace(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?\/?>/g, '')
-    // Strip common instruction-override phrases
-    .replace(/IGNORE\s+(ALL\s+)?PREVIOUS\s+(INSTRUCTIONS?|PROMPTS?)/gi, '[filtered]')
-    .replace(/DISREGARD\s+(ALL\s+)?PREVIOUS/gi, '[filtered]')
-    // Strip unicode null and zero-width characters (used to hide injected text)
-    .replace(/[\u0000\u200B\u200C\u200D\uFEFF]/g, '')
-    .trim();
+  return (
+    input
+      // NFKC normalization — collapses Unicode homographs (e.g. Cyrillic lookalikes) to ASCII
+      .normalize('NFKC')
+      // Strip carriage returns
+      .replace(/\r/g, '')
+      // Normalize consecutive newlines (3+ → 2)
+      .replace(/\n{3,}/g, '\n\n')
+      // Strip directional override characters (LTR/RTL embedding, isolates)
+      .replace(/[\u202A-\u202E\u2066-\u2069]/g, '')
+      // Prevent markdown header injection — catch both mid-string and start-of-string
+      .replace(/^## /gm, '### ')
+      .replace(/^# /gm, '### ')
+      // Strip all XML/HTML-style tags that could escape <data> boundaries
+      .replace(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?\/?>/g, '')
+      // Strip common instruction-override phrases
+      .replace(/IGNORE\s+(ALL\s+)?PREVIOUS\s+(INSTRUCTIONS?|PROMPTS?)/gi, '[filtered]')
+      .replace(/DISREGARD\s+(ALL\s+)?PREVIOUS/gi, '[filtered]')
+      // Strip unicode null and zero-width characters (used to hide injected text)
+      .replace(/[\u0000\u200B\u200C\u200D\uFEFF]/g, '')
+      // Detect base64-encoded injection attempts
+      .replace(/[A-Za-z0-9+/=]{20,}/g, (match) => {
+        try {
+          const decoded = Buffer.from(match, 'base64').toString('utf-8');
+          if (/IGNORE\s+(ALL\s+)?PREVIOUS/i.test(decoded) || /DISREGARD\s+(ALL\s+)?PREVIOUS/i.test(decoded)) {
+            return '[filtered]';
+          }
+        } catch {
+          /* not valid base64, pass through */
+        }
+        return match;
+      })
+      .trim()
+  );
 }
 
 /**

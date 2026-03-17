@@ -116,6 +116,22 @@ The `memory` object is the primary data exchange between nodes. It's an arbitrar
 
 **Thread Context** is the raw LLM conversation history within a single agent execution. Each agent has its own thread — agents don't see each other's raw messages. The agent extracts what matters via `save_to_memory`, and the thread is discarded.
 
+## Action types
+
+Actions dispatched to the reducer use a discriminated union type `ActionTypeSchema`. Valid action types are:
+
+| Action Type | Purpose |
+|-------------|---------|
+| `update_memory` | Write key-value pairs to the memory object |
+| `set_status` | Transition the workflow status |
+| `goto_node` | Override the next node in the graph |
+| `handoff` | Transfer control to another agent/workflow |
+| `request_human_input` | Pause for human-in-the-loop approval |
+| `resume_from_human` | Inject human response and resume |
+| `merge_parallel_results` | Combine results from parallel node execution |
+
+Invalid action types are rejected at parse time via Zod validation. Internal engine actions (prefixed with `_`, such as `_fail`, `_init`, `_budget_exceeded`) bypass this validation and are reserved for the engine.
+
 ## Taint tracking
 
 Data entering the system from external tools (web search, file reads) is flagged as **tainted**. Taint propagates automatically — if a node reads tainted data and writes to state, the output key inherits the taint flag. This lets downstream nodes make trust decisions about their inputs.

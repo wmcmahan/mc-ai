@@ -4,6 +4,7 @@ import {
   WorkflowStatusSchema,
   WaitingReasonSchema,
   ActionSchema,
+  ActionTypeSchema,
 } from '../src/types/state.js';
 import {
   GraphSchema,
@@ -137,11 +138,11 @@ describe('Type Validation (Zod Schemas)', () => {
       const actionWithCompensation = {
         id: '123e4567-e89b-12d3-a456-426614174000',
         idempotency_key: '123e4567-e89b-12d3-a456-426614174001',
-        type: 'charge_card',
+        type: 'update_memory',
         payload: { amount: 100 },
         compensation: {
-          type: 'refund_card',
-          payload: { amount: 100 },
+          type: 'update_memory',
+          payload: { amount: -100 },
         },
         metadata: {
           node_id: 'payment',
@@ -157,7 +158,7 @@ describe('Type Validation (Zod Schemas)', () => {
       const action = {
         id: '123e4567-e89b-12d3-a456-426614174000',
         idempotency_key: '123e4567-e89b-12d3-a456-426614174001',
-        type: 'test',
+        type: 'set_status',
         payload: {},
         metadata: {
           node_id: 'test',
@@ -167,6 +168,103 @@ describe('Type Validation (Zod Schemas)', () => {
 
       const parsed = ActionSchema.parse(action);
       expect(parsed.metadata.attempt).toBe(1);
+    });
+  });
+
+  describe('ActionTypeSchema', () => {
+    const validActionTypes = [
+      'update_memory',
+      'set_status',
+      'goto_node',
+      'handoff',
+      'request_human_input',
+      'resume_from_human',
+      'merge_parallel_results',
+    ] as const;
+
+    test('should accept all 7 valid action types', () => {
+      for (const type of validActionTypes) {
+        expect(() => ActionTypeSchema.parse(type)).not.toThrow();
+      }
+    });
+
+    test('should reject invalid action type', () => {
+      const result = ActionTypeSchema.safeParse('invalid_type');
+      expect(result.success).toBe(false);
+    });
+
+    test('should reject typo action type (updat_memory)', () => {
+      const result = ActionTypeSchema.safeParse('updat_memory');
+      expect(result.success).toBe(false);
+    });
+
+    test('ActionSchema should parse with valid type update_memory', () => {
+      const action = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        idempotency_key: '123e4567-e89b-12d3-a456-426614174001',
+        type: 'update_memory',
+        payload: { updates: { key: 'value' } },
+        metadata: {
+          node_id: 'test-node',
+          timestamp: new Date(),
+          attempt: 1,
+        },
+      };
+
+      expect(() => ActionSchema.parse(action)).not.toThrow();
+    });
+
+    test('ActionSchema should reject invalid type string', () => {
+      const action = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        idempotency_key: '123e4567-e89b-12d3-a456-426614174001',
+        type: 'invalid_type',
+        payload: {},
+        metadata: {
+          node_id: 'test-node',
+          timestamp: new Date(),
+          attempt: 1,
+        },
+      };
+
+      const result = ActionSchema.safeParse(action);
+      expect(result.success).toBe(false);
+    });
+
+    test('ActionSchema should reject typo type (updat_memory)', () => {
+      const action = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        idempotency_key: '123e4567-e89b-12d3-a456-426614174001',
+        type: 'updat_memory',
+        payload: {},
+        metadata: {
+          node_id: 'test-node',
+          timestamp: new Date(),
+          attempt: 1,
+        },
+      };
+
+      const result = ActionSchema.safeParse(action);
+      expect(result.success).toBe(false);
+    });
+
+    test('all 7 valid types should parse successfully through ActionSchema', () => {
+      for (const type of validActionTypes) {
+        const action = {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          idempotency_key: `key-${type}`,
+          type,
+          payload: {},
+          metadata: {
+            node_id: 'test-node',
+            timestamp: new Date(),
+            attempt: 1,
+          },
+        };
+
+        const result = ActionSchema.safeParse(action);
+        expect(result.success, `Expected type '${type}' to parse successfully`).toBe(true);
+      }
     });
   });
 

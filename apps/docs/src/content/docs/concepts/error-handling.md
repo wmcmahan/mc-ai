@@ -109,6 +109,74 @@ stateDiagram-v2
 
 Any success resets the counter to 0.
 
+### Compensation / Saga rollback
+
+For workflows with side effects (e.g. API calls, database writes), nodes can declare compensating actions that undo their work on failure.
+
+Nodes with `requires_compensation: true` push an entry onto the `compensation_stack` in state after successful execution. On failure, if `auto_rollback: true` is set on the `GraphRunner` options, the engine executes compensation entries in LIFO order and transitions the workflow to `cancelled` status.
+
+```typescript
+const graph = createGraph({
+  name: 'Saga Example',
+  nodes: [
+    {
+      id: 'charge_payment',
+      type: 'tool',
+      tool_id: 'stripe_charge',
+      read_keys: ['order'],
+      write_keys: ['payment_result'],
+      requires_compensation: true,
+      compensation_tool_id: 'stripe_refund', // tool to call on rollback
+    },
+    {
+      id: 'reserve_inventory',
+      type: 'tool',
+      tool_id: 'inventory_reserve',
+      read_keys: ['order'],
+      write_keys: ['reservation'],
+      requires_compensation: true,
+      compensation_tool_id: 'inventory_release',
+    },
+    // ... more nodes ...
+  ],
+  edges: [
+    { source: 'charge_payment', target: 'reserve_inventory' },
+  ],
+  start_node: 'charge_payment',
+  end_nodes: ['confirm_order'],
+});
+
+const runner = new GraphRunner(graph, state, {
+  auto_rollback: true, // execute compensation stack on failure
+});
+```
+
+If `reserve_inventory` fails, the engine automatically calls `stripe_refund` (the compensation for `charge_payment`) and sets status to `cancelled`.
+
+When `auto_rollback` is `false` (the default), the compensation stack is preserved in state but not executed — the host application decides how to handle rollback.
+
+### Graceful shutdown
+
+`runner.shutdown()` signals the engine to stop after the current node completes. The workflow remains in `running` status (resumable from the last persisted state) and emits a `workflow:paused` event:
+
+```typescript
+const runner = new GraphRunner(graph, state, {
+  persistStateFn: async (s) => persistence.saveWorkflowState(s),
+});
+
+// Start the workflow
+const resultPromise = runner.run();
+
+// Later, signal graceful stop
+runner.shutdown();
+
+// run() resolves after the current node finishes
+const pausedState = await resultPromise;
+// pausedState.status === 'running' — resumable
+```
+
+This is useful for deployments, scaling down, or pausing long-running workflows without losing progress.
+
 ### Event log recovery
 
 `GraphRunner.recoverFromEventLog()` replays events:
@@ -116,7 +184,10 @@ Any success resets the counter to 0.
 2. If no checkpoint: load all events
 3. If no events: throw `EventLogCorruptionError`
 4. If no `_init` event: throw `EventLogCorruptionError`
-5. Replay events through reducers to reconstruct state
+5. Verify monotonically increasing sequence IDs across all events
+6. Verify the first event is `workflow_started`
+7. If any integrity check fails: throw `EventLogCorruptionError`
+8. Replay events through reducers to reconstruct state
 
 ## Error propagation flow
 
