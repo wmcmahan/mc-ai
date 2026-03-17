@@ -72,3 +72,7 @@ export const DEFAULT_AGENT_TIMEOUT_MS =
 /** Max serialized memory bytes injected into the system prompt (default: 50 KB). */
 export const MAX_MEMORY_PROMPT_BYTES =
   parseInt(process.env.MAX_MEMORY_PROMPT_BYTES ?? '', 10) || 50 * 1024;
+
+/** Max serialized bytes for a single memory value (default: 1 MB). */
+export const MAX_MEMORY_VALUE_BYTES =
+  parseInt(process.env.MAX_MEMORY_VALUE_BYTES ?? '', 10) || 1024 * 1024;

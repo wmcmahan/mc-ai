@@ -102,6 +102,7 @@ export const workflow_runs = pgTable('workflow_runs', {
   index('idx_workflow_runs_graph_id').on(table.graph_id),
   index('idx_workflow_runs_created_at_desc').on(table.created_at),
   index('idx_workflow_runs_completed_not_archived').on(table.completed_at).where(sql`archived_at IS NULL`),
+  index('idx_workflow_runs_graph_status').on(table.graph_id, table.status),
 ]);
 
 export const workflow_states = pgTable('workflow_states', {
@@ -136,6 +137,7 @@ export const workflow_events = pgTable('workflow_events', {
 }, (table) => [
   uniqueIndex('uq_workflow_events_run_seq').on(table.run_id, table.sequence_id),
   index('idx_workflow_events_run_type').on(table.run_id, table.event_type),
+  index('idx_workflow_events_run_created').on(table.run_id, table.created_at),
 ]);
 
 export const workflow_checkpoints = pgTable('workflow_checkpoints', {

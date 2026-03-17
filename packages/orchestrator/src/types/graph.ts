@@ -195,6 +195,8 @@ export const MapReduceConfigSchema = z.object({
   error_strategy: z.enum(['fail_fast', 'best_effort']).default('best_effort'),
   /** Maximum concurrent workers. */
   max_concurrency: z.number().min(1).default(5),
+  /** Per-task timeout in milliseconds (guards against hung LLM calls). */
+  task_timeout_ms: z.number().min(1).optional(),
 });
 
 export type MapReduceConfig = z.infer<typeof MapReduceConfigSchema>;
@@ -219,6 +221,8 @@ export const VotingConfigSchema = z.object({
   judge_agent_id: z.string().optional(),
   /** Per-agent weights for the `weighted_vote` strategy. */
   weights: z.record(z.string(), z.number()).optional(),
+  /** Per-task timeout in milliseconds (guards against hung LLM calls). */
+  task_timeout_ms: z.number().min(1).optional(),
 });
 
 export type VotingConfig = z.infer<typeof VotingConfigSchema>;
@@ -278,6 +282,8 @@ export const EvolutionConfigSchema = z.object({
   error_strategy: z.enum(['fail_fast', 'best_effort']).default('best_effort'),
   /** Custom instruction passed to the fitness evaluator. */
   evaluation_criteria: z.string().optional(),
+  /** Per-task timeout in milliseconds (guards against hung LLM calls). */
+  task_timeout_ms: z.number().min(1).optional(),
 });
 
 export type EvolutionConfig = z.infer<typeof EvolutionConfigSchema>;

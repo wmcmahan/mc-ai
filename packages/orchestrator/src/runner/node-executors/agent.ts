@@ -80,5 +80,6 @@ export async function executeAgentNode(
     node_id: node.id,
     abortSignal: ctx.abortSignal,
     onToken,
+    drainTaintEntries: ctx.deps.drainTaintEntries,
   });
 }

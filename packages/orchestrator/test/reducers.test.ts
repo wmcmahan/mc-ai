@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import {
   updateMemoryReducer,
@@ -525,6 +525,79 @@ describe('Reducers', () => {
       };
 
       expect(validateAction(action, ['_taint_registry', 'normal'])).toBe(false);
+    });
+  });
+
+  describe('Memory value size validation', () => {
+    test('drops oversized memory values in updateMemoryReducer', () => {
+      const state = createBaseState();
+      // Create a value larger than MAX_MEMORY_VALUE_BYTES (1MB)
+      const oversizedValue = 'x'.repeat(1024 * 1024 + 1);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: {
+          updates: {
+            normal_key: 'normal_value',
+            oversized_key: oversizedValue,
+          },
+        },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      const newState = updateMemoryReducer(state, action);
+      expect(newState.memory.normal_key).toBe('normal_value');
+      expect(newState.memory.oversized_key).toBeUndefined();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Dropping oversized memory key "oversized_key"'),
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    test('drops oversized values in mergeParallelResultsReducer', () => {
+      const state = createBaseState();
+      const oversizedValue = 'y'.repeat(1024 * 1024 + 1);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'merge_parallel_results',
+        payload: {
+          updates: {
+            good: 'ok',
+            big: oversizedValue,
+          },
+          total_tokens: 100,
+        },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      const newState = rootReducer(state, action);
+      expect(newState.memory.good).toBe('ok');
+      expect(newState.memory.big).toBeUndefined();
+
+      consoleSpy.mockRestore();
+    });
+
+    test('allows values within the size limit', () => {
+      const state = createBaseState();
+      const normalValue = 'x'.repeat(1000); // well within 1MB
+
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: { updates: { key: normalValue } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      const newState = updateMemoryReducer(state, action);
+      expect(newState.memory.key).toBe(normalValue);
     });
   });
 });

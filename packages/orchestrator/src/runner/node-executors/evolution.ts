@@ -178,10 +178,10 @@ export async function executeEvolutionNode(
           task.stateView,
           tools,
           attempt,
-          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken },
+          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries },
         );
       },
-      { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy },
+      { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy, task_timeout_ms: config.task_timeout_ms },
     );
 
     // Score each successful candidate

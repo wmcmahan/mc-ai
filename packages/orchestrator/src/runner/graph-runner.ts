@@ -439,6 +439,9 @@ export class GraphRunner extends EventEmitter {
         resolveTools: this.toolResolver
           ? (sources) => this.toolResolver!.resolveTools(sources)
           : resolveBuiltinsOnly,
+        drainTaintEntries: this.toolResolver?.drainTaintEntries
+          ? () => this.toolResolver!.drainTaintEntries!()
+          : undefined,
       },
     };
   }
@@ -727,6 +730,16 @@ export class GraphRunner extends EventEmitter {
             action_id: action.id,
             compensation_action: action.compensation,
           });
+        }
+
+        // Merge child subgraph compensation entries into parent stack
+        if (action.compensation_entries && action.compensation_entries.length > 0) {
+          for (const entry of action.compensation_entries) {
+            this.dispatchInternal('_push_compensation', {
+              action_id: entry.action_id,
+              compensation_action: entry.compensation_action,
+            });
+          }
         }
 
         // Apply action via reducer

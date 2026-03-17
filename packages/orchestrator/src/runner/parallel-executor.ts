@@ -47,6 +47,8 @@ export interface ParallelExecutionConfig {
   max_concurrency: number;
   /** How to handle task failures. */
   error_strategy: 'fail_fast' | 'best_effort';
+  /** Per-task timeout in milliseconds. If a task exceeds this, it is aborted. */
+  task_timeout_ms?: number;
 }
 
 /**
@@ -88,7 +90,17 @@ export async function executeParallel(
     const batchPromises = batch.map(async (task, batchIndex): Promise<ParallelResult> => {
       const taskIndex = batchStart + batchIndex;
       try {
-        const action = await executeFn(task);
+        const taskPromise = executeFn(task);
+        const action = config.task_timeout_ms
+          ? await Promise.race([
+              taskPromise,
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error(
+                  `Task ${taskIndex} (${task.node.id}) timed out after ${config.task_timeout_ms}ms`
+                )), config.task_timeout_ms),
+              ),
+            ])
+          : await taskPromise;
 
         const extMetadata = action.metadata as Record<string, unknown>;
         const tokenUsage = extMetadata?.token_usage as { totalTokens?: number } | undefined;

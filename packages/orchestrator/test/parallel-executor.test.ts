@@ -162,4 +162,45 @@ describe('Parallel Executor', () => {
 
     expect(executeFn).toHaveBeenCalledTimes(1);
   });
+
+  test('should timeout individual tasks with task_timeout_ms', async () => {
+    const tasks = [makeTask('fast'), makeTask('slow')];
+    const executeFn = vi.fn(async (task: ParallelTask) => {
+      if (task.node.id === 'slow') {
+        // Simulate a hung task — longer than the timeout
+        await new Promise(r => setTimeout(r, 5000));
+      }
+      return makeAction(task.node.id);
+    });
+
+    const results = await executeParallel(tasks, executeFn, {
+      max_concurrency: 10,
+      error_strategy: 'best_effort',
+      task_timeout_ms: 50,
+    });
+
+    expect(results).toHaveLength(2);
+    const fast = results.find(r => r.node_id === 'fast');
+    const slow = results.find(r => r.node_id === 'slow');
+    expect(fast?.success).toBe(true);
+    expect(slow?.success).toBe(false);
+    expect(slow?.error).toMatch(/timed out/);
+  });
+
+  test('should not timeout tasks when task_timeout_ms is not set', async () => {
+    const tasks = [makeTask('a')];
+    const executeFn = vi.fn(async (task: ParallelTask) => {
+      await new Promise(r => setTimeout(r, 10));
+      return makeAction(task.node.id);
+    });
+
+    const results = await executeParallel(tasks, executeFn, {
+      max_concurrency: 10,
+      error_strategy: 'best_effort',
+      // task_timeout_ms intentionally omitted
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+  });
 });

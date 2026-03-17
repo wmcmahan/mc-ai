@@ -250,6 +250,137 @@ describe('executeAgent', () => {
   });
 });
 
+describe('MCP taint draining', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (agentFactory.loadAgent as any).mockResolvedValue(makeAgentConfig());
+  });
+
+  it('applies mcp_tool taint when MCP tools were called and taint entries exist', async () => {
+    (streamText as any).mockReturnValue(mockStreamTextResult({
+      text: Promise.resolve(''),
+      toolCalls: Promise.resolve([
+        { toolCallId: 'tc1', toolName: 'web_search', args: { query: 'test' } },
+        { toolCallId: 'tc2', toolName: 'save_to_memory', args: { key: 'findings', value: 'result' } },
+      ]),
+      toolResults: Promise.resolve([
+        { toolCallId: 'tc1', result: 'search results' },
+        { toolCallId: 'tc2', result: { saved: true } },
+      ]),
+    }));
+
+    const drainTaintEntries = vi.fn(() => new Map([
+      ['search-server:web_search', {
+        source: 'mcp_tool' as const,
+        tool_name: 'web_search',
+        server_id: 'search-server',
+        created_at: new Date().toISOString(),
+      }],
+    ]));
+
+    const action = await executeAgent('test-agent', makeStateView(), {}, 1, {
+      drainTaintEntries,
+    });
+
+    expect(drainTaintEntries).toHaveBeenCalled();
+    const updates = action.payload.updates as Record<string, unknown>;
+    const registry = updates['_taint_registry'] as Record<string, any>;
+    expect(registry).toBeDefined();
+    expect(registry['findings']).toBeDefined();
+    expect(registry['findings'].source).toBe('mcp_tool');
+    expect(registry['findings'].tool_name).toBe('web_search');
+    expect(registry['findings'].server_id).toBe('search-server');
+  });
+
+  it('does not apply MCP taint when only save_to_memory was called', async () => {
+    (streamText as any).mockReturnValue(mockStreamTextResult({
+      text: Promise.resolve(''),
+      toolCalls: Promise.resolve([
+        { toolCallId: 'tc1', toolName: 'save_to_memory', args: { key: 'findings', value: 'data' } },
+      ]),
+      toolResults: Promise.resolve([
+        { toolCallId: 'tc1', result: { saved: true } },
+      ]),
+    }));
+
+    const drainTaintEntries = vi.fn(() => new Map());
+
+    const action = await executeAgent('test-agent', makeStateView(), {}, 1, {
+      drainTaintEntries,
+    });
+
+    const updates = action.payload.updates as Record<string, unknown>;
+    // No taint registry should be added (no MCP tools, no derived taint)
+    expect(updates['_taint_registry']).toBeUndefined();
+  });
+
+  it('works unchanged when drainTaintEntries is undefined', async () => {
+    (streamText as any).mockReturnValue(mockStreamTextResult({
+      text: Promise.resolve(''),
+      toolCalls: Promise.resolve([
+        { toolCallId: 'tc1', toolName: 'web_search', args: { query: 'test' } },
+        { toolCallId: 'tc2', toolName: 'save_to_memory', args: { key: 'findings', value: 'result' } },
+      ]),
+      toolResults: Promise.resolve([
+        { toolCallId: 'tc1', result: 'search results' },
+        { toolCallId: 'tc2', result: { saved: true } },
+      ]),
+    }));
+
+    // No drainTaintEntries option — should not throw
+    const action = await executeAgent('test-agent', makeStateView(), {}, 1);
+    expect(action.type).toBe('update_memory');
+  });
+
+  it('merges MCP taint with existing derived taint', async () => {
+    const stateView = makeStateView({
+      memory: {
+        topic: 'AI orchestration',
+        _taint_registry: {
+          topic: {
+            source: 'mcp_tool',
+            tool_name: 'prior_search',
+            server_id: 'old-server',
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        },
+      },
+    });
+
+    (streamText as any).mockReturnValue(mockStreamTextResult({
+      text: Promise.resolve(''),
+      toolCalls: Promise.resolve([
+        { toolCallId: 'tc1', toolName: 'web_search', args: { query: 'test' } },
+        { toolCallId: 'tc2', toolName: 'save_to_memory', args: { key: 'findings', value: 'result' } },
+      ]),
+      toolResults: Promise.resolve([
+        { toolCallId: 'tc1', result: 'search results' },
+        { toolCallId: 'tc2', result: { saved: true } },
+      ]),
+    }));
+
+    const drainTaintEntries = vi.fn(() => new Map([
+      ['search-server:web_search', {
+        source: 'mcp_tool' as const,
+        tool_name: 'web_search',
+        server_id: 'search-server',
+        created_at: new Date().toISOString(),
+      }],
+    ]));
+
+    const action = await executeAgent('test-agent', stateView, {}, 1, {
+      drainTaintEntries,
+    });
+
+    const updates = action.payload.updates as Record<string, unknown>;
+    const registry = updates['_taint_registry'] as Record<string, any>;
+    // Should contain both the existing 'topic' taint and the new 'findings' MCP taint
+    expect(registry['topic']).toBeDefined();
+    expect(registry['findings']).toBeDefined();
+    expect(registry['findings'].source).toBe('mcp_tool');
+  });
+});
+
 describe('PermissionDeniedError', () => {
   it('has correct name and message', () => {
     const err = new PermissionDeniedError('test message');

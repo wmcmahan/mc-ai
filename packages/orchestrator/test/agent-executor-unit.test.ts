@@ -273,20 +273,31 @@ describe('validateMemoryUpdatePermissions', () => {
     }).not.toThrow();
   });
 
-  it('skips validation for non update_memory actions', () => {
+  it('validates non update_memory actions via unified validateAction', () => {
     const action: Action = {
       id: '00000000-0000-0000-0000-000000000001',
       idempotency_key: '00000000-0000-0000-0000-000000000002',
       type: 'goto_node',
-      payload: { node: 'next' },
+      payload: { node_id: 'next' },
       metadata: {
         node_id: 'test-node',
         timestamp: new Date(),
         attempt: 1,
       },
     };
+    // goto_node requires 'control_flow' or '*' — empty keys should throw
     expect(() => {
       validateMemoryUpdatePermissions(action, []);
+    }).toThrow(PermissionDeniedError);
+
+    // With wildcard, it should pass
+    expect(() => {
+      validateMemoryUpdatePermissions(action, ['*']);
+    }).not.toThrow();
+
+    // With control_flow, it should pass
+    expect(() => {
+      validateMemoryUpdatePermissions(action, ['control_flow']);
     }).not.toThrow();
   });
 });

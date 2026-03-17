@@ -85,9 +85,9 @@ export async function executeVotingNode(
       const agentConfig = await ctx.deps.loadAgent(task.node.agent_id!);
       const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), task.node.agent_id!);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
-      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken });
+      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries });
     },
-    { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort' },
+    { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort', task_timeout_ms: config.task_timeout_ms },
   );
 
   // Extract votes from action payloads

@@ -13,7 +13,7 @@
 
 import type { GraphNode } from '../../types/graph.js';
 import type { Graph } from '../../types/graph.js';
-import type { WorkflowState, Action, StateView } from '../../types/state.js';
+import type { WorkflowState, Action, StateView, TaintMetadata } from '../../types/state.js';
 import type { ToolSource } from '../../types/tools.js';
 
 /**
@@ -75,6 +75,7 @@ export interface ExecutorDependencies {
       node_id?: string;
       abortSignal?: AbortSignal;
       onToken?: (token: string) => void;
+      drainTaintEntries?: () => Map<string, TaintMetadata>;
     },
   ) => Promise<Action>;
 
@@ -113,6 +114,9 @@ export interface ExecutorDependencies {
 
   /** Get the taint registry from workflow memory. */
   getTaintRegistry: (memory: Record<string, unknown>) => Record<string, unknown>;
+
+  /** Drain accumulated MCP taint entries after agent execution. */
+  drainTaintEntries?: () => Map<string, TaintMetadata>;
 }
 
 /**

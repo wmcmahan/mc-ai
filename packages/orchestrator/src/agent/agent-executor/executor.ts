@@ -30,6 +30,7 @@ import type { StateView, Action } from '../../types/state.js';
 import { createLogger } from '../../utils/logger.js';
 import { getTracer, withSpan } from '../../utils/tracing.js';
 import { v4 as uuidv4 } from 'uuid';
+import type { TaintMetadata } from '../../types/state.js';
 import { getTaintRegistry, propagateDerivedTaint } from '../../utils/taint.js';
 import { buildSystemPrompt, buildTaskPrompt } from './prompts.js';
 import { DEFAULT_AGENT_TIMEOUT_MS } from '../constants.js';
@@ -99,6 +100,7 @@ export async function executeAgent(
     timeout_ms?: number;
     abortSignal?: AbortSignal;
     onToken?: (token: string) => void;
+    drainTaintEntries?: () => Map<string, TaintMetadata>;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -234,16 +236,34 @@ export async function executeAgent(
     const fallbackKey = options?.node_id ? `${options.node_id}_output` : 'agent_response';
     const memoryUpdates = extractMemoryUpdates(text, toolCalls, config.write_keys, fallbackKey);
 
-    // TODO (Phase 2): Once the executor has access to the ToolResolver, call
-    // `resolver.drainTaintEntries()` here and apply direct MCP taint to any
-    // memory keys that received MCP tool results. Currently, MCP tool results
-    // are returned clean to the LLM (no wrapper), and taint is accumulated in
-    // MCPConnectionManager.taintEntries for later retrieval.
+    // Apply MCP taint: if any MCP tools were called during this execution,
+    // mark all output memory keys as tainted by MCP tool origin.
+    const mcpToolCalls = toolCalls.filter((c) => c.toolName !== 'save_to_memory');
+    const mcpTaintEntries = options?.drainTaintEntries?.();
 
     // Propagate taint: if any input memory keys were tainted, mark outputs as derived-tainted
     const outputKeys = Object.keys(memoryUpdates);
     if (outputKeys.length > 0) {
       const taintUpdates = propagateDerivedTaint(stateView.memory, outputKeys, agent_id);
+
+      // Merge MCP direct taint: when MCP tools were called and taint entries exist,
+      // apply mcp_tool taint to all output keys (we can't trace which specific
+      // MCP result ended up in which key, so taint conservatively)
+      if (mcpToolCalls.length > 0 && mcpTaintEntries && mcpTaintEntries.size > 0) {
+        for (const key of outputKeys) {
+          if (key === '_taint_registry') continue;
+          // Use the first taint entry as representative (all originated from MCP tools in this execution)
+          const [, firstEntry] = mcpTaintEntries.entries().next().value as [string, TaintMetadata];
+          taintUpdates[key] = {
+            source: 'mcp_tool',
+            tool_name: mcpToolCalls.map((c) => c.toolName).join(','),
+            server_id: firstEntry.server_id,
+            agent_id,
+            created_at: new Date().toISOString(),
+          };
+        }
+      }
+
       if (Object.keys(taintUpdates).length > 0) {
         const existingRegistry = getTaintRegistry(stateView.memory);
         memoryUpdates['_taint_registry'] = { ...existingRegistry, ...taintUpdates };

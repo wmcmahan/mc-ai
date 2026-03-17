@@ -28,6 +28,7 @@ import {
   ResumeFromHumanPayloadSchema,
   MergeParallelResultsPayloadSchema,
 } from '../types/state.js';
+import { MAX_MEMORY_VALUE_BYTES } from '../agent/constants.js';
 
 /**
  * Reducer function signature.
@@ -39,6 +40,33 @@ export type Reducer = (state: WorkflowState, action: Action) => WorkflowState;
 
 export const MAX_SUPERVISOR_HISTORY = 100;
 export const MAX_VISITED_NODES = 1000;
+
+/**
+ * Filter out memory values that exceed {@link MAX_MEMORY_VALUE_BYTES}.
+ * Returns a new object with only the values that fit within the size limit.
+ * Oversized keys are silently dropped with a console warning (not a crash).
+ */
+function filterOversizedValues(updates: Record<string, unknown>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized !== undefined && serialized.length > MAX_MEMORY_VALUE_BYTES) {
+        // Warn but don't crash — the workflow should survive a large value
+        // eslint-disable-next-line no-console
+        console.warn(`[reducer] Dropping oversized memory key "${key}": ${serialized.length} bytes exceeds limit of ${MAX_MEMORY_VALUE_BYTES}`);
+        continue;
+      }
+    } catch {
+      // Non-serializable values are dropped
+      // eslint-disable-next-line no-console
+      console.warn(`[reducer] Dropping non-serializable memory key "${key}"`);
+      continue;
+    }
+    filtered[key] = value;
+  }
+  return filtered;
+}
 
 /** Append a node ID to visited_nodes, keeping only the last MAX_VISITED_NODES entries. */
 function appendVisited(visited: string[], nodeId: string): string[] {
@@ -58,12 +86,13 @@ export const updateMemoryReducer: Reducer = (state, action) => {
   if (action.type !== 'update_memory') return state;
 
   const { updates } = UpdateMemoryPayloadSchema.parse(action.payload);
+  const safeUpdates = filterOversizedValues(updates);
 
   return {
     ...state,
     memory: {
       ...state.memory,
-      ...updates,
+      ...safeUpdates,
     },
     updated_at: new Date(),
   };
@@ -218,13 +247,14 @@ export const mergeParallelResultsReducer: Reducer = (state, action) => {
   if (action.type !== 'merge_parallel_results') return state;
 
   const { updates, total_tokens } = MergeParallelResultsPayloadSchema.parse(action.payload);
+  const safeUpdates = filterOversizedValues(updates);
   const totalTokens = total_tokens || 0;
 
   return {
     ...state,
     memory: {
       ...state.memory,
-      ...updates,
+      ...safeUpdates,
     },
     total_tokens_used: (state.total_tokens_used || 0) + totalTokens,
     updated_at: new Date(),

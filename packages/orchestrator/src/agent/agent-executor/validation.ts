@@ -1,52 +1,57 @@
 /**
  * Zero Trust Permission Validation
  *
- * Enforces the agent permission model by verifying that every memory key
- * written by an agent is present in its `write_keys` allow-list.
+ * Delegates to the canonical {@link validateAction} in the reducers module
+ * to ensure a single, consistent permission boundary. The agent executor
+ * calls this before returning an action to the runner.
  *
- * Internal keys (prefixed with `_`) are system-generated (e.g. `_taint_registry`)
- * and are exempt from agent permission checks.
+ * Internal `_`-prefixed keys (e.g. `_taint_registry`) are system-generated
+ * by the executor itself and are stripped before validation to avoid
+ * false rejections.
  *
  * @module agent-executor/validation
  */
 
 import type { Action } from '../../types/state.js';
+import { validateAction } from '../../reducers/index.js';
 import { PermissionDeniedError } from './errors.js';
 
 /**
- * Validate that an action's memory updates only write to keys the agent
- * is authorised to modify.
+ * Validate that an action respects the agent's write permissions.
+ *
+ * Delegates to the canonical {@link validateAction} in the reducers module,
+ * which covers all action types (not just `update_memory`). For
+ * `update_memory` actions, system-generated `_`-prefixed keys are
+ * stripped before validation since they are added by the executor,
+ * not by the agent.
  *
  * @param action - The action produced by the agent executor.
  * @param allowedKeys - The agent's configured `write_keys`. A single `'*'`
  *   entry grants wildcard access.
- * @throws {PermissionDeniedError} If the action writes to any key not in
- *   `allowedKeys` (excluding internal `_`-prefixed keys).
+ * @throws {PermissionDeniedError} If the action is not permitted.
  */
 export function validateMemoryUpdatePermissions(action: Action, allowedKeys: string[]): void {
-  if (action.type !== 'update_memory') {
-    return;
+  // For update_memory actions, strip system-generated _-prefixed keys
+  // (e.g. _taint_registry) before delegating to validateAction, since
+  // they are added by the executor — not by the agent.
+  let actionToValidate = action;
+  if (action.type === 'update_memory' && action.payload?.updates) {
+    const updates = action.payload.updates as Record<string, unknown>;
+    const hasInternalKeys = Object.keys(updates).some(k => k.startsWith('_'));
+    if (hasInternalKeys) {
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([k]) => !k.startsWith('_'))
+      );
+      actionToValidate = {
+        ...action,
+        payload: { ...action.payload, updates: filteredUpdates },
+      };
+    }
   }
 
-  const updates = action.payload?.updates as Record<string, unknown> | undefined;
-  if (!updates || typeof updates !== 'object') {
-    return;
-  }
-
-  // Filter out internal keys (system-generated, not agent-controlled)
-  const agentKeys = Object.keys(updates).filter(k => !k.startsWith('_'));
-
-  // Wildcard permission
-  if (allowedKeys.includes('*')) {
-    return;
-  }
-
-  // Check each agent-written key
-  const unauthorized = agentKeys.filter(k => !allowedKeys.includes(k));
-
-  if (unauthorized.length > 0) {
+  if (!validateAction(actionToValidate, allowedKeys)) {
     throw new PermissionDeniedError(
-      `Agent attempted to write to unauthorized keys: ${unauthorized.join(', ')}`
+      `Agent attempted unauthorized action "${action.type}"`
     );
   }
 }

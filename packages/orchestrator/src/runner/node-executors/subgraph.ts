@@ -120,11 +120,28 @@ export async function executeSubgraphNode(
     }
   }
 
+  // Propagate child compensation stack to parent with namespaced IDs
+  const childCompensation = finalChildState.compensation_stack;
+  const compensationEntries = childCompensation.length > 0
+    ? childCompensation.map(entry => ({
+        action_id: `subgraph:${node.id}:${entry.action_id}`,
+        compensation_action: entry.compensation_action,
+      }))
+    : undefined;
+
+  if (compensationEntries) {
+    logger.info('subgraph_compensation_propagated', {
+      node_id: node.id,
+      entries: compensationEntries.length,
+    });
+  }
+
   return {
     id: uuidv4(),
     idempotency_key: `${node.id}:${ctx.state.iteration_count}:${attempt}`,
     type: 'update_memory',
     payload: { updates: outputUpdates },
+    compensation_entries: compensationEntries,
     metadata: {
       node_id: node.id,
       timestamp: new Date(),

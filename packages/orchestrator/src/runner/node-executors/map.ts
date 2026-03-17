@@ -50,6 +50,7 @@ export async function executeWorkerWithStateView(
         node_id: node.id,
         abortSignal: ctx.abortSignal,
         onToken,
+        drainTaintEntries: ctx.deps.drainTaintEntries,
       });
     }
     case 'tool': {
@@ -157,7 +158,7 @@ export async function executeMapNode(
   const results = await executeParallel(
     tasks,
     async (task) => executeWorkerWithStateView(task.node, task.stateView, 1, ctx),
-    { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy },
+    { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy, task_timeout_ms: config.task_timeout_ms },
   );
 
   const successResults = results.filter(r => r.success).map(r => ({

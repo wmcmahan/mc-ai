@@ -357,6 +357,13 @@ export const ActionSchema = z.object({
     payload: z.record(z.string(), z.unknown()),
   }).optional(),
 
+  // ── Subgraph compensation propagation ──
+  /** Compensation entries from child subgraph runs to merge into parent. */
+  compensation_entries: z.array(z.object({
+    action_id: z.string(),
+    compensation_action: z.unknown(),
+  })).optional(),
+
   // ── Metadata ──
   /** Execution metadata for observability and debugging. */
   metadata: z.object({
