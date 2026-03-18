@@ -5,22 +5,6 @@ description: Scale workflow execution across multiple processes with per-workflo
 
 MC-AI's `GraphRunner` runs entirely within a single Node.js process. For production deployments with concurrent workflows, the **WorkflowWorker** distributes execution across multiple processes — each workflow runs on one worker for its entire lifetime, using the existing `GraphRunner` unmodified.
 
-## Architecture
-
-```
-                    ┌─────────────────────┐
-                    │   WorkflowQueue      │
-                    │  (waiting jobs)      │
-                    └──────┬──────────────┘
-                           │ dequeue
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼────┐ ┌────▼─────┐ ┌────▼─────┐
-        │ Worker 1  │ │ Worker 2  │ │ Worker 3  │
-        │ GraphRunner│ │ GraphRunner│ │ GraphRunner│
-        └──────────┘ └──────────┘ └──────────┘
-```
-
 Workers poll the queue, claim jobs atomically, and execute workflows. Crashed workers are detected via **visibility timeouts** — if a worker stops heartbeating, the job is reclaimed and re-executed on another worker using event log replay.
 
 ## WorkflowQueue
