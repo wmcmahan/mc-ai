@@ -63,6 +63,7 @@ export default defineConfig({
             { label: 'Your First Workflow', slug: 'guides/first-workflow' },
             { label: 'Custom LLM Providers', slug: 'guides/custom-providers' },
             { label: 'Adding MCP Tools', slug: 'guides/adding-tools' },
+            { label: 'Budget-Aware Model Selection', slug: 'guides/model-selection' },
             { label: 'Using the Architect', slug: 'guides/architect' },
           ],
         },

@@ -88,6 +88,36 @@ for await (const event of runner.stream()) {
 
 At 100%, the workflow is terminated with `BudgetExceededError` and status transitions to `failed`.
 
+## Budget-aware model resolution
+
+When agents use `model_preference` and a `ModelResolver` is configured, the engine automatically selects the most capable model that fits within the remaining budget. This works hand-in-hand with the budget system described above.
+
+Before each agent execution, the resolver:
+
+1. Estimates the cost of the preferred tier using conservative token budgets
+2. Compares against remaining budget (`budget_usd - total_cost_usd`)
+3. Downgrades to a cheaper model if estimated cost exceeds 50% of remaining budget
+
+Each resolution emits a `model:resolved` stream event with one of three reasons:
+
+| Reason | Meaning |
+|--------|---------|
+| `preferred` | Budget is healthy — agent got its requested tier |
+| `budget_downgrade` | Stepped down one tier to conserve budget |
+| `budget_critical` | Forced to the lowest tier — budget is nearly exhausted |
+
+```typescript
+for await (const event of runner.stream(state)) {
+  if (event.type === 'model:resolved') {
+    console.log(`${event.node_id}: ${event.reason} → ${event.resolved_model}`);
+  }
+}
+```
+
+This means a workflow with `budget_usd: 0.50` might start by using `claude-opus-4-20250514` for early tasks, then automatically switch to `claude-sonnet-4-20250514` or `claude-haiku-4-5-20251001` as the budget depletes — without any manual intervention.
+
+See [Budget-Aware Model Selection](/guides/model-selection/) for the full setup guide.
+
 ## Usage recording
 
 For production billing and reporting, implement the `UsageRecorder` interface to persist per-run usage records:

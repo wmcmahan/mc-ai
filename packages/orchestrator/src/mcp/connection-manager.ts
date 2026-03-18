@@ -327,7 +327,12 @@ export class MCPConnectionManager implements ToolResolver {
         return new StdioTransportClass({
           command: config.command,
           args: config.args,
-          env: config.env,
+          env: {
+            ...config.env,
+            // Suppress npm install/fund/audit output that npx writes to stdout,
+            // which corrupts the JSON-RPC stdio transport.
+            npm_config_loglevel: 'silent',
+          },
         });
       }
       case 'http':
