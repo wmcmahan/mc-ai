@@ -9,3 +9,5 @@
 export * from './interfaces.js';
 export * from './in-memory.js';
 export * from './delta-tracker.js';
+export * from './queue-interfaces.js';
+export * from './in-memory-queue.js';

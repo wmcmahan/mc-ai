@@ -213,8 +213,27 @@ graph TD
     Worker --> JobFailed[Worker marks job as failed]
 ```
 
+### Dead-lettering (distributed execution)
+
+When using the [WorkflowWorker](/concepts/distributed-execution/), jobs that fail more times than `max_attempts` are moved to a **dead letter** queue. Dead-lettered jobs are not retried automatically — they require manual investigation.
+
+The worker emits a `job:dead_letter` event when this happens:
+
+```typescript
+worker.on('job:dead_letter', ({ jobId, runId, error }) => {
+  alertOps(`Job ${jobId} (run ${runId}) dead-lettered: ${error}`);
+});
+```
+
+Monitor queue health via `getQueueDepth()`:
+
+```typescript
+const { waiting, active, dead_letter } = await queue.getQueueDepth();
+```
+
 ## Next steps
 
 - [Workflow State](/concepts/workflow-state/) — the shared state that errors affect
+- [Distributed Execution](/concepts/distributed-execution/) — worker crash recovery and dead-lettering
 - [Security](/security/) — how write_keys and taint tracking enforce zero trust
 - [Tracing](/observability/tracing/) — correlating errors with distributed traces

@@ -139,6 +139,7 @@ See [examples/](./examples/) for complete, runnable versions.
 | **MCP Tools** | Tool manifest caching (5-min TTL), per-tool execution timeouts, connection retry with backoff, auto-reconnect |
 | **Observability** | 17 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
 | **Cost Control** | Token budgets, per-run cost tracking, budget-aware model resolution (all node types), workflow and node-level timeouts |
+| **Distributed Execution** | `WorkflowWorker` with per-workflow assignment, `WorkflowQueue` interface, visibility-timeout crash recovery, HITL release (non-blocking), dead-lettering, configurable concurrency |
 | **Persistence** | Mandatory atomic snapshots, differential state persistence (delta tracking), event log auto-compaction |
 
 ## Examples
@@ -171,9 +172,9 @@ src/
   db/             Event log writers (in-memory, no-op)
   evals/          Eval framework (assertions, runner)
   mcp/            MCP connection manager, tool adapter, gateway client
-  persistence/    Persistence interfaces + in-memory implementations
+  persistence/    Persistence interfaces + in-memory implementations (including WorkflowQueue)
   reducers/       Pure state reducer functions
-  runner/         GraphRunner, node executors, circuit breaker
+  runner/         GraphRunner, node executors, circuit breaker, WorkflowWorker
   types/          Graph, State, Action, Event (Zod schemas)
   utils/          Logger, tracing, metrics, taint, pricing
   validation/     Graph structure validation

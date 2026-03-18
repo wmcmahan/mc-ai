@@ -57,7 +57,7 @@ flowchart TB
     Loop -->|"Yes"| Done(["__done__"])
 ```
 
-Because the `GraphRunner` is a lightweight TypeScript library, there's no heavy control plane to spin up. You can embed it directly in your Fastify/Express server, execute it in a background queue like BullMQ, or run it in a serverless function.
+Because the `GraphRunner` is a lightweight TypeScript library, there's no heavy control plane to spin up. You can embed it directly in your Fastify/Express server, run it in a serverless function, or scale horizontally using the built-in [`WorkflowWorker`](/concepts/distributed-execution/) — which distributes workflows across multiple processes with automatic crash recovery.
 
 ## What MC-AI is not
 

@@ -43,6 +43,7 @@ export default defineConfig({
             { label: 'Cost & Budget Tracking', slug: 'concepts/cost-tracking' },
             { label: 'Taint Tracking', slug: 'concepts/taint-tracking' },
             { label: 'Persistence', slug: 'concepts/persistence' },
+            { label: 'Distributed Execution', slug: 'concepts/distributed-execution' },
             { label: 'Error Handling', slug: 'concepts/error-handling' },
           ],
         },

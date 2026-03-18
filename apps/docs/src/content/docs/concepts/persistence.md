@@ -62,6 +62,22 @@ Trusted store for MCP server transport configurations. See [Tools & MCP](/concep
 | `listServers()` | List all registered servers. |
 | `deleteServer(id)` | Remove a server. |
 
+### WorkflowQueue
+
+Job queue for [distributed execution](/concepts/distributed-execution/). Workers poll for jobs, process them via `GraphRunner`, and report results.
+
+| Method | Description |
+|--------|-------------|
+| `enqueue(input)` | Add a job to the queue. Returns the auto-generated job ID. |
+| `dequeue(workerId)` | Atomically claim the highest-priority waiting job. |
+| `ack(jobId)` | Mark a job as completed. |
+| `nack(jobId, error)` | Report failure. Retries if attempts remain, otherwise dead-letters. |
+| `heartbeat(jobId, extendMs?)` | Extend visibility timeout during long execution. |
+| `release(jobId)` | Return to queue without incrementing attempt count (for HITL pauses). |
+| `reclaimExpired()` | Reclaim jobs with expired visibility timeouts (crash recovery). |
+| `getJob(jobId)` | Load a job by ID. |
+| `getQueueDepth()` | Count by status: `{ waiting, active, dead_letter }`. |
+
 ### UsageRecorder
 
 Persists per-run cost and token usage for billing and observability:
@@ -87,17 +103,20 @@ For development and testing, the core package provides:
 - `InMemoryPersistenceProvider` — full `PersistenceProvider` backed by `Map` objects
 - `InMemoryAgentRegistry` — agent registry with `register()`, `loadAgent()`, `updateAgent()`, `listAgents()`, and `deleteAgent()`
 - `InMemoryMCPServerRegistry` — MCP server registry backed by a `Map`
+- `InMemoryWorkflowQueue` — job queue for [distributed execution](/concepts/distributed-execution/)
 
 ```typescript
 import {
   InMemoryPersistenceProvider,
   InMemoryAgentRegistry,
   InMemoryMCPServerRegistry,
+  InMemoryWorkflowQueue,
 } from '@mcai/orchestrator';
 
 const persistence = new InMemoryPersistenceProvider();
 const agents = new InMemoryAgentRegistry();
 const mcpServers = new InMemoryMCPServerRegistry();
+const queue = new InMemoryWorkflowQueue();
 ```
 
 ## Postgres implementation

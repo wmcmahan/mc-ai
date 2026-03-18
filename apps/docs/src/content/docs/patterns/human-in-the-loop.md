@@ -135,6 +135,42 @@ If the workflow is resumed after the deadline has expired, the engine transition
 
 If no human responds within 10 minutes and a resume is attempted after that window, the workflow fails with `WorkflowTimeoutError`. To handle timeouts gracefully, check `state.status === 'timeout'` in your application code and trigger appropriate fallback logic.
 
+## Worker-based HITL
+
+When using the [WorkflowWorker](/concepts/distributed-execution/) for distributed execution, HITL is handled without blocking any worker:
+
+1. The API enqueues a `{ type: 'start' }` job
+2. A worker runs the workflow until it hits an approval node → returns `status: 'waiting'`
+3. The worker calls `queue.release(jobId)` — frees the slot immediately (no blocking)
+4. Later, the API enqueues a `{ type: 'resume', human_response: { decision: 'approved' } }` job
+5. A worker (same or different) picks it up, recovers via event log, applies the response, and continues
+
+```typescript
+import { InMemoryWorkflowQueue } from '@mcai/orchestrator';
+
+const queue = new InMemoryWorkflowQueue();
+
+// 1. Start the workflow
+await queue.enqueue({
+  type: 'start',
+  run_id: runId,
+  graph_id: graph.id,
+  initial_state: { goal: 'Write an article' },
+});
+
+// 2. Worker runs it, hits approval node, releases the job
+
+// 3. Later, when the human approves:
+await queue.enqueue({
+  type: 'resume',
+  run_id: runId,       // Same run
+  graph_id: graph.id,
+  human_response: { decision: 'approved', data: 'Looks great!' },
+});
+```
+
+The key distinction: `release` (not `nack`) returns the job to the queue without counting it as a failure. This preserves the attempt count for actual crash recovery.
+
 ## When to use this pattern
 
 - **High-stakes actions**: An agent proposes a production deployment, financial transaction, or email blast, but a human must sign off before execution.

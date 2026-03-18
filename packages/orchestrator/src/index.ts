@@ -23,6 +23,8 @@ export * from './reducers/index.js';
 
 export { GraphRunner } from './runner/graph-runner.js';
 export type { HumanResponse, GraphRunnerEvents, GraphRunnerOptions } from './runner/graph-runner.js';
+export { WorkflowWorker } from './runner/worker.js';
+export type { WorkflowWorkerOptions, WorkflowWorkerEvents } from './runner/worker.js';
 export { createStateView } from './runner/state-view.js';
 export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from './runner/middleware.js';
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';

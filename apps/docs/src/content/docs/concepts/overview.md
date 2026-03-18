@@ -66,6 +66,14 @@ Because State is cleanly separated from the execution logic, it can be persisted
 - **Resumability** — restart from the exact last checkpoint if an API crashes.
 - **Human-in-the-Loop** — pause mid-workflow, wait days for human approval, and resume identically.
 
+## Distributed execution
+
+For production deployments with concurrent workflows, the `WorkflowWorker` distributes execution across multiple processes. Each workflow runs on one worker for its entire lifetime — the `GraphRunner` is used as-is inside each worker.
+
+Workers poll a `WorkflowQueue` for jobs, execute them, and report results. Crashed workers are detected via visibility timeouts, and their jobs are recovered on another worker via event log replay.
+
+See [Distributed Execution](/concepts/distributed-execution/) for details.
+
 ## Next steps
 
 Explore the core concepts in detail:
@@ -75,4 +83,5 @@ Explore the core concepts in detail:
 - [Agents](/concepts/agents/) — injecting intelligence
 - [Workflow State](/concepts/workflow-state/) — how memory is managed
 - [Tools & MCP](/concepts/tools-and-mcp/) — how agents safely interact with the world
+- [Distributed Execution](/concepts/distributed-execution/) — scaling across multiple processes
 - [Error Handling](/concepts/error-handling/) — building resilient graphs
