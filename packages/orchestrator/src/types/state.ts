@@ -140,7 +140,10 @@ export const WorkflowStateSchema = z.object({
   /** Stack of compensating actions for rollback on failure. */
   compensation_stack: z.array(z.object({
     action_id: z.string(),
-    compensation_action: z.unknown(),
+    compensation_action: z.object({
+      type: z.string(),
+      payload: z.record(z.string(), z.unknown()),
+    }),
   })).default([]),
 
   // ── Supervisor history ──
@@ -361,7 +364,10 @@ export const ActionSchema = z.object({
   /** Compensation entries from child subgraph runs to merge into parent. */
   compensation_entries: z.array(z.object({
     action_id: z.string(),
-    compensation_action: z.unknown(),
+    compensation_action: z.object({
+      type: z.string(),
+      payload: z.record(z.string(), z.unknown()),
+    }),
   })).optional(),
 
   // ── Metadata ──

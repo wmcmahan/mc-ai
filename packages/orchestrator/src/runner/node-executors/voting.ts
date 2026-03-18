@@ -6,6 +6,7 @@ import { createLogger } from '../../utils/logger.js';
 import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { ensureSaveToMemory } from './agent.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const logger = createLogger('runner.node.voting');
 
@@ -83,9 +84,10 @@ export async function executeVotingNode(
     tasks,
     async (task) => {
       const agentConfig = await ctx.deps.loadAgent(task.node.agent_id!);
+      const { modelOverride } = resolveModelForAgent(agentConfig, task.node.agent_id!, task.node.id, ctx);
       const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), task.node.agent_id!);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
-      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries });
+      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}) });
     },
     { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort', task_timeout_ms: config.task_timeout_ms },
   );

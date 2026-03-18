@@ -117,6 +117,15 @@ mcpRegistry.register({
 | `http` | Remote MCP servers (stateless) | HTTPS URLs only in production |
 | `sse` | Remote MCP servers (streaming) | HTTPS URLs only in production |
 
+Each `MCPServerEntry` also supports the following optional fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `timeout_ms` | `number` | — | Connection-level timeout for the MCP transport |
+| `tool_timeout_ms` | `number` | — | Per-tool-call execution timeout (overrides manager default) |
+| `max_retries` | `number` | `2` | Number of connection retry attempts with exponential backoff |
+| `allowed_agents` | `string[]` | — | Restrict which agents can access this server |
+
 ### Access control
 
 You can restrict which agents are allowed to use a specific server with the `allowed_agents` field:
@@ -131,6 +140,54 @@ mcpRegistry.register({
 ```
 
 When `allowed_agents` is set, only the listed agents can resolve tools from that server. Omit the field for unrestricted access.
+
+### Connection resilience
+
+The `MCPConnectionManager` includes built-in resilience features for production reliability:
+
+**Connection retry with backoff**: Failed connections are automatically retried with exponential backoff. Configure `max_retries` on each server entry (default: 2):
+
+```typescript
+mcpRegistry.register({
+  id: 'web-search',
+  name: 'Web Search',
+  transport: { type: 'http', url: 'https://mcp.example.com/search' },
+  max_retries: 3, // Retry up to 3 times with backoff (1s, 2s, 4s)
+});
+```
+
+**Per-tool execution timeouts**: Set `tool_timeout_ms` on the server entry to enforce a timeout on each individual tool call. This prevents hung tools from blocking the entire workflow:
+
+```typescript
+mcpRegistry.register({
+  id: 'slow-api',
+  name: 'External API',
+  transport: { type: 'http', url: 'https://api.example.com/mcp' },
+  tool_timeout_ms: 10_000, // 10 second timeout per tool call
+});
+```
+
+You can also set a default timeout for all servers via `MCPConnectionManagerOptions`:
+
+```typescript
+const manager = new MCPConnectionManager(mcpRegistry, {
+  default_tool_timeout_ms: 30_000, // 30s default for all servers
+});
+```
+
+Server-level `tool_timeout_ms` overrides the default.
+
+**Tool manifest caching**: Tool manifests from MCP servers are cached for 5 minutes by default, avoiding redundant `client.tools()` calls. Configure via `cache_ttl_ms`:
+
+```typescript
+const manager = new MCPConnectionManager(mcpRegistry, {
+  cache_ttl_ms: 600_000, // 10 minute cache TTL
+});
+```
+
+Set to `0` to disable caching.
+
+**Manual reconnection**: Use `manager.reconnect(serverId)` to invalidate a stale connection and force a fresh reconnection on the next `resolveTools()` call.
 
 ## Taint tracking
 

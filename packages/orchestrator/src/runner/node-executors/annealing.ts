@@ -9,13 +9,14 @@
  * @module runner/node-executors/annealing
  */
 
-import jp from 'jsonpath';
+import { JSONPath } from 'jsonpath-plus';
 import type { GraphNode } from '../../types/graph.js';
 import type { Action, StateView } from '../../types/state.js';
 import { v4 as uuidv4 } from 'uuid';
 import { ensureSaveToMemory } from './agent.js';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const logger = createLogger('runner.node.annealing');
 
@@ -48,6 +49,7 @@ export async function executeAnnealingLoop(
   });
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
+  const { modelOverride } = resolveModelForAgent(agentConfig, agent_id, node.id, ctx);
   const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), agent_id);
 
   let bestAction: Action | null = null;
@@ -80,6 +82,7 @@ export async function executeAnnealingLoop(
       abortSignal: ctx.abortSignal,
       onToken,
       drainTaintEntries: ctx.deps.drainTaintEntries,
+      ...(modelOverride ? { model_override: modelOverride } : {}),
     });
 
     // Evaluate quality via evaluator agent or JSONPath extraction
@@ -96,7 +99,7 @@ export async function executeAnnealingLoop(
       evalTokens = evalResult.tokens_used;
     } else {
       try {
-        const results = jp.query(action.payload, config.score_path);
+        const results = JSONPath({ path: config.score_path, json: action.payload });
         score = typeof results[0] === 'number' ? results[0] : 0;
       } catch {
         score = 0;

@@ -240,9 +240,8 @@ for await (const event of runner.stream(state)) {
 }
 ```
 
-## Limitations (Phase 1)
+## Limitations
 
-- **Agent and supervisor nodes only** — evolution, annealing, and swarm node executors do not perform model resolution
 - **Architect unaware** — the Workflow Architect does not yet generate graphs with `model_preference` set; you must configure it via the registry
 - **Single-step lookahead** — the resolver estimates cost for one call at a time, not the remaining workflow
 

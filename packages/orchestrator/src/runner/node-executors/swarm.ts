@@ -15,6 +15,7 @@ import { createLogger } from '../../utils/logger.js';
 import { NodeConfigError } from '../errors.js';
 import { ensureSaveToMemory } from './agent.js';
 import type { NodeExecutorContext } from './context.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const logger = createLogger('runner.node.swarm');
 
@@ -63,6 +64,7 @@ export async function executeSwarmAgentNode(
   };
 
   const agentConfig = await ctx.deps.loadAgent(agent_id);
+  const { modelOverride } = resolveModelForAgent(agentConfig, agent_id, node.id, ctx);
   const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), agent_id);
   const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, node.id) : undefined;
   const action = await ctx.deps.executeAgent(agent_id, swarmView, tools, attempt, {
@@ -70,6 +72,7 @@ export async function executeSwarmAgentNode(
     abortSignal: ctx.abortSignal,
     onToken,
     drainTaintEntries: ctx.deps.drainTaintEntries,
+    ...(modelOverride ? { model_override: modelOverride } : {}),
   });
 
   const updates = action.payload.updates as Record<string, unknown>;

@@ -47,7 +47,7 @@ const state = createWorkflowState({
 | `retry_count` | `number` | `0` | Retries on the current node so far. |
 | `max_retries` | `number` | `3` | Maximum retries before the node fails permanently. |
 | `last_error` | `string` | — | Error message from the most recent failure. |
-| `compensation_stack` | `CompensationEntry[]` | `[]` | Stack of compensating actions for saga rollback. |
+| `compensation_stack` | `CompensationEntry[]` | `[]` | Stack of typed compensating actions for saga rollback. Each entry has `action_id` and `compensation_action: { type, payload }`. |
 
 ### Waiting (human-in-the-loop)
 

@@ -522,7 +522,7 @@ Expressions starting with `$.` (JSONPath prefix) are automatically converted by 
 ```typescript
 async function executeParallel(
   tasks: ParallelTask[],
-  executeFn: (task: ParallelTask) => Promise<Action>,
+  executeFn: (task: ParallelTask, signal?: AbortSignal) => Promise<Action>,
   config: ParallelExecutionConfig,
 ): Promise<ParallelResult[]>
 ```
@@ -530,9 +530,10 @@ async function executeParallel(
 | Parameter | Type | Purpose |
 |-----------|------|---------|
 | `tasks` | `ParallelTask[]` | Tasks to execute (node + stateView pairs) |
-| `executeFn` | `(task) => Promise<Action>` | Execution function for each task |
+| `executeFn` | `(task, signal?) => Promise<Action>` | Execution function for each task; receives an `AbortSignal` for cooperative cancellation when `task_timeout_ms` is set |
 | `config.max_concurrency` | `number` | Max simultaneous tasks per batch |
 | `config.error_strategy` | `'fail_fast' \| 'best_effort'` | How to handle task failures |
+| `config.task_timeout_ms` | `number?` | Per-task timeout — uses `AbortController` + `Promise.race` for both cooperative and forced cancellation |
 
 ### Error Strategies
 

@@ -145,6 +145,31 @@ function createBuiltinTool(name: string): Record<string, unknown> | null {
 
 // ─── MCPConnectionManager ───────────────────────────────────────────
 
+/** Default tool manifest cache TTL: 5 minutes. */
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Options for constructing an MCPConnectionManager. */
+export interface MCPConnectionManagerOptions {
+  /**
+   * TTL for cached tool manifests in milliseconds.
+   * Set to 0 to disable caching (fetch on every resolveTools call).
+   * @default 300000 (5 minutes)
+   */
+  cache_ttl_ms?: number;
+  /**
+   * Default per-tool execution timeout in milliseconds.
+   * Can be overridden per-server via `MCPServerEntry.tool_timeout_ms`.
+   * Set to 0 to disable (no timeout). @default 30000 (30 seconds)
+   */
+  default_tool_timeout_ms?: number;
+}
+
+/** Cached tool manifest entry. */
+interface ToolCacheEntry {
+  tools: Record<string, unknown>;
+  fetchedAt: number;
+}
+
 /**
  * Manages MCP client connections for a workflow run.
  *
@@ -155,9 +180,14 @@ export class MCPConnectionManager implements ToolResolver {
   private readonly pending = new Map<string, Promise<MCPClientType>>();
   private readonly registry: MCPServerRegistry;
   private taintEntries = new Map<string, TaintMetadata>();
+  private readonly toolCache = new Map<string, ToolCacheEntry>();
+  private readonly cacheTtlMs: number;
+  private readonly defaultToolTimeoutMs: number;
 
-  constructor(registry: MCPServerRegistry) {
+  constructor(registry: MCPServerRegistry, options?: MCPConnectionManagerOptions) {
     this.registry = registry;
+    this.cacheTtlMs = options?.cache_ttl_ms ?? DEFAULT_CACHE_TTL_MS;
+    this.defaultToolTimeoutMs = options?.default_tool_timeout_ms ?? 30_000;
   }
 
   /**
@@ -168,7 +198,7 @@ export class MCPConnectionManager implements ToolResolver {
    */
   async resolveTools(sources: ToolSource[], agentId?: string): Promise<Record<string, unknown>> {
     const tools: Record<string, unknown> = {};
-    const mcpToolSets: Array<{ serverId: string; toolSet: Record<string, unknown>; filter?: string[] }> = [];
+    const mcpToolSets: Array<{ serverId: string; toolSet: Record<string, unknown>; filter?: string[]; toolTimeoutMs: number }> = [];
 
     // Separate built-in and MCP sources
     const mcpSources = sources.filter(s => s.type === 'mcp');
@@ -182,14 +212,14 @@ export class MCPConnectionManager implements ToolResolver {
       }
     }
 
-    // Resolve MCP tools in parallel (with access control)
+    // Resolve MCP tools in parallel (with access control + caching)
     if (mcpSources.length > 0) {
       const results = await Promise.all(
         mcpSources.map(async (source) => {
-          await this.checkAccess(source.server_id, agentId);
-          const client = await this.getClient(source.server_id);
-          const toolSet = await client.tools() as Record<string, unknown>;
-          return { serverId: source.server_id, toolSet, filter: source.tool_names };
+          const entry = await this.checkAccess(source.server_id, agentId);
+          const toolSet = await this.getToolsForServer(source.server_id);
+          const toolTimeoutMs = entry.tool_timeout_ms ?? this.defaultToolTimeoutMs;
+          return { serverId: source.server_id, toolSet, filter: source.tool_names, toolTimeoutMs };
         })
       );
 
@@ -222,14 +252,14 @@ export class MCPConnectionManager implements ToolResolver {
       }
     }
 
-    // Add MCP tools with taint wrapping and optional namespacing
-    for (const { serverId, toolSet, filter } of mcpToolSets) {
+    // Add MCP tools with taint wrapping, timeout, and optional namespacing
+    for (const { serverId, toolSet, filter, toolTimeoutMs } of mcpToolSets) {
       const toolNames = filter ?? Object.keys(toolSet);
       for (const name of toolNames) {
         if (!(name in toolSet)) continue;
 
         const tool = toolSet[name] as Record<string, unknown>;
-        const wrappedTool = this.wrapToolWithTaint(tool, name, serverId);
+        const wrappedTool = this.wrapToolWithTaint(tool, name, serverId, toolTimeoutMs);
         const finalName = collisions.has(name) ? `${serverId}__${name}` : name;
 
         if (collisions.has(name)) {
@@ -244,8 +274,31 @@ export class MCPConnectionManager implements ToolResolver {
   }
 
   /**
+   * Get tool manifests for a server, using cache if valid.
+   */
+  private async getToolsForServer(serverId: string): Promise<Record<string, unknown>> {
+    if (this.cacheTtlMs > 0) {
+      const cached = this.toolCache.get(serverId);
+      if (cached && (Date.now() - cached.fetchedAt) < this.cacheTtlMs) {
+        logger.debug('tool_cache_hit', { server_id: serverId });
+        return cached.tools;
+      }
+    }
+
+    const client = await this.getClient(serverId);
+    const tools = await client.tools() as Record<string, unknown>;
+
+    if (this.cacheTtlMs > 0) {
+      this.toolCache.set(serverId, { tools, fetchedAt: Date.now() });
+    }
+
+    return tools;
+  }
+
+  /**
    * Get or create an MCP client for a server ID.
    * Uses pending-promise dedup to prevent connection stampedes.
+   * Retries failed connections with exponential backoff.
    */
   private async getClient(serverId: string): Promise<MCPClientType> {
     // Return existing connected client
@@ -256,8 +309,8 @@ export class MCPConnectionManager implements ToolResolver {
     const pending = this.pending.get(serverId);
     if (pending) return pending;
 
-    // Start new connection
-    const connectionPromise = this.connectToServer(serverId);
+    // Start new connection with retry
+    const connectionPromise = this.connectWithRetry(serverId);
     this.pending.set(serverId, connectionPromise);
 
     try {
@@ -270,10 +323,62 @@ export class MCPConnectionManager implements ToolResolver {
   }
 
   /**
+   * Connect with retry and exponential backoff.
+   */
+  private async connectWithRetry(serverId: string): Promise<MCPClientType> {
+    const entry = await this.registry.loadServer(serverId);
+    if (!entry) {
+      throw new MCPServerNotFoundError(serverId);
+    }
+
+    const maxRetries = entry.max_retries ?? 2;
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.connectToServer(serverId);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt < maxRetries) {
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10_000);
+          logger.warn('connection_retry', {
+            server_id: serverId,
+            attempt: attempt + 1,
+            max_retries: maxRetries,
+            backoff_ms: backoffMs,
+            error: lastError.message,
+          });
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  /**
+   * Remove a client and invalidate its cache, forcing reconnection on next use.
+   */
+  async reconnect(serverId: string): Promise<void> {
+    const existing = this.clients.get(serverId);
+    if (existing) {
+      try {
+        await existing.close();
+      } catch {
+        // Best-effort close
+      }
+      this.clients.delete(serverId);
+    }
+    this.toolCache.delete(serverId);
+    logger.info('connection_invalidated', { server_id: serverId });
+  }
+
+  /**
    * Check if an agent is authorized to use an MCP server.
    * If `allowed_agents` is set on the server entry, the agent must be in the list.
+   * Returns the server entry for downstream use.
    */
-  private async checkAccess(serverId: string, agentId?: string): Promise<void> {
+  private async checkAccess(serverId: string, agentId?: string): Promise<MCPServerEntry> {
     const entry = await this.registry.loadServer(serverId);
     if (!entry) {
       throw new MCPServerNotFoundError(serverId);
@@ -284,6 +389,8 @@ export class MCPConnectionManager implements ToolResolver {
         throw new MCPAccessDeniedError(agentId ?? 'unknown', serverId);
       }
     }
+
+    return entry;
   }
 
   /**
@@ -351,15 +458,17 @@ export class MCPConnectionManager implements ToolResolver {
   }
 
   /**
-   * Wrap a tool's execute function to accumulate taint metadata in the
-   * internal map while returning the raw result to the AI SDK (and thus
-   * to the LLM). This ensures the LLM never sees taint wrapper objects.
+   * Wrap a tool's execute function to:
+   * 1. Enforce per-tool execution timeouts
+   * 2. Accumulate taint metadata for provenance tracking
+   *
    * Creates a new tool object — never mutates the original.
    */
   private wrapToolWithTaint(
     tool: Record<string, unknown>,
     toolName: string,
     serverId: string,
+    toolTimeoutMs: number = 0,
   ): Record<string, unknown> {
     const originalExecute = tool.execute as ((args: unknown) => Promise<unknown>) | undefined;
 
@@ -370,7 +479,27 @@ export class MCPConnectionManager implements ToolResolver {
     return {
       ...tool,
       execute: async (args: unknown): Promise<unknown> => {
-        const result = await originalExecute(args);
+        let result: unknown;
+
+        if (toolTimeoutMs > 0) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), toolTimeoutMs);
+          try {
+            result = await Promise.race([
+              originalExecute(args),
+              new Promise<never>((_, reject) => {
+                controller.signal.addEventListener('abort', () => {
+                  reject(new Error(`MCP tool "${toolName}" on server "${serverId}" timed out after ${toolTimeoutMs}ms`));
+                }, { once: true });
+              }),
+            ]);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        } else {
+          result = await originalExecute(args);
+        }
+
         const taintKey = `${serverId}:${toolName}`;
         this.taintEntries.set(taintKey, {
           source: 'mcp_tool' as const,
@@ -410,5 +539,6 @@ export class MCPConnectionManager implements ToolResolver {
     await Promise.allSettled(closePromises);
     this.clients.clear();
     this.pending.clear();
+    this.toolCache.clear();
   }
 }

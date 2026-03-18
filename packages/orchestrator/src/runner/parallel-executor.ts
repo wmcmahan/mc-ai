@@ -4,6 +4,10 @@
  * Executes multiple graph node tasks concurrently with configurable
  * concurrency limits and error handling strategies.
  *
+ * Uses `AbortController` for timeout-based cancellation so that
+ * timed-out tasks are properly aborted rather than left running
+ * in the background consuming resources.
+ *
  * @module runner/parallel-executor
  */
 
@@ -59,14 +63,18 @@ export interface ParallelExecutionConfig {
  * failure aborts the batch. Under `best_effort`, all results
  * (including failures) are collected.
  *
+ * When `task_timeout_ms` is set, each task gets an `AbortController`
+ * whose signal is aborted on timeout. The `executeFn` receives an
+ * `AbortSignal` that it should propagate to LLM calls.
+ *
  * @param tasks - The tasks to execute.
- * @param executeFn - Executor function called for each task.
+ * @param executeFn - Executor function called for each task. Receives an optional AbortSignal for cancellation.
  * @param config - Concurrency and error strategy configuration.
  * @returns Results for all executed tasks.
  */
 export async function executeParallel(
   tasks: ParallelTask[],
-  executeFn: (task: ParallelTask) => Promise<Action>,
+  executeFn: (task: ParallelTask, signal?: AbortSignal) => Promise<Action>,
   config: ParallelExecutionConfig,
 ): Promise<ParallelResult[]> {
   const results: ParallelResult[] = [];
@@ -89,18 +97,37 @@ export async function executeParallel(
 
     const batchPromises = batch.map(async (task, batchIndex): Promise<ParallelResult> => {
       const taskIndex = batchStart + batchIndex;
+
       try {
-        const taskPromise = executeFn(task);
-        const action = config.task_timeout_ms
-          ? await Promise.race([
-              taskPromise,
-              new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(
-                  `Task ${taskIndex} (${task.node.id}) timed out after ${config.task_timeout_ms}ms`
-                )), config.task_timeout_ms),
-              ),
-            ])
-          : await taskPromise;
+        let action: Action;
+
+        if (config.task_timeout_ms) {
+          // Create an AbortController for cooperative cancellation.
+          // The signal is passed to executeFn so LLM calls can be aborted.
+          // Promise.race ensures the timeout rejects immediately even if
+          // executeFn doesn't check the signal (resource leak prevention).
+          const abortController = new AbortController();
+          const timeoutMs = config.task_timeout_ms;
+
+          action = await Promise.race([
+            executeFn(task, abortController.signal),
+            new Promise<never>((_, reject) => {
+              const timeoutId = setTimeout(() => {
+                abortController.abort(new Error(`Task ${taskIndex} (${task.node.id}) timed out after ${timeoutMs}ms`));
+                reject(new Error(`Task ${taskIndex} (${task.node.id}) timed out after ${timeoutMs}ms`));
+              }, timeoutMs);
+              // Clean up timer if the task completes or the signal is aborted first
+              abortController.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
+            }),
+          ]);
+
+          // Task completed before timeout — abort to clean up the timer
+          if (!abortController.signal.aborted) {
+            abortController.abort();
+          }
+        } else {
+          action = await executeFn(task);
+        }
 
         const extMetadata = action.metadata as Record<string, unknown>;
         const tokenUsage = extMetadata?.token_usage as { totalTokens?: number } | undefined;

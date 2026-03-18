@@ -85,7 +85,23 @@ Each `MCPServerEntry` can define `allowed_agents: string[]`. When set:
 - **Lazy**: Clients are created on first `resolveTools()` call for a server
 - **Deduplication**: Concurrent calls for the same server share a pending promise
 - **Reuse**: Clients are cached for the lifetime of the manager
-- **Cleanup**: `closeAll()` closes all clients and clears the cache
+- **Retry with backoff**: Failed connections retry up to `max_retries` (default 2) with exponential backoff (1s, 2s, 4s, capped at 10s)
+- **Reconnect**: `reconnect(serverId)` invalidates a stale client and its tool cache, forcing fresh connection on next use
+- **Cleanup**: `closeAll()` closes all clients and clears both the client and tool caches
+
+### Tool Manifest Caching
+
+Tool manifests from `client.tools()` are cached per server with a configurable TTL (default 5 minutes). This avoids redundant server round-trips when the same agent resolves tools multiple times during a workflow.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `cache_ttl_ms` | `300000` (5 min) | TTL for cached tool manifests. Set to 0 to disable. |
+
+Cache is cleared on `closeAll()` and `reconnect(serverId)`.
+
+### Per-Tool Execution Timeouts
+
+Each MCP tool call can be time-bounded via `MCPServerEntry.tool_timeout_ms` or `MCPConnectionManagerOptions.default_tool_timeout_ms` (default 30s). Uses `Promise.race` + `AbortController` for both forced and cooperative cancellation.
 
 ### Taint Wrapping
 

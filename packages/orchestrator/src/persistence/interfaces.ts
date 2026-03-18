@@ -190,11 +190,13 @@ export interface PersistenceProvider {
   /**
    * Atomically save both the workflow run record and state snapshot.
    *
-   * Implementations should wrap both operations in a transaction to
-   * prevent inconsistent state if one fails. Optional — callers fall
-   * back to separate `saveWorkflowRun` + `saveWorkflowState` when absent.
+   * Implementations MUST wrap both operations in a transaction to
+   * prevent inconsistent state if one fails (e.g., crash between
+   * `saveWorkflowRun` and `saveWorkflowState`).
+   *
+   * The GraphRunner always uses this method for state persistence.
    */
-  saveWorkflowSnapshot?(state: WorkflowState): Promise<void>;
+  saveWorkflowSnapshot(state: WorkflowState): Promise<void>;
 
   // ── Event Queries ──
 

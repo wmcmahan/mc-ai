@@ -28,7 +28,7 @@ export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from 
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
-export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent } from './runner/stream-events.js';
+export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent, MemoryDiff } from './runner/stream-events.js';
 export { isTerminalEvent } from './runner/stream-events.js';
 
 export * from './runner/helpers.js';
@@ -98,7 +98,7 @@ export { jsonSchemaToZod } from './mcp/json-schema-converter.js';
 export type { JSONSchema } from './mcp/json-schema-converter.js';
 export { MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
 export { MCPConnectionManager } from './mcp/connection-manager.js';
-export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult } from './mcp/connection-manager.js';
+export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult, MCPConnectionManagerOptions } from './mcp/connection-manager.js';
 export {
   registerDefaultMCPServers,
   DEFAULT_MCP_SERVERS,

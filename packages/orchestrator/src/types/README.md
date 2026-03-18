@@ -47,7 +47,7 @@ The shared "blackboard" that all nodes read from and write to. This is the singl
 | `max_token_budget` | `number?` | — | Token limit (fails when exceeded) |
 | `visited_nodes` | `string[]` | `[]` | Execution path for debugging |
 | `max_iterations` | `number` | `50` | Iteration safety limit |
-| `compensation_stack` | `Array<{action_id, compensation_action}>` | `[]` | Saga pattern rollback stack |
+| `compensation_stack` | `Array<{action_id, compensation_action: {type, payload}}>` | `[]` | Typed saga rollback stack |
 | `supervisor_history` | `Array<{supervisor_id, delegated_to, reasoning, iteration, timestamp}>` | `[]` | Supervisor routing decisions |
 
 ### WorkflowStatus (9-state machine)

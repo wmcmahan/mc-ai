@@ -113,6 +113,10 @@ export const MCPServerEntrySchema = z.object({
   allowed_agents: z.array(z.string()).optional(),
   /** Connection timeout in milliseconds. */
   timeout_ms: z.number().default(30_000),
+  /** Per-tool execution timeout in milliseconds. Applied to each tool call. */
+  tool_timeout_ms: z.number().optional(),
+  /** Maximum connection retries before giving up. @default 2 */
+  max_retries: z.number().optional(),
 });
 
 export type MCPServerEntry = z.infer<typeof MCPServerEntrySchema>;

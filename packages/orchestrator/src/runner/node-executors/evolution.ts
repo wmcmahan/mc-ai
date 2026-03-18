@@ -6,9 +6,6 @@
  * and breeds the next generation using the winner as parent context.
  * Temperature controls diversity vs exploitation.
  *
- * Note: Evolution nodes do not yet support budget-aware model resolution (Phase 1 limitation).
- * Candidate and evaluator agents use their statically configured models.
- *
  * @module runner/node-executors/evolution
  */
 
@@ -20,6 +17,7 @@ import { createLogger } from '../../utils/logger.js';
 import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { ensureSaveToMemory } from './agent.js';
+import { resolveModelForAgent } from './resolve-model.js';
 
 const logger = createLogger('runner.node.evolution');
 
@@ -174,6 +172,7 @@ export async function executeEvolutionNode(
       tasks,
       async (task) => {
         const agentConfig = await ctx.deps.loadAgent(task.node.agent_id!);
+        const { modelOverride } = resolveModelForAgent(agentConfig, task.node.agent_id!, task.node.id, ctx);
         const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), task.node.agent_id!);
         const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
         return ctx.deps.executeAgent(
@@ -181,7 +180,7 @@ export async function executeEvolutionNode(
           task.stateView,
           tools,
           attempt,
-          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries },
+          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}) },
         );
       },
       { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy, task_timeout_ms: config.task_timeout_ms },

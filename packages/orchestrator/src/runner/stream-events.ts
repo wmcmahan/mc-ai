@@ -59,11 +59,27 @@ export interface NodeRetryEvent {
   timestamp: number;
 }
 
+/**
+ * Diff of memory keys changed by a single action.
+ */
+export interface MemoryDiff {
+  /** Keys that were added (not present before). */
+  added: string[];
+  /** Keys whose values changed. */
+  changed: string[];
+  /** Keys that were removed. */
+  removed: string[];
+  /** New values for added and changed keys. */
+  values: Record<string, unknown>;
+}
+
 export interface ActionAppliedEvent {
   type: 'action:applied';
   action_id: string;
   action_type: string;
   node_id: string;
+  /** Memory diff produced by this action (undefined if no memory changes). */
+  memory_diff?: MemoryDiff;
   timestamp: number;
 }
 

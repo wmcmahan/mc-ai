@@ -7,7 +7,7 @@
  * @module runner/node-executors/map
  */
 
-import jp from 'jsonpath';
+import { JSONPath } from 'jsonpath-plus';
 import type { GraphNode } from '../../types/graph.js';
 import type { Action, StateView } from '../../types/state.js';
 import { executeParallel, type ParallelTask } from '../parallel-executor.js';
@@ -111,7 +111,7 @@ export async function executeMapNode(
     items = config.static_items;
   } else if (config.items_path) {
     try {
-      const results = jp.query(stateView, config.items_path);
+      const results = JSONPath({ path: config.items_path, json: stateView });
       items = Array.isArray(results[0]) ? results[0] : results;
     } catch {
       throw new NodeConfigError(node.id, 'map', `valid items_path ("${config.items_path}" failed)`);

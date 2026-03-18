@@ -31,7 +31,8 @@ import {
 import type { EventLogWriter } from '../db/event-log.js';
 import { NoopEventLogWriter } from '../db/event-log.js';
 import type { EventType, WorkflowEvent } from '../types/event.js';
-import type { StreamEvent } from './stream-events.js';
+import type { StreamEvent, MemoryDiff } from './stream-events.js';
+import { StateDeltaTracker, type StatePatch } from '../persistence/delta-tracker.js';
 
 // Re-export error classes for backward compatibility
 export { BudgetExceededError, WorkflowTimeoutError };
@@ -217,6 +218,33 @@ export interface GraphRunnerOptions {
    * Agents without `model_preference` always use their static `model`.
    */
   modelResolver?: ModelResolver;
+  /**
+   * Number of events between automatic event log compactions.
+   *
+   * When set (and an `eventLog` is provided), the runner will
+   * automatically checkpoint and compact the event log every N events.
+   * This prevents unbounded event log growth in long-running workflows.
+   *
+   * Set to 0 or omit to disable auto-compaction (manual only via `compactEvents()`).
+   * @default 0 (disabled)
+   */
+  compaction_interval?: number;
+  /**
+   * Optional callback for persisting state deltas (patches).
+   *
+   * When provided alongside `persistStateFn`, the runner uses a
+   * {@link StateDeltaTracker} to compute diffs between state snapshots.
+   * Deltas are sent to this callback; full snapshots go to `persistStateFn`.
+   * This reduces I/O for long-running workflows with large memory.
+   *
+   * If omitted, all persists use `persistStateFn` (full snapshots only).
+   */
+  persistDeltaFn?: (patch: StatePatch) => Promise<void>;
+  /**
+   * Options for the delta tracker (snapshot interval, max patch size).
+   * Only used when `persistDeltaFn` is provided.
+   */
+  deltaTrackerOptions?: { full_snapshot_interval?: number; max_patch_bytes?: number };
 }
 
 /**
@@ -260,6 +288,14 @@ export class GraphRunner extends EventEmitter {
   // Budget-aware model resolver (optional)
   private readonly modelResolver?: ModelResolver;
 
+  // Auto-compaction: compact event log every N events (0 = disabled)
+  private readonly compactionInterval: number;
+  private eventsSinceLastCompaction: number = 0;
+
+  // Differential state persistence
+  private readonly persistDeltaFn?: (patch: StatePatch) => Promise<void>;
+  private readonly deltaTracker?: StateDeltaTracker;
+
   // Cancellation — allows external abort of in-flight agent/supervisor calls
   private abortController: AbortController = new AbortController();
 
@@ -302,6 +338,7 @@ export class GraphRunner extends EventEmitter {
       this.eventLog = new NoopEventLogWriter();
       this.middleware = [];
       this.autoRollback = false;
+      this.compactionInterval = 0;
     } else if (optionsOrPersistFn) {
       // Options object
       this.persistStateFn = optionsOrPersistFn.persistStateFn;
@@ -312,12 +349,18 @@ export class GraphRunner extends EventEmitter {
       this.toolResolver = optionsOrPersistFn.toolResolver;
       this.modelResolver = optionsOrPersistFn.modelResolver;
       this.autoRollback = optionsOrPersistFn.auto_rollback ?? false;
+      this.compactionInterval = optionsOrPersistFn.compaction_interval ?? 0;
+      this.persistDeltaFn = optionsOrPersistFn.persistDeltaFn;
+      if (this.persistDeltaFn) {
+        this.deltaTracker = new StateDeltaTracker(optionsOrPersistFn.deltaTrackerOptions);
+      }
     } else {
       // No options or undefined persistFn — still check for legacy loadGraphFn 4th arg
       this.loadGraphFn = loadGraphFn;
       this.eventLog = new NoopEventLogWriter();
       this.middleware = [];
       this.autoRollback = false;
+      this.compactionInterval = 0;
     }
 
     // Build O(1) lookup structures
@@ -847,8 +890,15 @@ export class GraphRunner extends EventEmitter {
           }
         }
 
+        // Capture memory before reducer for diff computation
+        const memoryBefore = this.state.memory;
+
         // Apply action via reducer
         this.state = rootReducer(this.state, action);
+
+        // Compute memory diff
+        const memoryAfter = this.state.memory;
+        const memoryDiff = this.computeMemoryDiff(memoryBefore, memoryAfter);
 
         // Hook: afterReduce — observational, after reducer
         if (mwCtx) {
@@ -899,6 +949,7 @@ export class GraphRunner extends EventEmitter {
           action_id: action.id,
           action_type: action.type,
           node_id: currentNode.id,
+          memory_diff: memoryDiff,
           timestamp: Date.now(),
         };
         this.emit('action:applied', {
@@ -1479,12 +1530,25 @@ export class GraphRunner extends EventEmitter {
   }
 
   /**
-   * Persist state to database (resumability)
+   * Persist state to database (resumability).
+   *
+   * When a delta tracker is configured, computes a diff and routes
+   * patches to `persistDeltaFn` and full snapshots to `persistStateFn`.
+   * Without a delta tracker, all persists are full snapshots.
    */
   private async persistState(): Promise<void> {
     if (this.persistStateFn) {
       try {
-        await this.persistStateFn(this.state);
+        if (this.deltaTracker && this.persistDeltaFn) {
+          const delta = this.deltaTracker.computeDelta(this.state);
+          if (delta.type === 'full') {
+            await this.persistStateFn(this.state);
+          } else {
+            await this.persistDeltaFn(delta.patch);
+          }
+        } else {
+          await this.persistStateFn(this.state);
+        }
         this.persistenceFailures = 0; // Reset on success
 
         this.emit('state:persisted', {
@@ -1512,6 +1576,30 @@ export class GraphRunner extends EventEmitter {
             `Persistence unavailable after ${this.persistenceFailures} consecutive failures. ` +
             `Halting workflow to prevent data loss.`
           );
+        }
+      }
+    }
+
+    // Auto-compact event log when interval is configured
+    if (this.compactionInterval > 0) {
+      this.eventsSinceLastCompaction++;
+      if (this.eventsSinceLastCompaction >= this.compactionInterval) {
+        try {
+          const deleted = await this.compactEvents();
+          this.eventsSinceLastCompaction = 0;
+          if (deleted > 0) {
+            logger.info('auto_compaction', {
+              run_id: this.state.run_id,
+              events_deleted: deleted,
+              interval: this.compactionInterval,
+            });
+          }
+        } catch (error) {
+          // Auto-compaction is best-effort — don't halt the workflow
+          logger.warn('auto_compaction_failed', {
+            run_id: this.state.run_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
     }
@@ -1934,6 +2022,45 @@ export class GraphRunner extends EventEmitter {
   /** Expose readonly access to the event log writer (for testing/diagnostics) */
   getEventLog(): EventLogWriter {
     return this.eventLog;
+  }
+
+  /**
+   * Compute the diff between two memory snapshots.
+   * Returns undefined if no keys changed.
+   */
+  private computeMemoryDiff(
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
+  ): MemoryDiff | undefined {
+    const added: string[] = [];
+    const changed: string[] = [];
+    const removed: string[] = [];
+    const values: Record<string, unknown> = {};
+
+    const beforeKeys = new Set(Object.keys(before));
+    const afterKeys = new Set(Object.keys(after));
+
+    for (const key of afterKeys) {
+      if (!beforeKeys.has(key)) {
+        added.push(key);
+        values[key] = after[key];
+      } else if (before[key] !== after[key]) {
+        changed.push(key);
+        values[key] = after[key];
+      }
+    }
+
+    for (const key of beforeKeys) {
+      if (!afterKeys.has(key)) {
+        removed.push(key);
+      }
+    }
+
+    if (added.length === 0 && changed.length === 0 && removed.length === 0) {
+      return undefined;
+    }
+
+    return { added, changed, removed, values };
   }
 }
 

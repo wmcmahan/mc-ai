@@ -42,12 +42,13 @@ Events are a discriminated union on the `type` field. They split into two catego
 | `node:complete` | `node_id`, `node_type`, `duration_ms` | A node has finished successfully. |
 | `node:failed` | `node_id`, `node_type`, `error`, `attempt` | A node execution failed (may retry). |
 | `node:retry` | `node_id`, `attempt`, `backoff_ms` | A failed node is being retried after a backoff delay. |
-| `action:applied` | `action_id`, `action_type`, `node_id` | A reducer has applied an action to state. |
+| `action:applied` | `action_id`, `action_type`, `node_id`, `memory_diff?` | A reducer has applied an action to state. Includes memory diff when keys changed. |
 | `state:persisted` | `run_id`, `iteration` | State has been persisted (via `persistStateFn`). |
 | `agent:token_delta` | `run_id`, `node_id`, `token` | A single token from an LLM response (real-time streaming). |
 | `tool:call_start` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `args` | A tool has started executing. |
 | `tool:call_finish` | `run_id`, `node_id`, `tool_name`, `tool_call_id`, `duration_ms`, `success`, `error?` | A tool has finished executing. |
 | `budget:threshold_reached` | `run_id`, `threshold_pct`, `cost_usd`, `budget_usd` | Cost has crossed a budget threshold (50%, 75%, 90%, 100%). |
+| `model:resolved` | `run_id`, `node_id`, `requested_model`, `resolved_model`, `reason?` | A model identifier has been resolved (e.g., via budget-aware fallback). |
 
 All events include a `timestamp` field (Unix ms).
 
@@ -102,6 +103,32 @@ for await (const event of runner.stream()) {
 ```
 
 Tool call events are also available via the event listener API (see below).
+
+## Memory diffs
+
+The `action:applied` event includes an optional `memory_diff` field that shows exactly which memory keys were added, changed, or removed by the action. This enables real-time UIs to display state changes without polling or comparing full snapshots.
+
+```typescript
+for await (const event of runner.stream()) {
+  if (event.type === 'action:applied' && event.memory_diff) {
+    const { added, changed, removed, values } = event.memory_diff;
+    if (added.length > 0) console.log('  Added:', added);
+    if (changed.length > 0) console.log('  Changed:', changed);
+    if (removed.length > 0) console.log('  Removed:', removed);
+  }
+}
+```
+
+The `MemoryDiff` type is exported from `@mcai/orchestrator`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `added` | `string[]` | Keys that were added (not present before). |
+| `changed` | `string[]` | Keys whose values changed. |
+| `removed` | `string[]` | Keys that were removed. |
+| `values` | `Record<string, unknown>` | New values for added and changed keys. |
+
+When no memory keys changed (e.g., `goto_node` or `set_status` actions), `memory_diff` is `undefined` — no overhead is incurred.
 
 ## Event listeners (non-streaming)
 

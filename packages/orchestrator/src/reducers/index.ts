@@ -384,7 +384,7 @@ export const internalReducer: Reducer = (state, action) => {
           ...state.compensation_stack,
           {
             action_id: action.payload.action_id as string,
-            compensation_action: action.payload.compensation_action as unknown,
+            compensation_action: action.payload.compensation_action as { type: string; payload: Record<string, unknown> },
           },
         ],
         updated_at: new Date(),

@@ -61,8 +61,6 @@ export async function executeAgentNode(
     throw new NodeConfigError(node.id, 'agent', 'agent_id');
   }
 
-  // Note: Annealing and swarm executors do not perform budget-aware model resolution (Phase 1 limitation).
-  // These specialized executors manage their own agent calls internally.
   if (node.annealing_config) {
     return executeAnnealingLoop(node, stateView, attempt, ctx);
   }

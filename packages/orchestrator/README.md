@@ -133,11 +133,13 @@ See [examples/](./examples/) for complete, runnable versions.
 |----------|-----------|
 | **Graph Engine** | Cyclic graphs, 10 node types, conditional routing via [filtrex](https://github.com/joewalnes/filtrex), parallel fan-out/fan-in |
 | **Node Types** | `agent` `tool` `router` `supervisor` `approval` `map` `synthesizer` `voting` `subgraph` `evolution` |
-| **Resilience** | Retry with backoff (linear/exponential/fixed), circuit breakers, saga rollback, durable execution via event sourcing |
+| **Resilience** | Retry with backoff (linear/exponential/fixed), circuit breakers, typed saga rollback, durable execution via event sourcing, event log auto-compaction |
 | **Security** | Zero Trust state slicing (`read_keys`/`write_keys`), taint tracking for external data, permission-enforced reducers |
-| **Streaming** | `stream()` async generator, real-time token deltas, tool call start/finish events, typed `StreamEvent` union, `isTerminalEvent()` guard, `AbortSignal` cancellation |
-| **Observability** | 16 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
-| **Cost Control** | Token budgets, per-run cost tracking, workflow and node-level timeouts |
+| **Streaming** | `stream()` async generator, real-time token deltas, tool call start/finish events, memory diffs on `action:applied`, typed `StreamEvent` union, `isTerminalEvent()` guard, `AbortSignal` cancellation |
+| **MCP Tools** | Tool manifest caching (5-min TTL), per-tool execution timeouts, connection retry with backoff, auto-reconnect |
+| **Observability** | 17 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
+| **Cost Control** | Token budgets, per-run cost tracking, budget-aware model resolution (all node types), workflow and node-level timeouts |
+| **Persistence** | Mandatory atomic snapshots, differential state persistence (delta tracking), event log auto-compaction |
 
 ## Examples
 

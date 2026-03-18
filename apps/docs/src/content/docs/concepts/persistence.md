@@ -31,7 +31,7 @@ The primary storage interface. Covers graph definitions, workflow runs, state sn
 | `listWorkflowRuns(opts?)` | List runs, ordered by creation time. |
 | `updateRunStatus(id, status)` | Update only the status of a run. |
 | `saveWorkflowState(state)` | Save a state snapshot (auto-incremented version). |
-| `saveWorkflowSnapshot(state)` | *(optional)* Atomically save both the run record and state snapshot in a single transaction. |
+| `saveWorkflowSnapshot(state)` | Atomically save both the run record and state snapshot in a single transaction. Required on all implementations. |
 | `loadLatestWorkflowState(run_id)` | Load the most recent state for crash recovery. |
 | `loadWorkflowStateHistory(run_id, opts?)` | Load version history (lightweight summaries). |
 | `loadWorkflowStateAtVersion(run_id, version)` | Load full state at a specific version. |
@@ -122,13 +122,7 @@ The `GraphRunner` accepts a `persistStateFn` callback that is called after every
 ```typescript
 const runner = new GraphRunner(graph, state, {
   persistStateFn: async (state) => {
-    // Prefer saveWorkflowSnapshot for atomic run + state saves
-    if (persistence.saveWorkflowSnapshot) {
-      await persistence.saveWorkflowSnapshot(state);
-    } else {
-      await persistence.saveWorkflowState(state);
-      await persistence.saveWorkflowRun(state);
-    }
+    await persistence.saveWorkflowSnapshot(state);
   },
 });
 ```
@@ -146,6 +140,76 @@ Every call to `saveWorkflowState()` creates a new version. This enables:
 - **Time travel** — `loadWorkflowStateAtVersion()` loads full state at any version
 
 `loadLatestWorkflowState()` sorts by `version` (not `created_at`) to handle sub-millisecond state saves correctly. Multiple state saves within the same millisecond are common during parallel node execution, so version ordering is the only reliable way to identify the latest state.
+
+## Differential state persistence
+
+For long-running workflows with large memory, persisting the full `WorkflowState` on every step can be expensive. MC-AI provides a `StateDeltaTracker` that computes diffs between consecutive state snapshots and persists only what changed.
+
+### Setup
+
+```typescript
+import { GraphRunner, StateDeltaTracker } from '@mcai/orchestrator';
+
+const runner = new GraphRunner(graph, state, {
+  persistStateFn: async (state) => {
+    // Full snapshots go here
+    await persistence.saveWorkflowSnapshot(state);
+  },
+  persistDeltaFn: async (patch) => {
+    // Compact patches go here
+    await persistence.saveDelta(patch);
+  },
+  deltaTrackerOptions: {
+    full_snapshot_interval: 10,  // Full snapshot every 10 persists
+    max_patch_bytes: 50_000,     // Fall back to full if patch > 50KB
+  },
+});
+```
+
+### How it works
+
+The delta tracker compares each state to the previously persisted snapshot and produces a `StatePatch`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `run_id` | `string` | Which run this patch applies to. |
+| `version` | `number` | Auto-incremented version number. |
+| `fields` | `Record<string, unknown>` | Changed scalar fields (status, current_node, etc.). |
+| `memory_updates` | `Record<string, unknown>` | Memory keys that were added or changed, with new values. |
+| `memory_removals` | `string[]` | Memory keys that were removed. |
+
+A full snapshot is automatically emitted:
+- On the first persist (no previous state to diff against)
+- Every `full_snapshot_interval` persists (default: 10)
+- When the computed patch exceeds `max_patch_bytes` (default: 50KB)
+
+This ensures recovery never requires replaying a long chain of patches.
+
+### Without delta tracking
+
+When `persistDeltaFn` is not provided, all persists use `persistStateFn` (full snapshots). Delta tracking is entirely opt-in.
+
+## Event log compaction
+
+Long-running workflows accumulate events in the event log. The `GraphRunner` supports automatic compaction to prevent unbounded growth:
+
+```typescript
+const runner = new GraphRunner(graph, state, {
+  eventLog: myEventLog,
+  compaction_interval: 100, // Checkpoint and compact every 100 events
+});
+```
+
+When `compaction_interval` is set, the runner automatically:
+1. Saves a checkpoint (state snapshot at the current sequence ID)
+2. Deletes all events at or before the checkpoint
+
+This is best-effort — compaction failures are logged but don't halt the workflow. You can also trigger compaction manually:
+
+```typescript
+const deleted = await runner.compactEvents();
+console.log(`Compacted ${deleted} events`);
+```
 
 ## Next steps
 
