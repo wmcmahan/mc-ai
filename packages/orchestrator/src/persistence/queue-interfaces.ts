@@ -20,6 +20,7 @@ import { z } from 'zod';
 export const WorkflowJobStatusSchema = z.enum([
   'waiting',
   'active',
+  'paused',
   'completed',
   'failed',
   'dead_letter',
@@ -75,6 +76,7 @@ export type EnqueueJobInput = Pick<WorkflowJob, 'type' | 'run_id' | 'graph_id'> 
 export interface QueueDepth {
   waiting: number;
   active: number;
+  paused: number;
   dead_letter: number;
 }
 
@@ -116,9 +118,11 @@ export interface WorkflowQueue {
   heartbeat(jobId: string, extendMs?: number): Promise<void>;
 
   /**
-   * Release a job back to the queue without incrementing the attempt count.
+   * Pause a job without incrementing the attempt count.
    *
-   * Used for HITL pauses — the job isn't failed, just paused.
+   * Used for HITL pauses — transitions to `paused` status so the job
+   * is NOT re-claimable by `dequeue`. A separate `resume` job must be
+   * enqueued to continue the workflow.
    */
   release(jobId: string): Promise<void>;
 

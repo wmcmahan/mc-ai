@@ -228,7 +228,7 @@ worker.on('job:dead_letter', ({ jobId, runId, error }) => {
 Monitor queue health via `getQueueDepth()`:
 
 ```typescript
-const { waiting, active, dead_letter } = await queue.getQueueDepth();
+const { waiting, active, paused, dead_letter } = await queue.getQueueDepth();
 ```
 
 ## Next steps

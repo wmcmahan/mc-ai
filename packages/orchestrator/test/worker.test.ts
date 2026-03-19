@@ -184,7 +184,7 @@ describe('WorkflowWorker', () => {
     expect(depth.waiting).toBe(1);
   });
 
-  test('HITL: start → waiting → release (not ack)', async () => {
+  test('HITL: start → waiting → release (paused, not re-claimable)', async () => {
     const graph = createSimpleGraph();
     await persistence.saveGraph(graph);
 
@@ -196,7 +196,7 @@ describe('WorkflowWorker', () => {
     });
 
     const runId = uuidv4();
-    await queue.enqueue({
+    const jobId = await queue.enqueue({
       type: 'start',
       run_id: runId,
       graph_id: graph.id,
@@ -212,9 +212,18 @@ describe('WorkflowWorker', () => {
 
     expect(events).toContain('released');
 
-    // Job should be back to waiting (released, not acked)
+    // Job should be paused (not waiting — not re-claimable by dequeue)
     const depth = await queue.getQueueDepth();
-    expect(depth.waiting).toBe(1);
+    expect(depth.waiting).toBe(0);
+    expect(depth.paused).toBe(1);
+
+    // Verify dequeue returns null (paused job is not claimable)
+    const nextJob = await queue.dequeue('other-worker');
+    expect(nextJob).toBeNull();
+
+    // Verify the job itself has paused status
+    const job = await queue.getJob(jobId);
+    expect(job?.status).toBe('paused');
 
     runSpy.mockRestore();
   });

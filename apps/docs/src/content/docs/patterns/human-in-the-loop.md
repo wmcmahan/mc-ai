@@ -141,9 +141,9 @@ When using the [WorkflowWorker](/concepts/distributed-execution/) for distribute
 
 1. The API enqueues a `{ type: 'start' }` job
 2. A worker runs the workflow until it hits an approval node → returns `status: 'waiting'`
-3. The worker calls `queue.release(jobId)` — frees the slot immediately (no blocking)
-4. Later, the API enqueues a `{ type: 'resume', human_response: { decision: 'approved' } }` job
-5. A worker (same or different) picks it up, recovers via event log, applies the response, and continues
+3. The worker calls `queue.release(jobId)` — transitions the job to `paused` status, freeing the slot immediately (no blocking). The paused job is **not** re-claimable by `dequeue`, so the worker won't re-execute the approval gate.
+4. Later, the API acks the original paused job (cleanup) and enqueues a `{ type: 'resume', human_response: { decision: 'approved' } }` job
+5. A worker (same or different) picks up the resume job, recovers via event log, applies the response, and continues
 
 ```typescript
 import { InMemoryWorkflowQueue } from '@mcai/orchestrator';
@@ -158,9 +158,10 @@ await queue.enqueue({
   initial_state: { goal: 'Write an article' },
 });
 
-// 2. Worker runs it, hits approval node, releases the job
+// 2. Worker runs it, hits approval node, releases the job (→ paused status)
 
 // 3. Later, when the human approves:
+await queue.ack(startJobId);  // Clean up the paused original job
 await queue.enqueue({
   type: 'resume',
   run_id: runId,       // Same run
@@ -169,7 +170,7 @@ await queue.enqueue({
 });
 ```
 
-The key distinction: `release` (not `nack`) returns the job to the queue without counting it as a failure. This preserves the attempt count for actual crash recovery.
+The key distinction: `release` (not `nack`) transitions the job to `paused` status without counting it as a failure. Paused jobs are not re-claimable by `dequeue` — this prevents the worker from re-executing the approval gate in a loop while awaiting a human response. A separate `resume` job carries the human's response.
 
 ## When to use this pattern
 

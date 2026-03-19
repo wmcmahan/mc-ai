@@ -113,7 +113,7 @@ export class InMemoryWorkflowQueue implements WorkflowQueue {
     if (!job) return;
     this.jobs.set(jobId, {
       ...job,
-      status: 'waiting',
+      status: 'paused',
       visible_at: null,
       worker_id: null,
     });
@@ -147,13 +147,15 @@ export class InMemoryWorkflowQueue implements WorkflowQueue {
   async getQueueDepth(): Promise<QueueDepth> {
     let waiting = 0;
     let active = 0;
+    let paused = 0;
     let dead_letter = 0;
     for (const job of this.jobs.values()) {
       if (job.status === 'waiting') waiting++;
       else if (job.status === 'active') active++;
+      else if (job.status === 'paused') paused++;
       else if (job.status === 'dead_letter') dead_letter++;
     }
-    return { waiting, active, dead_letter };
+    return { waiting, active, paused, dead_letter };
   }
 
   /** Clear all jobs (test utility). */

@@ -139,7 +139,7 @@ See [examples/](./examples/) for complete, runnable versions.
 | **MCP Tools** | Tool manifest caching (5-min TTL), per-tool execution timeouts, connection retry with backoff, auto-reconnect |
 | **Observability** | 17 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
 | **Cost Control** | Token budgets, per-run cost tracking, budget-aware model resolution (all node types), workflow and node-level timeouts |
-| **Distributed Execution** | `WorkflowWorker` with per-workflow assignment, `WorkflowQueue` interface, visibility-timeout crash recovery, HITL release (non-blocking), dead-lettering, configurable concurrency |
+| **Distributed Execution** | `WorkflowWorker` with per-workflow assignment, `WorkflowQueue` interface, visibility-timeout crash recovery, HITL pause (`paused` status — not re-claimable), dead-lettering, configurable concurrency |
 | **Persistence** | Mandatory atomic snapshots, differential state persistence (delta tracking), event log auto-compaction |
 
 ## Examples

@@ -73,10 +73,10 @@ Job queue for [distributed execution](/concepts/distributed-execution/). Workers
 | `ack(jobId)` | Mark a job as completed. |
 | `nack(jobId, error)` | Report failure. Retries if attempts remain, otherwise dead-letters. |
 | `heartbeat(jobId, extendMs?)` | Extend visibility timeout during long execution. |
-| `release(jobId)` | Return to queue without incrementing attempt count (for HITL pauses). |
+| `release(jobId)` | Transition to `paused` status without incrementing attempt count (for HITL pauses). Paused jobs are not re-claimable by `dequeue`. |
 | `reclaimExpired()` | Reclaim jobs with expired visibility timeouts (crash recovery). |
 | `getJob(jobId)` | Load a job by ID. |
-| `getQueueDepth()` | Count by status: `{ waiting, active, dead_letter }`. |
+| `getQueueDepth()` | Count by status: `{ waiting, active, paused, dead_letter }`. |
 
 ### UsageRecorder
 

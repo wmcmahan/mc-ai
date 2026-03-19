@@ -101,16 +101,20 @@ describe('InMemoryWorkflowQueue', () => {
     expect(updated!.visible_at!.getTime()).toBeGreaterThan(originalVisibleAt);
   });
 
-  test('release preserves attempt count and returns to waiting', async () => {
+  test('release transitions to paused (not re-claimable)', async () => {
     const jobId = await queue.enqueue(defaultInput());
     await queue.dequeue('w'); // attempt = 1
 
     await queue.release(jobId);
 
     const job = await queue.getJob(jobId);
-    expect(job!.status).toBe('waiting');
+    expect(job!.status).toBe('paused');
     expect(job!.attempt).toBe(1); // preserved, not incremented
     expect(job!.worker_id).toBeNull();
+
+    // Paused jobs must not be returned by dequeue
+    const next = await queue.dequeue('w');
+    expect(next).toBeNull();
   });
 
   test('reclaimExpired returns jobs with expired visibility', async () => {
@@ -149,6 +153,11 @@ describe('InMemoryWorkflowQueue', () => {
     await queue.enqueue(defaultInput());
     await queue.dequeue('w');
 
+    // 1 paused
+    const pausedId = await queue.enqueue(defaultInput());
+    await queue.dequeue('w');
+    await queue.release(pausedId);
+
     // 2 waiting
     await queue.enqueue(defaultInput());
     await queue.enqueue(defaultInput());
@@ -156,6 +165,7 @@ describe('InMemoryWorkflowQueue', () => {
     const depth = await queue.getQueueDepth();
     expect(depth.waiting).toBe(2);
     expect(depth.active).toBe(1);
+    expect(depth.paused).toBe(1);
     expect(depth.dead_letter).toBe(1);
   });
 });

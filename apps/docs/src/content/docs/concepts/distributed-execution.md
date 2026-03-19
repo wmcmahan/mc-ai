@@ -35,7 +35,7 @@ stateDiagram-v2
   waiting --> active : dequeue (worker claims)
   active --> completed : ack (success)
   active --> waiting : nack (retry)
-  active --> waiting : release (HITL pause)
+  active --> paused : release (HITL pause)
   active --> waiting : reclaimExpired (crash)
   active --> dead_letter : nack (attempts exhausted)
 ```
@@ -49,14 +49,14 @@ stateDiagram-v2
 | `ack(jobId)` | Mark a job as completed (terminal success). |
 | `nack(jobId, error)` | Report failure. Retries if attempts remain, otherwise dead-letters. |
 | `heartbeat(jobId, extendMs?)` | Extend the visibility timeout during long execution. |
-| `release(jobId)` | Return to queue **without** incrementing attempt count (for HITL pauses). |
+| `release(jobId)` | Transition to `paused` status **without** incrementing attempt count (for HITL pauses). Paused jobs are not re-claimable by `dequeue`. |
 | `reclaimExpired()` | Reclaim jobs with expired visibility timeouts (crash recovery). |
 | `getJob(jobId)` | Load a job by ID (diagnostics). |
-| `getQueueDepth()` | Count jobs by status: `{ waiting, active, dead_letter }`. |
+| `getQueueDepth()` | Count jobs by status: `{ waiting, active, paused, dead_letter }`. |
 
 ### Key design: release vs nack
 
-`release` is distinct from `nack` — HITL pauses call `release` to free the worker slot without penalizing the attempt count. The job returns to `waiting` and can be re-claimed later when the human responds.
+`release` is distinct from `nack` — HITL pauses call `release` to transition the job to `paused` status without penalizing the attempt count. Paused jobs are **not** re-claimable by `dequeue` — this prevents the worker from re-claiming and re-executing the approval gate in a tight loop while awaiting a human response. A separate `resume` job must be enqueued to continue the workflow.
 
 ## WorkflowWorker
 
@@ -142,21 +142,24 @@ sequenceDiagram
     Queue->>Worker: dequeue
     Worker->>Worker: GraphRunner.run()
     Note over Worker: Hits approval node
-    Worker->>Queue: release(jobId)
+    Worker->>Queue: release(jobId) → status: paused
     Note over Worker: Worker is free for other jobs
+    Note over Queue: Job is paused (not re-claimable)
 
     Human->>API: Submit decision
+    API->>Queue: ack(originalJobId) — clean up paused job
     API->>Queue: enqueue({ type: 'resume', human_response: {...} })
     Queue->>Worker: dequeue (same or different worker)
     Worker->>Worker: GraphRunner.recover() → applyHumanResponse() → run()
-    Worker->>Queue: ack(jobId)
+    Worker->>Queue: ack(resumeJobId)
 ```
 
 1. API enqueues a `start` job
 2. Worker runs the workflow until it hits an approval node → `status: 'waiting'`
-3. Worker calls `queue.release()` — frees the worker slot (no blocking)
-4. Later, the API enqueues a `resume` job with the human's response
-5. A worker picks it up, recovers via event log, applies the response, and continues
+3. Worker calls `queue.release()` — transitions the job to `paused` status, freeing the worker slot
+4. The paused job is not re-claimable — the worker continues polling for other jobs without re-executing the approval gate
+5. Later, the API acks the original job (cleanup) and enqueues a `resume` job with the human's response
+6. A worker picks up the resume job, recovers via event log, applies the response, and continues
 
 ## Dead-lettering
 
