@@ -27,6 +27,8 @@ export { WorkflowWorker } from './runner/worker.js';
 export type { WorkflowWorkerOptions, WorkflowWorkerEvents } from './runner/worker.js';
 export { createStateView } from './runner/state-view.js';
 export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from './runner/middleware.js';
+export { createObserverMiddleware } from './runner/observer-middleware.js';
+export type { ObserverMiddlewareOptions, ObserverFinding, ObserverSeverity, DiagnosticAgentOptions } from './runner/observer-middleware.js';
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
