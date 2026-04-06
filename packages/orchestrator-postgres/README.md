@@ -103,6 +103,44 @@ npx drizzle-kit push --config=packages/orchestrator-postgres/drizzle.config.ts
 - **Transactional archival** — `archiveCompletedWorkflows` wraps its two-phase update (run status + state status) in a database transaction. If either fails, both roll back.
 - **Idempotent event append** — appending an event with a duplicate `(run_id, sequence_id)` is silently ignored via `ON CONFLICT DO NOTHING`. This makes retries after network timeouts safe without risking duplicate events.
 
+## Memory Tables (Optional)
+
+Six tables for the `@mcai/memory` knowledge graph backed by pgvector HNSW:
+
+| Table | Purpose |
+|-------|---------|
+| `memory_entities` | Knowledge graph nodes |
+| `memory_relationships` | Directed temporal edges |
+| `memory_episodes` | Message groups |
+| `memory_facts` | Atomic semantic facts |
+| `memory_themes` | Fact clusters |
+| `memory_entity_facts` | Join table for entity-fact lookups |
+
+### Usage
+
+```typescript
+import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@mcai/orchestrator-postgres';
+import type { MemoryStore, MemoryIndex } from '@mcai/memory';
+
+const store: MemoryStore = new DrizzleMemoryStore();
+const index: MemoryIndex = new DrizzleMemoryIndex();
+
+// Use with @mcai/memory APIs
+await store.putEntity(entity);
+const results = await index.searchFacts(embedding, { limit: 10, min_similarity: 0.7 });
+```
+
+### Embedding Dimensions
+
+The default embedding dimension is 1536 (matching OpenAI text-embedding-ada-002).
+To use a different dimension, update the `EMBEDDING_DIMENSIONS` constant in the schema
+and generate a new migration.
+
+```typescript
+import { EMBEDDING_DIMENSIONS } from '@mcai/orchestrator-postgres';
+// Default: 1536
+```
+
 ## Testing
 
 Tests require a running Postgres instance. They are automatically skipped when `DATABASE_URL` is not set.

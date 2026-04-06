@@ -46,6 +46,18 @@ export async function executeSupervisorNode(
     stateView,
     ctx.state.supervisor_history,
     attempt,
-    { abortSignal: ctx.abortSignal, ...(modelOverride ? { model_override: modelOverride } : {}) },
+    {
+      abortSignal: ctx.abortSignal,
+      ...(modelOverride ? { model_override: modelOverride } : {}),
+      contextCompressor: ctx.contextCompressor,
+      onContextCompressed: ctx.onContextCompressed
+        ? (metrics) => ctx.onContextCompressed!({
+            tokensIn: metrics.totalTokensIn,
+            tokensOut: metrics.totalTokensOut,
+            reductionPercent: metrics.reductionPercent,
+            durationMs: metrics.totalDurationMs,
+          }, node.id)
+        : undefined,
+    },
   );
 }

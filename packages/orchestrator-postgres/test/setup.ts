@@ -16,11 +16,25 @@ import {
   workflow_events,
   workflow_checkpoints,
   agents,
+  memory_entity_facts,
+  memory_facts,
+  memory_relationships,
+  memory_episodes,
+  memory_themes,
+  memory_entities,
 } from '../src/schema.js';
 import { beforeAll, afterAll, beforeEach } from 'vitest';
 
 /** All engine tables, in safe truncation order (respecting FK constraints). */
 const TRUNCATABLE_TABLES = [
+  // Memory tables (FK order)
+  memory_entity_facts,
+  memory_facts,
+  memory_relationships,
+  memory_episodes,
+  memory_themes,
+  memory_entities,
+  // Engine tables
   workflow_checkpoints,
   workflow_events,
   workflow_states,

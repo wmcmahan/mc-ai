@@ -65,7 +65,12 @@ export async function executeSupervisor(
   stateView: StateView,
   supervisorHistory: WorkflowState['supervisor_history'],
   attempt: number,
-  options?: { abortSignal?: AbortSignal; model_override?: string },
+  options?: {
+    abortSignal?: AbortSignal;
+    model_override?: string;
+    contextCompressor?: import('../context-compressor.js').ContextCompressor;
+    onContextCompressed?: (metrics: import('../context-compressor.js').ContextCompressionMetrics) => void;
+  },
 ): Promise<Action> {
   return withSpan(tracer, 'supervisor.route', async (span) => {
     span.setAttribute('supervisor.id', node.id);
@@ -117,7 +122,11 @@ export async function executeSupervisor(
       : agentConfig;
     const model = agentFactory.getModel(effectiveConfig);
 
-    const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory);
+    const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory, {
+      contextCompressor: options?.contextCompressor,
+      model: effectiveConfig.model,
+      onCompressed: options?.onContextCompressed,
+    });
 
     logger.info('routing', {
       supervisor_id: node.id,

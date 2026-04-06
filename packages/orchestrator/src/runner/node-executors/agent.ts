@@ -94,5 +94,14 @@ export async function executeAgentNode(
     onToolCallComplete,
     drainTaintEntries: ctx.deps.drainTaintEntries,
     ...(modelOverride ? { model_override: modelOverride } : {}),
+    contextCompressor: ctx.contextCompressor,
+    onContextCompressed: ctx.onContextCompressed
+      ? (metrics) => ctx.onContextCompressed!({
+          tokensIn: metrics.totalTokensIn,
+          tokensOut: metrics.totalTokensOut,
+          reductionPercent: metrics.reductionPercent,
+          durationMs: metrics.totalDurationMs,
+        }, node.id)
+      : undefined,
   });
 }

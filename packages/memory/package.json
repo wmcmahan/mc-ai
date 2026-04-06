@@ -1,0 +1,55 @@
+{
+  "name": "@mcai/memory",
+  "version": "1.0.0",
+  "description": "Temporal and hierarchical memory service for LLM agents — knowledge graph, episode segmentation, semantic deduplication, and efficient retrieval.",
+  "keywords": [
+    "memory",
+    "knowledge-graph",
+    "temporal",
+    "hierarchical",
+    "semantic",
+    "agent-memory",
+    "rag",
+    "retrieval"
+  ],
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wmcmahan/mc-ai.git",
+    "directory": "packages/memory"
+  },
+  "homepage": "https://github.com/wmcmahan/mc-ai/tree/main/packages/memory#readme",
+  "bugs": {
+    "url": "https://github.com/wmcmahan/mc-ai/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

@@ -138,6 +138,17 @@ export interface ModelResolvedEvent {
   timestamp: number;
 }
 
+export interface ContextCompressedEvent {
+  type: 'context:compressed';
+  run_id: string;
+  node_id: string;
+  tokens_in: number;
+  tokens_out: number;
+  reduction_percent: number;
+  duration_ms: number;
+  timestamp: number;
+}
+
 export interface BudgetThresholdReachedEvent {
   type: 'budget:threshold_reached';
   run_id: string;
@@ -220,7 +231,8 @@ export type StreamEvent =
   | ToolCallStartEvent
   | ToolCallFinishEvent
   | BudgetThresholdReachedEvent
-  | ModelResolvedEvent;
+  | ModelResolvedEvent
+  | ContextCompressedEvent;
 
 /**
  * Type guard: narrows to terminal events that carry `state: WorkflowState`.

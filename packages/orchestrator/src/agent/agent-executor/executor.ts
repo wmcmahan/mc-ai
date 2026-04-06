@@ -107,6 +107,10 @@ export async function executeAgent(
     drainTaintEntries?: () => Map<string, TaintMetadata>;
     /** Override the model from agent config (used by budget-aware model resolution). */
     model_override?: string;
+    /** Context compressor for memory serialization in prompts. */
+    contextCompressor?: import('../context-compressor.js').ContextCompressor;
+    /** Callback fired when context compression runs. */
+    onContextCompressed?: (metrics: import('../context-compressor.js').ContextCompressionMetrics) => void;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -137,7 +141,11 @@ export async function executeAgent(
     const model = agentFactory.getModel(effectiveConfig);
 
     // Build context-aware prompt (with injection guards)
-    const systemPrompt = buildSystemPrompt(config, stateView);
+    const systemPrompt = buildSystemPrompt(config, stateView, {
+      contextCompressor: options?.contextCompressor,
+      model: effectiveConfig.model,
+      onCompressed: options?.onContextCompressed,
+    });
     const taskPrompt = buildTaskPrompt(stateView, attempt);
 
     // Wrap resolved tools into AI SDK v6 tool() format

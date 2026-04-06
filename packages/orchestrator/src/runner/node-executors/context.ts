@@ -16,6 +16,8 @@ import type { Graph } from '../../types/graph.js';
 import type { WorkflowState, Action, StateView, TaintMetadata } from '../../types/state.js';
 import type { ToolSource } from '../../types/tools.js';
 import type { ModelResolver, ModelResolutionResult, ModelTier } from '../../agent/model-resolver.js';
+import type { ContextCompressor, ContextCompressionMetrics } from '../../agent/context-compressor.js';
+import type { MemoryRetriever } from '../../agent/memory-retriever.js';
 
 /**
  * Raw tool definition — description + parameters without an execute function.
@@ -87,6 +89,10 @@ export interface ExecutorDependencies {
       drainTaintEntries?: () => Map<string, TaintMetadata>;
       /** Override the model from agent config (used by budget-aware model resolution). */
       model_override?: string;
+      /** Context compressor for memory serialization in prompts. */
+      contextCompressor?: ContextCompressor;
+      /** Callback fired when context compression runs. */
+      onContextCompressed?: (metrics: ContextCompressionMetrics) => void;
     },
   ) => Promise<Action>;
 
@@ -102,7 +108,14 @@ export interface ExecutorDependencies {
       timestamp: Date;
     }>,
     attempt: number,
-    options?: { abortSignal?: AbortSignal; model_override?: string },
+    options?: {
+      abortSignal?: AbortSignal;
+      model_override?: string;
+      /** Context compressor for memory serialization in prompts. */
+      contextCompressor?: ContextCompressor;
+      /** Callback fired when context compression runs. */
+      onContextCompressed?: (metrics: ContextCompressionMetrics) => void;
+    },
   ) => Promise<Action>;
 
   /** Evaluate output quality via an LLM-as-judge. */
@@ -149,6 +162,12 @@ export interface NodeExecutorContext {
   deps: ExecutorDependencies;
   /** Budget-aware model resolver (from GraphRunnerOptions). */
   modelResolver?: ModelResolver;
+  /** Context compressor for memory serialization in prompts (from GraphRunnerOptions). */
+  contextCompressor?: ContextCompressor;
+  /** Memory retriever for injecting relevant facts into prompts (from GraphRunnerOptions). */
+  memoryRetriever?: MemoryRetriever;
+  /** Callback fired when context compression runs on a prompt's memory section. */
+  onContextCompressed?: (event: { tokensIn: number; tokensOut: number; reductionPercent: number; durationMs: number }, nodeId: string) => void;
   /** Remaining workflow budget in USD, or `undefined` if unlimited (static snapshot — prefer getRemainingBudgetUsd). */
   remainingBudgetUsd?: number;
   /** Lazy budget getter — reads current state at call time (avoids TOCTOU). */

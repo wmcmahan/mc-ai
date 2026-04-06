@@ -1,0 +1,363 @@
+/**
+ * Conflict Detector
+ *
+ * Identifies contradictory, negating, or superseding facts in
+ * the memory store. Supports automatic resolution of temporal
+ * supersession and manual resolution of other conflicts.
+ *
+ * @module consolidation/conflict-detector
+ */
+
+import type { MemoryStore } from '../interfaces/memory-store.js';
+import type { MemoryIndex } from '../interfaces/memory-index.js';
+import type { SemanticFact } from '../schemas/semantic.js';
+
+export interface Conflict {
+  factA: SemanticFact;
+  factB: SemanticFact;
+  type: 'negation' | 'supersession' | 'semantic_contradiction';
+  confidence: number;
+}
+
+export type ConflictResolutionPolicy = 'supersede-on-newer' | 'negation-invalidates-positive' | 'manual-review';
+
+export interface ConflictResolutionReport {
+  resolved: number;
+  skipped: number;
+  details: Array<{ conflict: Conflict; action: string }>;
+}
+
+export interface ConflictDetectorOptions {
+  /** Auto-resolve temporal supersession (default: true). */
+  autoResolveSupersession?: boolean;
+  /** Cosine similarity threshold for contradiction detection (default: 0.8). */
+  embeddingThreshold?: number;
+  /** Default conflict resolution policy. */
+  policy?: ConflictResolutionPolicy;
+}
+
+/** Common English stop words to exclude from word overlap analysis. */
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall',
+  'should', 'may', 'might', 'must', 'can', 'could', 'to', 'of', 'in',
+  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+  'during', 'before', 'after', 'above', 'below', 'between', 'and',
+  'but', 'or', 'nor', 'so', 'yet', 'both', 'either', 'neither', 'each',
+  'every', 'all', 'any', 'few', 'more', 'most', 'other', 'some', 'such',
+  'that', 'this', 'these', 'those', 'it', 'its',
+]);
+
+/** Negation keywords. */
+const NEGATION_WORDS = new Set([
+  'not', 'no', 'never', 'neither', 'nor', 'cannot',
+]);
+
+/** Negation contractions (lowercased). */
+const NEGATION_CONTRACTIONS = [
+  "doesn't", "don't", "isn't", "wasn't", "hasn't",
+  "won't", "can't", "couldn't", "wouldn't", "shouldn't",
+  "aren't", "weren't", "haven't", "hadn't",
+  "doesnt", "dont", "isnt", "wasnt", "hasnt",
+  "wont", "cant", "couldnt", "wouldnt", "shouldnt",
+  "arent", "werent", "havent", "hadnt",
+  "no longer",
+];
+
+export class ConflictDetector {
+  constructor(
+    private readonly store: MemoryStore,
+    private readonly index: MemoryIndex,
+    private readonly options: ConflictDetectorOptions = {},
+  ) {}
+
+  async detectConflicts(facts?: SemanticFact[]): Promise<Conflict[]> {
+    const allFacts = facts ?? await this.store.findFacts({ include_invalidated: false, limit: 10_000 });
+    const activeFacts = allFacts.filter((f) => !f.invalidated_by);
+    const conflicts: Conflict[] = [];
+    const pairKeys = new Set<string>();
+
+    const makePairKey = (a: string, b: string): string =>
+      a < b ? `${a}:${b}` : `${b}:${a}`;
+
+    // Group facts by entity_id for efficient pair generation
+    const byEntity = new Map<string, SemanticFact[]>();
+    for (const fact of activeFacts) {
+      for (const eid of fact.entity_ids) {
+        let group = byEntity.get(eid);
+        if (!group) {
+          group = [];
+          byEntity.set(eid, group);
+        }
+        group.push(fact);
+      }
+    }
+
+    // 1. Negation detection
+    for (const [, group] of byEntity) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const a = group[i];
+          const b = group[j];
+          const pk = makePairKey(a.id, b.id);
+          if (pairKeys.has(pk)) continue;
+
+          if (this.isNegation(a, b)) {
+            pairKeys.add(pk);
+            conflicts.push({ factA: a, factB: b, type: 'negation', confidence: 0.8 });
+          }
+        }
+      }
+    }
+
+    // 2. Temporal supersession
+    const autoResolve = this.options.autoResolveSupersession ?? true;
+    for (const [, group] of byEntity) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const a = group[i];
+          const b = group[j];
+          const pk = makePairKey(a.id, b.id);
+          if (pairKeys.has(pk)) continue;
+
+          const supersession = this.checkSupersession(a, b);
+          if (supersession) {
+            pairKeys.add(pk);
+            conflicts.push(supersession);
+
+            if (autoResolve) {
+              // Invalidate the older fact
+              const older = a.valid_from < b.valid_from ? a : b;
+              const newer = older === a ? b : a;
+              await this.store.putFact({
+                ...older,
+                invalidated_by: newer.id,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Semantic contradiction (embedding-based)
+    const embeddingThreshold = this.options.embeddingThreshold ?? 0.8;
+    for (const fact of activeFacts) {
+      if (!fact.embedding) continue;
+
+      const similar = await this.index.searchFacts(fact.embedding, {
+        min_similarity: embeddingThreshold,
+        limit: 50,
+      });
+
+      for (const { item: candidate } of similar) {
+        if (candidate.id === fact.id) continue;
+        if (candidate.invalidated_by) continue;
+
+        const pk = makePairKey(fact.id, candidate.id);
+        if (pairKeys.has(pk)) continue;
+
+        // Must share at least one entity_id
+        const sharedEntities = fact.entity_ids.some((eid) =>
+          candidate.entity_ids.includes(eid),
+        );
+        if (!sharedEntities) continue;
+
+        // Low text overlap => potential contradiction
+        const overlap = this.wordOverlap(fact.content, candidate.content);
+        if (overlap < 0.3) {
+          pairKeys.add(pk);
+          conflicts.push({
+            factA: fact,
+            factB: candidate,
+            type: 'semantic_contradiction',
+            confidence: 0.6,
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  }
+
+  async resolveConflict(
+    conflict: Conflict,
+    resolution: 'keep_a' | 'keep_b' | 'keep_both',
+  ): Promise<void> {
+    if (resolution === 'keep_a') {
+      await this.store.putFact({
+        ...conflict.factB,
+        invalidated_by: conflict.factA.id,
+      });
+    } else if (resolution === 'keep_b') {
+      await this.store.putFact({
+        ...conflict.factA,
+        invalidated_by: conflict.factB.id,
+      });
+    }
+    // 'keep_both' — no action
+  }
+
+  async autoResolveAll(
+    conflicts: Conflict[],
+    policy?: ConflictResolutionPolicy,
+  ): Promise<ConflictResolutionReport> {
+    const effectivePolicy = policy ?? this.options.policy ?? 'manual-review';
+    const report: ConflictResolutionReport = {
+      resolved: 0,
+      skipped: 0,
+      details: [],
+    };
+
+    for (const conflict of conflicts) {
+      if (effectivePolicy === 'manual-review') {
+        report.skipped++;
+        report.details.push({ conflict, action: 'skipped: manual review required' });
+        continue;
+      }
+
+      if (effectivePolicy === 'supersede-on-newer') {
+        const resolution = this.resolveByTemporal(conflict);
+        await this.resolveConflict(conflict, resolution.keep);
+        report.resolved++;
+        report.details.push({ conflict, action: resolution.action });
+        continue;
+      }
+
+      if (effectivePolicy === 'negation-invalidates-positive') {
+        if (conflict.type === 'negation') {
+          const aHasNeg = this.containsNegation(conflict.factA.content);
+          // Invalidate the positive fact (the one WITHOUT negation)
+          if (aHasNeg) {
+            // A has negation, keep A, invalidate B (positive)
+            await this.resolveConflict(conflict, 'keep_a');
+            report.resolved++;
+            report.details.push({ conflict, action: 'negation kept, positive fact invalidated' });
+          } else {
+            // B has negation, keep B, invalidate A (positive)
+            await this.resolveConflict(conflict, 'keep_b');
+            report.resolved++;
+            report.details.push({ conflict, action: 'negation kept, positive fact invalidated' });
+          }
+        } else if (conflict.type === 'supersession') {
+          const resolution = this.resolveByTemporal(conflict);
+          await this.resolveConflict(conflict, resolution.keep);
+          report.resolved++;
+          report.details.push({ conflict, action: resolution.action });
+        } else {
+          // semantic_contradiction
+          report.skipped++;
+          report.details.push({ conflict, action: 'requires manual review' });
+        }
+      }
+    }
+
+    return report;
+  }
+
+  private resolveByTemporal(conflict: Conflict): { keep: 'keep_a' | 'keep_b'; action: string } {
+    const aTime = conflict.factA.valid_from.getTime();
+    const bTime = conflict.factB.valid_from.getTime();
+
+    if (aTime !== bTime) {
+      if (aTime > bTime) {
+        return { keep: 'keep_a', action: 'newer fact kept, older fact invalidated' };
+      } else {
+        return { keep: 'keep_b', action: 'newer fact kept, older fact invalidated' };
+      }
+    }
+
+    // Same valid_from: tiebreak by ID (lexicographic, keep smaller)
+    if (conflict.factA.id < conflict.factB.id) {
+      return { keep: 'keep_a', action: 'same timestamp, kept lexicographically smaller ID' };
+    } else {
+      return { keep: 'keep_b', action: 'same timestamp, kept lexicographically smaller ID' };
+    }
+  }
+
+  private tokenize(text: string): string[] {
+    return text
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 0 && !STOP_WORDS.has(w));
+  }
+
+  private containsNegation(text: string): boolean {
+    const lower = text.toLowerCase();
+
+    for (const contraction of NEGATION_CONTRACTIONS) {
+      if (lower.includes(contraction)) return true;
+    }
+
+    const words = lower.split(/\s+/);
+    for (const w of words) {
+      if (NEGATION_WORDS.has(w)) return true;
+    }
+
+    return false;
+  }
+
+  private wordOverlap(textA: string, textB: string): number {
+    const wordsA = new Set(this.tokenize(textA));
+    const wordsB = new Set(this.tokenize(textB));
+    if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+    let shared = 0;
+    for (const w of wordsA) {
+      if (wordsB.has(w)) shared++;
+    }
+
+    return shared / Math.min(wordsA.size, wordsB.size);
+  }
+
+  private wordOverlapExcludingNegations(textA: string, textB: string): number {
+    const filterNeg = (words: string[]) =>
+      words.filter((w) => !NEGATION_WORDS.has(w) && !NEGATION_CONTRACTIONS.includes(w));
+
+    const wordsA = new Set(filterNeg(this.tokenize(textA)));
+    const wordsB = new Set(filterNeg(this.tokenize(textB)));
+    if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+    let shared = 0;
+    for (const w of wordsA) {
+      if (wordsB.has(w)) shared++;
+    }
+
+    return shared / Math.min(wordsA.size, wordsB.size);
+  }
+
+  private isNegation(a: SemanticFact, b: SemanticFact): boolean {
+    const aHasNeg = this.containsNegation(a.content);
+    const bHasNeg = this.containsNegation(b.content);
+
+    // Exactly one should contain negation
+    if (aHasNeg === bHasNeg) return false;
+
+    // Check high word overlap excluding negation words (>50%)
+    const overlap = this.wordOverlapExcludingNegations(a.content, b.content);
+    return overlap > 0.5;
+  }
+
+  private checkSupersession(a: SemanticFact, b: SemanticFact): Conflict | null {
+    const timeDiffMs = Math.abs(a.valid_from.getTime() - b.valid_from.getTime());
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    if (timeDiffMs <= oneDayMs) return null;
+
+    // Remove dates/numbers for content comparison
+    const stripDatesNumbers = (text: string) =>
+      text.replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
+
+    const cleanA = stripDatesNumbers(a.content);
+    const cleanB = stripDatesNumbers(b.content);
+    const overlap = this.wordOverlap(cleanA, cleanB);
+
+    if (overlap <= 0.4) return null;
+
+    return {
+      factA: a,
+      factB: b,
+      type: 'supersession',
+      confidence: 0.9,
+    };
+  }
+}

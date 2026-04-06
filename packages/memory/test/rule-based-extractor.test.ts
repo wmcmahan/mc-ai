@@ -1,0 +1,235 @@
+import { describe, it, expect } from 'vitest';
+import { RuleBasedExtractor } from '../src/hierarchy/rule-based-extractor.js';
+import type { Episode } from '../src/schemas/episode.js';
+
+function makeEpisode(messages: Array<{ role: 'user' | 'assistant'; content: string }>): Episode {
+  const now = new Date('2024-01-01T10:00:00Z');
+  return {
+    id: crypto.randomUUID(),
+    topic: 'test topic',
+    messages: messages.map((m, i) => ({
+      id: crypto.randomUUID(),
+      role: m.role,
+      content: m.content,
+      timestamp: new Date(now.getTime() + i * 60_000),
+      metadata: {},
+    })),
+    started_at: now,
+    ended_at: new Date(now.getTime() + messages.length * 60_000),
+    fact_ids: [],
+    provenance: { source: 'system', created_at: now },
+  };
+}
+
+describe('RuleBasedExtractor', () => {
+  const extractor = new RuleBasedExtractor();
+
+  it('extracts entities and facts from "Alice Smith works at Acme Corp"', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'Alice Smith works at Acme Corp.' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(facts[0].content).toContain('Alice Smith works at Acme Corp');
+    expect(facts[0].source_episode_ids).toEqual([ep.id]);
+    expect(facts[0].entity_ids.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('detects person and organization entity types', () => {
+    const entities = extractor.extractEntities('Alice Smith works at Acme Corp');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('Alice Smith');
+    expect(names).toContain('Acme Corp');
+
+    const alice = entities.find((e) => e.name === 'Alice Smith');
+    expect(alice?.type).toBe('person');
+    const acme = entities.find((e) => e.name === 'Acme Corp');
+    expect(acme?.type).toBe('organization');
+  });
+
+  it('extracts entities from "Bob manages the Widget Project"', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'Bob manages the Widget Project.' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(facts[0].content).toContain('Bob manages the Widget Project');
+  });
+
+  it('extracts depends_on relationship pattern', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'The API depends on Redis for caching data.' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(facts[0].content).toContain('API depends on Redis');
+  });
+
+  it('extracts multiple facts from multiple sentences in one message', async () => {
+    const ep = makeEpisode([{
+      role: 'user',
+      content: 'Alice Smith works at Acme Corp. Bob manages the Widget Project. The system uses Redis.',
+    }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBe(3);
+  });
+
+  it('returns no facts for empty messages', async () => {
+    const ep = makeEpisode([{ role: 'user', content: '' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts).toHaveLength(0);
+  });
+
+  it('skips very short sentences (< 20 chars by default)', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'Hi. This is a much longer sentence that should be extracted as a fact.' }]);
+    const facts = await extractor.extract(ep);
+    // "Hi." is 3 chars, should be skipped
+    expect(facts.length).toBe(1);
+    expect(facts[0].content).toContain('longer sentence');
+  });
+
+  it('respects custom minSentenceLength', async () => {
+    const shortExtractor = new RuleBasedExtractor({ minSentenceLength: 5 });
+    const ep = makeEpisode([{ role: 'user', content: 'Hello world. Yes, okay then.' }]);
+    const facts = await shortExtractor.extract(ep);
+    expect(facts.length).toBe(2);
+  });
+
+  it('deduplicates identical sentences', async () => {
+    const ep = makeEpisode([
+      { role: 'user', content: 'Alice Smith works at Acme Corp.' },
+      { role: 'assistant', content: 'Alice Smith works at Acme Corp.' },
+    ]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBe(1);
+  });
+
+  it('deduplicates case-insensitively', async () => {
+    const ep = makeEpisode([
+      { role: 'user', content: 'Alice Smith works at Acme Corp.' },
+      { role: 'assistant', content: 'alice smith works at acme corp.' },
+    ]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBe(1);
+  });
+
+  it('extractEntities detects @handles', () => {
+    const entities = extractor.extractEntities('Message from @alice to @bob about the project');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('@alice');
+    expect(names).toContain('@bob');
+    const handle = entities.find((e) => e.name === '@alice');
+    expect(handle?.type).toBe('person');
+  });
+
+  it('extractEntities detects ACRONYMS', () => {
+    const entities = extractor.extractEntities('The API uses REST and HTTP protocols');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('API');
+    expect(names).toContain('REST');
+    expect(names).toContain('HTTP');
+  });
+
+  it('extractEntities detects camelCase identifiers', () => {
+    const entities = extractor.extractEntities('The getUserData function calls fetchApi');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('getUserData');
+    expect(names).toContain('fetchApi');
+  });
+
+  it('extractEntities detects organization suffixes correctly', () => {
+    const entities = extractor.extractEntities('Work done by Global Inc and Local Ltd');
+    const inc = entities.find((e) => e.name === 'Global Inc');
+    const ltd = entities.find((e) => e.name === 'Local Ltd');
+    expect(inc?.type).toBe('organization');
+    expect(ltd?.type).toBe('organization');
+  });
+
+  it('extractEntities detects quoted terms', () => {
+    const entities = extractor.extractEntities('The "context engine" is a key component');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('context engine');
+  });
+
+  it('extracts entities from code-like identifiers', async () => {
+    const ep = makeEpisode([{
+      role: 'user',
+      content: 'The getUserData function calls the fetchApi module for data retrieval.',
+    }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+    const allEntityIds = facts.flatMap((f) => f.entity_ids);
+    expect(allEntityIds.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('sets provenance source to derived', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'Alice Smith works at Acme Corp.' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts[0].provenance.source).toBe('derived');
+  });
+
+  it('sets valid_from to episode started_at', async () => {
+    const ep = makeEpisode([{ role: 'user', content: 'Alice Smith works at Acme Corp.' }]);
+    const facts = await extractor.extract(ep);
+    expect(facts[0].valid_from).toEqual(ep.started_at);
+  });
+
+  it('handles multiple messages in an episode producing combined facts', async () => {
+    const ep = makeEpisode([
+      { role: 'user', content: 'Alice Smith works at Acme Corp.' },
+      { role: 'assistant', content: 'Bob manages the Widget Project at the company.' },
+    ]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBe(2);
+  });
+
+  it('extracts facts from sentences with no relationship verbs (attribute patterns)', async () => {
+    const ep = makeEpisode([{
+      role: 'user',
+      content: 'The system is highly scalable and well designed for production use.',
+    }]);
+    const facts = await extractor.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('preserves abbreviations like Dr. and Mr. during sentence splitting', async () => {
+    const ep = makeEpisode([{
+      role: 'user',
+      content: 'Dr. Smith and Mr. Jones discussed the architecture of the project.',
+    }]);
+    const facts = await extractor.extract(ep);
+    // Should be one sentence, not split on "Dr." or "Mr."
+    expect(facts.length).toBe(1);
+    expect(facts[0].content).toContain('Dr.');
+  });
+
+  it('extractEntities works as a standalone public method', () => {
+    const entities = extractor.extractEntities('Alice Smith at Acme Corp uses @slack');
+    expect(entities.length).toBeGreaterThanOrEqual(3);
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('Alice Smith');
+    expect(names).toContain('Acme Corp');
+    expect(names).toContain('@slack');
+  });
+
+  it('accepts additional entity patterns via options', async () => {
+    const custom = new RuleBasedExtractor({
+      entityPatterns: [/\bTICKET-\d+\b/g],
+    });
+    const entities = custom.extractEntities('Fix TICKET-123 before release');
+    const names = entities.map((e) => e.name);
+    expect(names).toContain('TICKET-123');
+  });
+
+  it('accepts additional relationship verbs via options', async () => {
+    const custom = new RuleBasedExtractor({
+      relationshipVerbs: ['sponsors'],
+    });
+    // The verb list is extended; no crash
+    const ep = makeEpisode([{ role: 'user', content: 'Acme Corp sponsors the Open Source event.' }]);
+    const facts = await custom.extract(ep);
+    expect(facts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('handles LLC suffix as organization', () => {
+    const entities = extractor.extractEntities('Funded by Tech LLC and Design Co');
+    const llc = entities.find((e) => e.name === 'Tech LLC');
+    const co = entities.find((e) => e.name === 'Design Co');
+    expect(llc?.type).toBe('organization');
+    expect(co?.type).toBe('organization');
+  });
+});

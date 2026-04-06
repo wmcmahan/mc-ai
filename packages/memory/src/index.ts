@@ -1,0 +1,112 @@
+/**
+ * @mcai/memory — Public API
+ *
+ * Temporal and hierarchical memory service for LLM agents.
+ * All public types, classes, and functions are re-exported here.
+ *
+ * @packageDocumentation
+ */
+
+// ─── Schemas ───────────────────────────────────────────────────────
+// Zod schemas and inferred TypeScript types
+
+export {
+  ProvenanceSchema,
+  EntitySchema,
+  RelationshipSchema,
+  MessageSchema,
+  EpisodeSchema,
+  SemanticFactSchema,
+  ThemeSchema,
+  MemoryQuerySchema,
+  MemoryResultSchema,
+} from './schemas/index.js';
+
+export type {
+  Provenance,
+  Entity,
+  EntityInput,
+  Relationship,
+  RelationshipInput,
+  Message,
+  Episode,
+  EpisodeInput,
+  SemanticFact,
+  SemanticFactInput,
+  Theme,
+  ThemeInput,
+  MemoryQuery,
+  MemoryResult,
+} from './schemas/index.js';
+
+// ─── Interfaces ────────────────────────────────────────────────────
+// Contracts for storage, search, and processing
+
+export type {
+  MemoryStore,
+  EntityFilter,
+  FactFilter,
+  RelationshipFilter,
+  PaginationOptions,
+} from './interfaces/memory-store.js';
+
+export type {
+  MemoryIndex,
+  ScoredResult,
+  SearchOptions,
+} from './interfaces/memory-index.js';
+
+export type { EpisodeSegmenter } from './interfaces/episode-segmenter.js';
+export type { SemanticExtractor } from './interfaces/semantic-extractor.js';
+export type { ThemeClusterer } from './interfaces/theme-clusterer.js';
+export type { EmbeddingProvider } from './interfaces/embedding-provider.js';
+
+// ─── In-Memory Implementations ────────────────────────────────────
+// Zero-dependency implementations for testing and lightweight use
+
+export { InMemoryMemoryStore } from './store/in-memory-store.js';
+export { InMemoryMemoryIndex } from './search/in-memory-index.js';
+export { batchGetFallback } from './store/batch-mixin.js';
+
+// ─── Hierarchy (xMemory Pipeline) ─────────────────────────────────
+// Messages → Episodes → Facts → Themes
+
+export { SimpleEpisodeSegmenter } from './hierarchy/simple-episode-segmenter.js';
+export type { SimpleEpisodeSegmenterOptions } from './hierarchy/simple-episode-segmenter.js';
+
+export { SimpleSemanticExtractor } from './hierarchy/simple-semantic-extractor.js';
+
+export { SimpleThemeClusterer } from './hierarchy/simple-theme-clusterer.js';
+export type { SimpleThemeClustererOptions } from './hierarchy/simple-theme-clusterer.js';
+
+export { RuleBasedExtractor } from './hierarchy/rule-based-extractor.js';
+export type { RuleBasedExtractorOptions, ExtractedEntity } from './hierarchy/rule-based-extractor.js';
+
+export { LLMExtractor } from './hierarchy/llm-extractor.js';
+export type { LLMExtractorOptions, LLMProvider } from './hierarchy/llm-extractor.js';
+
+export { ConsolidatingThemeClusterer } from './hierarchy/consolidating-theme-clusterer.js';
+export type { ConsolidatingThemeClustererOptions } from './hierarchy/consolidating-theme-clusterer.js';
+
+// ─── Retrieval ─────────────────────────────────────────────────────
+// Subgraph extraction, hierarchical top-down, temporal filtering
+
+export { extractSubgraph } from './retrieval/subgraph-extractor.js';
+export type { SubgraphOptions, SubgraphResult } from './retrieval/subgraph-extractor.js';
+
+export { retrieveMemory } from './retrieval/hierarchical-retriever.js';
+
+export { isValidAt, isChangedSince, filterValid } from './retrieval/temporal-filter.js';
+export type { TemporalRecord, TemporalFilterOptions } from './retrieval/temporal-filter.js';
+
+// ─── Consolidation ───────────────────────────────────────────────
+
+export { MemoryConsolidator } from './consolidation/memory-consolidator.js';
+export type { ConsolidationOptions, ConsolidationReport } from './consolidation/memory-consolidator.js';
+
+export { ConflictDetector } from './consolidation/conflict-detector.js';
+export type { ConflictDetectorOptions, Conflict, ConflictResolutionPolicy, ConflictResolutionReport } from './consolidation/conflict-detector.js';
+
+// ─── Utilities ─────────────────────────────────────────────────────
+
+export { cosineSimilarity } from './utils/similarity.js';

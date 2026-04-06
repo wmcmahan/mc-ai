@@ -13,11 +13,22 @@
 
 import type { AgentConfig } from '../types.js';
 import type { StateView } from '../../types/state.js';
+import type { ContextCompressor, ContextCompressionMetrics } from '../context-compressor.js';
 import { createLogger } from '../../utils/logger.js';
 import { sanitizeForPrompt, sanitizeString } from './sanitizers.js';
 import { MAX_MEMORY_PROMPT_BYTES } from '../constants.js';
 
 const logger = createLogger('agent.executor');
+
+/** Options for optional context compression in prompt building. */
+export interface BuildPromptOptions {
+  /** Context compressor for memory serialization (from GraphRunnerOptions). */
+  contextCompressor?: ContextCompressor;
+  /** Target model for model-aware token counting. */
+  model?: string;
+  /** Callback fired when compression runs (for observability). */
+  onCompressed?: (metrics: ContextCompressionMetrics) => void;
+}
 
 /**
  * Build a context-aware system prompt with prompt-injection guards.
@@ -28,27 +39,45 @@ const logger = createLogger('agent.executor');
  * 3. Serialised memory inside `<data>` boundary tags
  * 4. Instruction footer (save_to_memory usage, permission reminders)
  *
+ * When `options.contextCompressor` is provided, memory is compressed
+ * via the context engine instead of `JSON.stringify`. Falls back to
+ * default serialization if the compressor returns `null` or throws.
+ *
  * @param config - The agent's configuration record.
  * @param stateView - The current workflow state view scoped to this agent.
+ * @param options - Optional compression configuration.
  * @returns The assembled system prompt string.
  */
-export function buildSystemPrompt(config: AgentConfig, stateView: StateView): string {
+export function buildSystemPrompt(
+  config: AgentConfig,
+  stateView: StateView,
+  options?: BuildPromptOptions,
+): string {
   // Sanitize memory values to prevent prompt injection
   const sanitizedMemory = sanitizeForPrompt(stateView.memory);
 
-  // Bound memory size to prevent context-window overflow and cost explosion.
-  // Uses byte-accurate truncation: convert to Buffer, slice by byte count,
-  // then decode back to string to avoid splitting multi-byte characters.
-  let memoryJson = JSON.stringify(sanitizedMemory, null, 2);
-  const memoryBytes = Buffer.byteLength(memoryJson, 'utf-8');
+  // Serialize memory — use context compressor when available, fall back to default
+  let memoryJson: string;
 
-  if (memoryBytes > MAX_MEMORY_PROMPT_BYTES) {
-    const truncated = Buffer.from(memoryJson, 'utf-8').subarray(0, MAX_MEMORY_PROMPT_BYTES);
-    memoryJson = truncated.toString('utf-8') + '\n... [truncated — memory exceeds size limit]';
-    logger.warn('memory_truncated', {
-      original_bytes: memoryBytes,
-      limit_bytes: MAX_MEMORY_PROMPT_BYTES,
-    });
+  if (options?.contextCompressor) {
+    try {
+      const result = options.contextCompressor(sanitizedMemory, {
+        model: options.model,
+      });
+      if (result !== null) {
+        memoryJson = result.compressed;
+        try { options.onCompressed?.(result.metrics); } catch { /* best-effort observability */ }
+      } else {
+        memoryJson = defaultSerializeMemory(sanitizedMemory);
+      }
+    } catch (err) {
+      logger.warn('context_compressor_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      memoryJson = defaultSerializeMemory(sanitizedMemory);
+    }
+  } else {
+    memoryJson = defaultSerializeMemory(sanitizedMemory);
   }
 
   return `${config.system}
@@ -68,6 +97,28 @@ ${memoryJson}
 - Only write to memory keys you have permission for: ${config.write_keys.join(', ')}
 - Keys starting with underscore (_) are reserved and cannot be written to
 - Be concise and actionable`;
+}
+
+/**
+ * Default memory serialization: JSON.stringify with 2-space indent and byte-cap.
+ *
+ * This is the existing behavior, extracted for reuse as a fallback when no
+ * context compressor is configured or the compressor returns null/throws.
+ */
+function defaultSerializeMemory(sanitizedMemory: Record<string, unknown>): string {
+  let memoryJson = JSON.stringify(sanitizedMemory, null, 2);
+  const memoryBytes = Buffer.byteLength(memoryJson, 'utf-8');
+
+  if (memoryBytes > MAX_MEMORY_PROMPT_BYTES) {
+    const truncated = Buffer.from(memoryJson, 'utf-8').subarray(0, MAX_MEMORY_PROMPT_BYTES);
+    memoryJson = truncated.toString('utf-8') + '\n... [truncated — memory exceeds size limit]';
+    logger.warn('memory_truncated', {
+      original_bytes: memoryBytes,
+      limit_bytes: MAX_MEMORY_PROMPT_BYTES,
+    });
+  }
+
+  return memoryJson;
 }
 
 /**

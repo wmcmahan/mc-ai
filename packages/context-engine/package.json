@@ -1,0 +1,61 @@
+{
+  "name": "@mcai/context-engine",
+  "version": "0.1.0",
+  "description": "Framework-agnostic context optimization engine — composable compression pipeline that makes every token count.",
+  "keywords": [
+    "context-compression",
+    "token-optimization",
+    "llm",
+    "prompt-compression",
+    "agentic",
+    "framework-agnostic"
+  ],
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wmcmahan/mc-ai.git",
+    "directory": "packages/context-engine"
+  },
+  "homepage": "https://github.com/wmcmahan/mc-ai/tree/main/packages/context-engine#readme",
+  "bugs": {
+    "url": "https://github.com/wmcmahan/mc-ai/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

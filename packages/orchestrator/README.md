@@ -139,8 +139,36 @@ See [examples/](./examples/) for complete, runnable versions.
 | **MCP Tools** | Tool manifest caching (5-min TTL), per-tool execution timeouts, connection retry with backoff, auto-reconnect |
 | **Observability** | 17 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
 | **Cost Control** | Token budgets, per-run cost tracking, budget-aware model resolution (all node types), workflow and node-level timeouts |
+| **Context Compression** | Optional `@mcai/context-engine` integration — format compression, dedup, CoT distillation, heuristic pruning with `context:compressed` stream events |
 | **Distributed Execution** | `WorkflowWorker` with per-workflow assignment, `WorkflowQueue` interface, visibility-timeout crash recovery, HITL pause (`paused` status — not re-claimable), dead-lettering, configurable concurrency |
 | **Persistence** | Mandatory atomic snapshots, differential state persistence (delta tracking), event log auto-compaction |
+
+## Context Compression (Optional)
+
+Reduce token costs by 40-70% on agent memory payloads. Pass a `contextCompressor` to `GraphRunnerOptions` — the orchestrator uses it to compress memory before injecting into agent and supervisor prompts.
+
+```typescript
+import { GraphRunner } from '@mcai/orchestrator';
+import type { ContextCompressor } from '@mcai/orchestrator';
+import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
+
+const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
+
+const contextCompressor: ContextCompressor = (sanitizedMemory, options) => {
+  const result = pipeline.compress({
+    segments: [{ id: 'memory', content: serialize(sanitizedMemory), role: 'memory', priority: 1 }],
+    budget: { maxTokens: options?.maxTokens ?? 8192, outputReserve: 0 },
+    model: options?.model,
+  });
+  return { compressed: result.segments[0].content, metrics: result.metrics };
+};
+
+const runner = new GraphRunner(graph, state, { contextCompressor });
+```
+
+Without `@mcai/context-engine` installed, the orchestrator works exactly as before — memory is serialized as `JSON.stringify(data, null, 2)` with a 50KB byte cap.
+
+Compression metrics are emitted as `context:compressed` stream events and can be consumed via `runner.on('context:compressed', ...)` for observability.
 
 ## Examples
 

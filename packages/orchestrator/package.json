@@ -60,9 +60,13 @@
     "@opentelemetry/sdk-metrics": "^2.6.0",
     "@opentelemetry/sdk-node": "^0.213.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "ai": "^6.0.116"
+    "ai": "^6.0.116",
+    "@mcai/context-engine": ">=0.1.0"
   },
   "peerDependenciesMeta": {
+    "@mcai/context-engine": {
+      "optional": true
+    },
     "@ai-sdk/anthropic": {
       "optional": true
     },

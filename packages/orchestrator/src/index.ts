@@ -32,7 +32,7 @@ export type { ObserverMiddlewareOptions, ObserverFinding, ObserverSeverity, Diag
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
-export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent, MemoryDiff } from './runner/stream-events.js';
+export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent, ContextCompressedEvent, MemoryDiff } from './runner/stream-events.js';
 export { isTerminalEvent } from './runner/stream-events.js';
 
 export * from './runner/helpers.js';
@@ -83,6 +83,20 @@ export type {
 export { ProviderRegistry, createProviderRegistry, registerBuiltInProviders } from './agent/provider-registry.js';
 export type { LanguageModelFactory, ProviderOptions } from './agent/provider-registry.js';
 export { UnsupportedProviderError } from './agent/agent-factory/errors.js';
+
+// ─── Context Compression ───────────────────────────────────────────
+export type {
+  ContextCompressor,
+  ContextCompressionResult,
+  ContextCompressionMetrics,
+  ContextCompressionStageMetrics,
+} from './agent/context-compressor.js';
+
+// ─── Memory Retriever ─────────────────────────────────────────────
+export type {
+  MemoryRetriever,
+  MemoryRetrievalResult,
+} from './agent/memory-retriever.js';
 
 // ─── Evaluator (LLM-as-Judge) ───────────────────────────────────────
 

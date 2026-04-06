@@ -47,6 +47,8 @@ import { evaluateQualityExecutor } from '../agent/evaluator-executor/executor.js
 import type { ToolResolver } from '../mcp/connection-manager.js';
 import type { ToolSource } from '../types/tools.js';
 import type { ModelResolver } from '../agent/model-resolver.js';
+import type { ContextCompressor } from '../agent/context-compressor.js';
+import type { MemoryRetriever } from '../agent/memory-retriever.js';
 import { agentFactory } from '../agent/agent-factory/index.js';
 import { getTaintRegistry } from '../utils/taint.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
@@ -219,6 +221,22 @@ export interface GraphRunnerOptions {
    */
   modelResolver?: ModelResolver;
   /**
+   * Context compression function for memory in prompts.
+   *
+   * When provided, replaces the default `JSON.stringify` + byte-cap
+   * serialization with intelligent compression via `@mcai/context-engine`.
+   * Without it, memory serialization works exactly as before.
+   */
+  contextCompressor?: ContextCompressor;
+  /**
+   * Optional memory retriever for injecting relevant facts into agent prompts.
+   *
+   * When provided, the runner passes this through to node executors so that
+   * prompt builders can retrieve and inject memory context before LLM calls.
+   * Follows the same adapter pattern as `contextCompressor`.
+   */
+  memoryRetriever?: MemoryRetriever;
+  /**
    * Number of events between automatic event log compactions.
    *
    * When set (and an `eventLog` is provided), the runner will
@@ -288,6 +306,12 @@ export class GraphRunner extends EventEmitter {
   // Budget-aware model resolver (optional)
   private readonly modelResolver?: ModelResolver;
 
+  // Context compressor for memory in prompts (optional)
+  private readonly contextCompressor?: ContextCompressor;
+
+  // Memory retriever for injecting relevant facts into prompts (optional)
+  private readonly memoryRetriever?: MemoryRetriever;
+
   // Auto-compaction: compact event log every N events (0 = disabled)
   private readonly compactionInterval: number;
   private eventsSinceLastCompaction: number = 0;
@@ -348,6 +372,8 @@ export class GraphRunner extends EventEmitter {
       this.middleware = optionsOrPersistFn.middleware ?? [];
       this.toolResolver = optionsOrPersistFn.toolResolver;
       this.modelResolver = optionsOrPersistFn.modelResolver;
+      this.contextCompressor = optionsOrPersistFn.contextCompressor;
+      this.memoryRetriever = optionsOrPersistFn.memoryRetriever;
       this.autoRollback = optionsOrPersistFn.auto_rollback ?? false;
       this.compactionInterval = optionsOrPersistFn.compaction_interval ?? 0;
       this.persistDeltaFn = optionsOrPersistFn.persistDeltaFn;
@@ -544,6 +570,8 @@ export class GraphRunner extends EventEmitter {
       createStateView: (node: GraphNode) => createStateView(this.state, node),
       abortSignal: this.abortController.signal,
       modelResolver: this.modelResolver,
+      contextCompressor: this.contextCompressor,
+      memoryRetriever: this.memoryRetriever,
       remainingBudgetUsd,
       getRemainingBudgetUsd: () => {
         return (this.state.budget_usd && this.state.budget_usd > 0)
@@ -553,6 +581,23 @@ export class GraphRunner extends EventEmitter {
       onToken,
       onToolCall,
       onToolCallComplete,
+      onContextCompressed: (event, nodeId) => {
+        const streamEvent = {
+          type: 'context:compressed' as const,
+          run_id: this.state.run_id,
+          node_id: nodeId,
+          tokens_in: event.tokensIn,
+          tokens_out: event.tokensOut,
+          reduction_percent: event.reductionPercent,
+          duration_ms: event.durationMs,
+          timestamp: Date.now(),
+        };
+        this.emit('context:compressed', streamEvent);
+        if (this.isStreaming) {
+          this.tokenChannel.push(streamEvent);
+          this.tokenNotify?.();
+        }
+      },
       onModelResolved: (event, nodeId) => {
         const streamEvent = {
           type: 'model:resolved' as const,
