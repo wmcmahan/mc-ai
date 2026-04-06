@@ -123,15 +123,31 @@ When a `query` string is provided in the scorer context, tokens near query terms
 
 ### Neural scoring (optional)
 
-For maximum compression quality, the `TransformersJsCompressionProvider` uses a local language model to compute per-token perplexity:
+For maximum compression quality, implement `CompressionProvider` against an inference server that returns per-token log-probabilities:
 
 ```typescript
-import { TransformersJsCompressionProvider, precomputeImportanceScores } from '@mcai/context-engine';
+import type { CompressionProvider } from '@mcai/context-engine';
+import { precomputeImportanceScores } from '@mcai/context-engine';
 
-// Requires: npm install @huggingface/transformers
-const provider = new TransformersJsCompressionProvider({ model: 'Xenova/distilgpt2' });
+// Implement against your inference server (Ollama, vLLM, TGI, etc.)
+const provider: CompressionProvider = {
+  async scoreTokenImportance(tokens, context) {
+    const text = (context ? context + ' ' : '') + tokens.join(' ');
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'distilgpt2', prompt: text, raw: true }),
+    });
+    // Extract and normalize per-token log-probs to [0,1]
+    // Higher surprisal = more important to retain
+    return tokens.map(() => 0.5); // replace with actual implementation
+  },
+};
+
 const scores = await precomputeImportanceScores(segments, provider);
 ```
+
+Without a `CompressionProvider`, the self-information stage falls back to the n-gram surprisal scorer (zero dependencies, pure TypeScript). This covers most use cases without any external infrastructure.
 
 ## Adaptive memory compression
 
@@ -220,7 +236,7 @@ The engine uses dependency injection for optional capabilities:
 | Interface | Purpose | Built-in |
 |-----------|---------|----------|
 | `TokenCounter` | Count tokens per model | `DefaultTokenCounter` (character ratio estimates) |
-| `CompressionProvider` | ML-based token importance | `TransformersJsCompressionProvider` (optional peer dep) |
+| `CompressionProvider` | ML-based token importance | Implement against your inference server (Ollama, vLLM, etc.) |
 | `EmbeddingProvider` | Vector embeddings for semantic dedup | (consumer-provided) |
 | `SummarizationProvider` | LLM-based summarization | (consumer-provided) |
 

@@ -203,5 +203,3 @@ export { createOptimizedPipeline } from './budget/optimizer.js';
 
 export { createTiktokenCounter } from './providers/tiktoken-adapter.js';
 
-export { TransformersJsCompressionProvider } from './providers/transformers-compression.js';
-export type { TransformersCompressionOptions } from './providers/transformers-compression.js';

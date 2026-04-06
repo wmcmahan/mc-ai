@@ -499,21 +499,31 @@ The engine scales with available providers but always works without them:
 | `EmbeddingProvider` | Throws (feature disabled) | Semantic dedup |
 | `SummarizationProvider` | Throws (feature disabled) | Text summarization |
 
-### Neural Compression Provider
+### Custom Compression Provider (Inference Server)
 
-ML-powered token importance scoring via HuggingFace Transformers.js:
+For production, implement `CompressionProvider` against your inference server (Ollama, vLLM, TGI, or any API that returns per-token log-probabilities):
 
 ```typescript
-import { TransformersJsCompressionProvider } from '@mcai/context-engine';
+import type { CompressionProvider } from '@mcai/context-engine';
+import { precomputeImportanceScores } from '@mcai/context-engine';
 
-// Requires optional peer dep: npm install @huggingface/transformers
-const provider = new TransformersJsCompressionProvider({
-  model: 'Xenova/distilgpt2',
-  maxLength: 512,
-});
+// Example: Ollama running locally on port 11434
+const ollamaProvider: CompressionProvider = {
+  async scoreTokenImportance(tokens: string[], context?: string): Promise<number[]> {
+    const text = (context ? context + ' ' : '') + tokens.join(' ');
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'distilgpt2', prompt: text, raw: true }),
+    });
+    const data = await response.json();
+    // Extract per-token log-probs and normalize to [0,1]
+    // Higher surprisal = more important to keep
+    return tokens.map(() => Math.random()); // replace with actual log-prob extraction
+  },
+};
 
-// Use with self-information scoring:
-const scores = await precomputeImportanceScores(segments, provider);
+const scores = await precomputeImportanceScores(segments, ollamaProvider);
 ```
 
 ### Tiktoken Adapter

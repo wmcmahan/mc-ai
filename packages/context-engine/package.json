@@ -45,14 +45,6 @@
   "dependencies": {
     "zod": "^4.3.6"
   },
-  "peerDependencies": {
-    "@huggingface/transformers": ">=3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@huggingface/transformers": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^25.3.5",
     "typescript": "^5.9.3",
