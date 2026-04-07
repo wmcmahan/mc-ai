@@ -34,6 +34,8 @@ export interface PipelineState {
   compressedSegments: Map<string, PromptSegment>;
   /** Segment ID -> output after per-segment stages only. */
   perSegmentOutputs: Map<string, PromptSegment>;
+  /** Segment ID -> hash of per-segment output content (for detecting actual output changes). */
+  perSegmentOutputHashes: Map<string, number>;
   /** Aggregate metrics from the previous turn. */
   lastMetrics: PipelineMetrics;
   /** Turn counter (starts at 1). */
@@ -57,6 +59,15 @@ export interface IncrementalResult {
   cachedSegmentCount: number;
   /** Number of segments that were freshly compressed. */
   freshSegmentCount: number;
+}
+
+// --- Helpers ---
+
+/** Remove keys from a Map that are not in the valid set. */
+function pruneStaleKeys<V>(map: Map<string, V>, validIds: Set<string>): void {
+  for (const key of map.keys()) {
+    if (!validIds.has(key)) map.delete(key);
+  }
 }
 
 // --- Implementation ---
@@ -168,13 +179,27 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
           ? aggregateMetrics(allStageMetrics)
           : aggregateMetrics([computeStageMetrics('(none)', 0, 0, 0)]);
 
+        // Compute per-segment output hashes for future cross-segment change detection
+        const perSegmentOutputHashes = new Map<string, number>();
+        for (const [id, seg] of perSegmentOutputs) {
+          perSegmentOutputHashes.set(id, fnv1a(seg.content));
+        }
+
         const state: PipelineState = {
           segmentHashes: currentHashes,
           compressedSegments,
           perSegmentOutputs,
+          perSegmentOutputHashes,
           lastMetrics: metrics,
           turnNumber: (previousState?.turnNumber ?? 0) + 1,
         };
+
+        // Defensive: ensure no stale segment keys survive
+        const validIds = new Set(input.segments.map(s => s.id));
+        pruneStaleKeys(state.segmentHashes, validIds);
+        pruneStaleKeys(state.compressedSegments, validIds);
+        pruneStaleKeys(state.perSegmentOutputs, validIds);
+        pruneStaleKeys(state.perSegmentOutputHashes, validIds);
 
         return {
           result: { segments: finalSegments, metrics },
@@ -208,6 +233,7 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
       // --- Per-segment phase ---
       const perSegmentOutputs = new Map<string, PromptSegment>();
       let anyPerSegmentFresh = false;
+      let perSegMetrics: PipelineMetrics | undefined;
 
       if (perSegmentStages.length > 0) {
         // Reuse cached per-segment outputs for unchanged segments
@@ -224,6 +250,7 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
           const perSegPipeline = createPipeline({ ...config, stages: perSegmentStages });
           const freshInput: PipelineInput = { ...input, segments: freshSegments };
           const freshResult = perSegPipeline.compress(freshInput);
+          perSegMetrics = freshResult.metrics;
           for (const seg of freshResult.segments) {
             perSegmentOutputs.set(seg.id, seg);
           }
@@ -244,17 +271,37 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
       const perSegmentOrdered = input.segments.map(s => perSegmentOutputs.get(s.id)!);
 
       // --- Cross-segment phase ---
+      // Check if any per-segment OUTPUT actually changed (not just input).
+      // A fresh input might produce the same per-segment output, in which
+      // case cross-segment stages don't need to re-run.
+      let anyPerSegOutputChanged = false;
+      if (previousState.perSegmentOutputHashes) {
+        for (const [id, seg] of perSegmentOutputs) {
+          const newHash = fnv1a(seg.content);
+          const prevHash = previousState.perSegmentOutputHashes.get(id);
+          if (prevHash === undefined || prevHash !== newHash) {
+            anyPerSegOutputChanged = true;
+            break;
+          }
+        }
+      } else {
+        // No previous output hashes (legacy state) — fall back to input-based detection
+        anyPerSegOutputChanged = anyPerSegmentFresh || freshIds.size > 0;
+      }
+
       let outputSegments: PromptSegment[];
+      let crossMetrics: PipelineMetrics | undefined;
 
       if (!hasCrossSegmentStages) {
         // No cross-segment stages: per-segment outputs ARE the final outputs
         outputSegments = perSegmentOrdered;
-      } else if (anyPerSegmentFresh || freshIds.size > 0) {
-        // Something changed: re-run cross-segment stages on ALL segments
+      } else if (anyPerSegOutputChanged) {
+        // Per-segment outputs actually changed: re-run cross-segment stages on ALL segments
         const crossPipeline = createPipeline({ ...config, stages: crossSegmentStages });
         const crossInput: PipelineInput = { ...input, segments: perSegmentOrdered };
         const crossResult = crossPipeline.compress(crossInput);
         outputSegments = crossResult.segments;
+        crossMetrics = crossResult.metrics;
       } else {
         // Everything cached: reuse final output from previous state
         outputSegments = input.segments.map(
@@ -267,21 +314,20 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
       let metrics: PipelineMetrics;
 
       if (allCached) {
-        metrics = buildCachedOnlyMetrics(config);
+        // Nothing changed — reuse last turn's metrics with a cached flag
+        metrics = { ...previousState.lastMetrics, cached: true };
       } else {
-        // Build approximate metrics
-        const stageMetricsList = config.stages.map(stage => {
-          if (cachedIds.size > 0 && stage.scope !== 'cross-segment') {
-            // Per-segment stage: only fresh segments went through
-            return computeStageMetrics(stage.name, 0, 0, 0);
-          }
-          return computeStageMetrics(stage.name, 0, 0, 0);
-        });
-        metrics = aggregateMetrics(
-          stageMetricsList.length > 0
-            ? stageMetricsList
-            : [computeStageMetrics('(none)', 0, 0, 0)],
-        );
+        // Aggregate real metrics from pipeline runs that actually executed
+        const allStageMetrics: import('./types.js').StageMetrics[] = [];
+        if (perSegMetrics?.stages) {
+          allStageMetrics.push(...perSegMetrics.stages);
+        }
+        if (crossMetrics?.stages) {
+          allStageMetrics.push(...crossMetrics.stages);
+        }
+        metrics = allStageMetrics.length > 0
+          ? aggregateMetrics(allStageMetrics)
+          : aggregateMetrics([computeStageMetrics('(none)', 0, 0, 0)]);
       }
 
       // --- Build new state ---
@@ -290,13 +336,27 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
         compressedSegments.set(seg.id, seg);
       }
 
+      // Compute per-segment output hashes for future cross-segment change detection
+      const perSegmentOutputHashes = new Map<string, number>();
+      for (const [id, seg] of perSegmentOutputs) {
+        perSegmentOutputHashes.set(id, fnv1a(seg.content));
+      }
+
       const state: PipelineState = {
         segmentHashes: currentHashes,
         compressedSegments,
         perSegmentOutputs,
+        perSegmentOutputHashes,
         lastMetrics: metrics,
         turnNumber: previousState.turnNumber + 1,
       };
+
+      // Defensive: ensure no stale segment keys survive
+      const validIds = new Set(input.segments.map(s => s.id));
+      pruneStaleKeys(state.segmentHashes, validIds);
+      pruneStaleKeys(state.compressedSegments, validIds);
+      pruneStaleKeys(state.perSegmentOutputs, validIds);
+      pruneStaleKeys(state.perSegmentOutputHashes, validIds);
 
       return {
         result: { segments: outputSegments, metrics },
@@ -308,17 +368,3 @@ export function createIncrementalPipeline(config: IncrementalPipelineConfig) {
   };
 }
 
-/**
- * Build metrics representing zero pipeline work (all segments cached).
- */
-function buildCachedOnlyMetrics(config: PipelineConfig): PipelineMetrics {
-  const stageMetrics = config.stages.map(stage =>
-    computeStageMetrics(stage.name, 0, 0, 0),
-  );
-
-  if (stageMetrics.length === 0) {
-    return aggregateMetrics([computeStageMetrics('(none)', 0, 0, 0)]);
-  }
-
-  return aggregateMetrics(stageMetrics);
-}

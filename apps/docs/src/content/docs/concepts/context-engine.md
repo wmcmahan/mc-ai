@@ -91,7 +91,7 @@ const turn2 = pipeline.compress(
 console.log(`Cached: ${turn2.cachedSegmentCount}, Fresh: ${turn2.freshSegmentCount}`);
 ```
 
-Stages with `scope: 'cross-segment'` (like fuzzy dedup) are re-run whenever any segment changes, since their output depends on comparing content across segments. Per-segment stages (the default) cache independently.
+Stages with `scope: 'cross-segment'` (like fuzzy dedup) are re-run only when per-segment stage **outputs** actually change — not just when inputs change. The pipeline tracks per-segment output hashes between turns: if a segment's input changes but its compressed output is identical to the previous turn, cross-segment stages are skipped entirely. Per-segment stages (the default) cache independently.
 
 ## Scoring and pruning
 
@@ -204,6 +204,48 @@ const guarded = createCircuitBreaker(expensiveStage, tracker, {
   cooldownMs: 30_000,
 });
 ```
+
+## Pipeline configuration
+
+### Logger
+
+All pipelines accept an optional `PipelineLogger` for structured diagnostic output:
+
+```typescript
+const pipeline = createPipeline({
+  stages: [...],
+  logger: {
+    debug: (msg) => myLogger.debug(msg),
+    warn: (msg) => myLogger.warn(msg),
+  },
+});
+```
+
+Stage errors and timeout warnings are routed through the logger instead of being silently swallowed.
+
+### Pipeline timeout
+
+A pipeline-level timeout skips remaining stages when the wall-clock budget is exceeded:
+
+```typescript
+const pipeline = createPipeline({
+  stages: [...],
+  timeoutMs: 200,  // skip remaining stages after 200ms
+});
+```
+
+This is a stage-boundary check (the pipeline is synchronous by design). For async precompute steps like `precomputeEmbeddings`, use `Promise.race` externally.
+
+## Deduplication performance
+
+Fuzzy and semantic dedup use **locality-sensitive hashing** (LSH) to avoid O(n²) pairwise comparisons on large inputs:
+
+| Stage | Algorithm | Pre-filter | Threshold |
+|-------|-----------|-----------|-----------|
+| Fuzzy dedup | Trigram Jaccard | MinHash LSH (100 hashes, 20 bands) | Items > 200 |
+| Semantic dedup | Cosine similarity | SimHash LSH (64 bits, 16 bands) | Items > 200 |
+
+For inputs ≤ 200, the original O(n²) path is used (LSH overhead isn't worthwhile). The default `maxItems` cap is 2000 (up from 500 before LSH).
 
 ## Orchestrator integration
 

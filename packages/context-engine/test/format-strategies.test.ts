@@ -19,12 +19,12 @@ describe('serializeTabular', () => {
 
   it('handles array cell values with semicolons', () => {
     const result = serializeTabular([{ name: 'Alice', tags: ['a', 'b', 'c'] }]);
-    expect(result).toBe('@name @tags\nAlice a;b;c');
+    expect(result).toBe('@name @tags\nAlice "a;b;c"');
   });
 
   it('handles nested object cell values with key=value', () => {
     const result = serializeTabular([{ name: 'Alice', meta: { x: 1, y: 2 } }]);
-    expect(result).toBe('@name @meta\nAlice x=1,y=2');
+    expect(result).toBe('@name @meta\nAlice "x=1,y=2"');
   });
 
   it('returns empty string for empty array', () => {
@@ -40,6 +40,43 @@ describe('serializeTabular', () => {
     const json = JSON.stringify(data, null, 2);
     const compact = serializeTabular(data);
     expect(compact.length).toBeLessThan(json.length);
+  });
+});
+
+describe('tabular quoting', () => {
+  it('quotes cell values containing spaces', () => {
+    const result = serializeTabular([{ name: 'Alice Smith' }]);
+    expect(result).toBe('@name\n"Alice Smith"');
+  });
+
+  it('quotes cell values containing semicolons', () => {
+    const result = serializeTabular([{ note: 'a;b' }]);
+    expect(result).toBe('@note\n"a;b"');
+  });
+
+  it('quotes cell values containing equals', () => {
+    const result = serializeTabular([{ expr: 'x=1' }]);
+    expect(result).toBe('@expr\n"x=1"');
+  });
+
+  it('quotes cell values containing newlines', () => {
+    const result = serializeTabular([{ note: 'line1\nline2' }]);
+    expect(result).toBe('@note\n"line1\nline2"');
+  });
+
+  it('escapes double quotes inside values', () => {
+    const result = serializeTabular([{ note: 'say "hello"' }]);
+    expect(result).toBe('@note\n"say ""hello"""');
+  });
+
+  it('does not quote clean values', () => {
+    const result = serializeTabular([{ name: 'Alice', score: 92 }]);
+    expect(result).toBe('@name @score\nAlice 92');
+  });
+
+  it('quotes array joins containing delimiter chars', () => {
+    const result = serializeTabular([{ tags: ['hello world', 'foo'] }]);
+    expect(result).toBe('@tags\n"hello world;foo"');
   });
 });
 

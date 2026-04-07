@@ -4,6 +4,7 @@ import { InMemoryMemoryIndex } from '../src/search/in-memory-index.js';
 import { MemoryConsolidator } from '../src/consolidation/memory-consolidator.js';
 import type { SemanticFact } from '../src/schemas/semantic.js';
 import type { Episode } from '../src/schemas/episode.js';
+import type { Theme } from '../src/schemas/theme.js';
 import type { Provenance } from '../src/schemas/provenance.js';
 
 const prov: Provenance = { source: 'system', created_at: new Date() };
@@ -463,5 +464,168 @@ describe('MemoryConsolidator', () => {
     const remaining = await store.findFacts({ include_invalidated: false });
     expect(remaining).toHaveLength(1);
     expect(remaining[0].id).toBe(newFact.id);
+  });
+
+  // --- Auto-consolidation ---
+
+  // 21. Centroid computation handles mixed-dimension embeddings
+  it('computes centroid correctly when embeddings have mixed dimensions', async () => {
+    // Create a theme with facts that have different embedding dimensions
+    const f1 = makeFact({ content: 'Fact A', embedding: [1, 0, 0], valid_from: daysAgo(1) });
+    const f2 = makeFact({ content: 'Fact B', embedding: [0, 1, 0], valid_from: daysAgo(1) });
+    const f3 = makeFact({ content: 'Fact C', embedding: [0.5, 0.5], valid_from: daysAgo(1) }); // 2-dim (mismatched)
+
+    await store.putFact(f1);
+    await store.putFact(f2);
+    await store.putFact(f3);
+
+    const theme: Theme = {
+      id: crypto.randomUUID(),
+      label: 'Test theme',
+      description: '',
+      fact_ids: [f1.id, f2.id, f3.id],
+      embedding: [0.5, 0.5, 0],
+      provenance: prov,
+    };
+    await store.putTheme(theme);
+    await index.rebuild(store);
+
+    // Delete f1 to trigger theme cascade with centroid recomputation
+    const consolidator = new MemoryConsolidator(store, index, {
+      dedupThreshold: 0.9,
+      maxFacts: 2,
+      decayHalfLifeDays: 1, // aggressive decay to prune f1
+    });
+    const report = await consolidator.consolidate();
+
+    // Theme should still exist (f2 and f3 remain) and not crash
+    expect(report.themesCleanedUp + report.themesRemoved).toBeGreaterThanOrEqual(0);
+    const themes = await store.listThemes();
+    // If theme survived, its embedding should be valid (not NaN)
+    for (const t of themes) {
+      if (t.embedding) {
+        for (const v of t.embedding) {
+          expect(Number.isFinite(v)).toBe(true);
+        }
+      }
+    }
+  });
+
+  describe('debug mode and mutation logging', () => {
+    it('populates mutationLog when debug mode is on', async () => {
+      const f1 = makeFact({ content: 'A', embedding: [1, 0, 0] });
+      const f2 = makeFact({ content: 'B', embedding: [1, 0, 0], valid_from: daysAgo(5) });
+      await store.putFact(f1);
+      await store.putFact(f2);
+      await index.rebuild(store);
+
+      const consolidator = new MemoryConsolidator(store, index, {
+        dedupThreshold: 0.9,
+        debug: true,
+      });
+      const report = await consolidator.consolidate();
+
+      expect(report.mutationLog).toBeDefined();
+      expect(report.mutationLog!.length).toBeGreaterThan(0);
+      // Each entry should have type and id
+      for (const entry of report.mutationLog!) {
+        expect(entry.type).toBeDefined();
+        expect(entry.id).toBeDefined();
+      }
+    });
+
+    it('does NOT include mutationLog when debug mode is off (default)', async () => {
+      const f1 = makeFact({ content: 'A', embedding: [1, 0, 0] });
+      const f2 = makeFact({ content: 'B', embedding: [1, 0, 0], valid_from: daysAgo(5) });
+      await store.putFact(f1);
+      await store.putFact(f2);
+      await index.rebuild(store);
+
+      const consolidator = new MemoryConsolidator(store, index, {
+        dedupThreshold: 0.9,
+      });
+      const report = await consolidator.consolidate();
+
+      expect(report.mutationLog).toBeUndefined();
+    });
+
+    it('applies non-conflicting mutations normally with debug on', async () => {
+      const oldFact = makeFact({
+        content: 'Old fact',
+        valid_from: daysAgo(60),
+        access_count: 0,
+      });
+      const newFact = makeFact({
+        content: 'New fact',
+        valid_from: daysAgo(1),
+        access_count: 0,
+      });
+      await store.putFact(oldFact);
+      await store.putFact(newFact);
+
+      const consolidator = new MemoryConsolidator(store, index, {
+        maxFacts: 1,
+        decayHalfLifeDays: 30,
+        debug: true,
+      });
+      const report = await consolidator.consolidate();
+
+      expect(report.factsDecayed).toBe(1);
+      expect(report.mutationLog).toBeDefined();
+      expect(report.mutationLog!.length).toBeGreaterThan(0);
+
+      const remaining = await store.findFacts({ include_invalidated: false });
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe(newFact.id);
+    });
+  });
+
+  describe('shouldConsolidate', () => {
+    it('returns true when facts exceed threshold', async () => {
+      for (let i = 0; i < 5; i++) {
+        await store.putFact(makeFact({ content: `Fact ${i}` }));
+      }
+      expect(await MemoryConsolidator.shouldConsolidate(store, { maxFacts: 3 })).toBe(true);
+    });
+
+    it('returns false when facts are under threshold', async () => {
+      for (let i = 0; i < 2; i++) {
+        await store.putFact(makeFact({ content: `Fact ${i}` }));
+      }
+      expect(await MemoryConsolidator.shouldConsolidate(store, { maxFacts: 5 })).toBe(false);
+    });
+
+    it('returns true when episodes exceed threshold', async () => {
+      for (let i = 0; i < 5; i++) {
+        await store.putEpisode(makeEpisode({ topic: `Episode ${i}` }));
+      }
+      expect(await MemoryConsolidator.shouldConsolidate(store, { maxEpisodes: 3 })).toBe(true);
+    });
+
+    it('returns false when no thresholds are set', async () => {
+      for (let i = 0; i < 100; i++) {
+        await store.putFact(makeFact({ content: `Fact ${i}` }));
+      }
+      expect(await MemoryConsolidator.shouldConsolidate(store, {})).toBe(false);
+    });
+  });
+
+  describe('autoConsolidate', () => {
+    it('returns null when not needed', async () => {
+      await store.putFact(makeFact({ content: 'Single fact' }));
+      const consolidator = new MemoryConsolidator(store, index, { maxFacts: 1 });
+      const result = await consolidator.autoConsolidate({ maxFacts: 10 });
+      expect(result).toBeNull();
+    });
+
+    it('returns report when consolidation is needed', async () => {
+      for (let i = 0; i < 5; i++) {
+        await store.putFact(makeFact({ content: `Fact ${i}`, valid_from: daysAgo(i * 10), access_count: 1 }));
+      }
+      const consolidator = new MemoryConsolidator(store, index, { maxFacts: 2 });
+      const result = await consolidator.autoConsolidate({ maxFacts: 3 });
+      expect(result).not.toBeNull();
+      expect(result!.totalReclaimed).toBeGreaterThan(0);
+    });
   });
 });

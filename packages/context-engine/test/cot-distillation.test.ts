@@ -108,6 +108,23 @@ describe('distillCoT', () => {
     expect(result.tokensEvicted).toBeGreaterThan(50);
   });
 
+  it('uses custom charsPerToken ratio for token eviction estimate', () => {
+    const longReasoning = 'x '.repeat(200);
+    const content = `<think>${longReasoning}Therefore: Answer.</think>`;
+    const defaultResult = distillCoT(content);
+    const customResult = distillCoT(content, { charsPerToken: 2 });
+    // With charsPerToken=2 (fewer chars per token), we get more tokens evicted
+    expect(customResult.tokensEvicted).toBeGreaterThan(defaultResult.tokensEvicted);
+  });
+
+  it('preserves default charsPerToken ratio of 4 when option omitted', () => {
+    const longReasoning = 'x '.repeat(200);
+    const content = `<think>${longReasoning}Therefore: Answer.</think>`;
+    const defaultResult = distillCoT(content);
+    const explicitResult = distillCoT(content, { charsPerToken: 4 });
+    expect(defaultResult.tokensEvicted).toBe(explicitResult.tokensEvicted);
+  });
+
   it('handles nested delimiters by processing outermost', () => {
     const content = '<think>Outer reasoning <think>inner nested</think> still outer. Therefore: Result.</think>';
     const result = distillCoT(content);

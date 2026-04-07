@@ -31,7 +31,7 @@ function throwingProvider(error: Error): LLMProvider {
 }
 
 describe('LLMExtractor', () => {
-  it('extracts facts from valid JSON response', async () => {
+  it('extracts facts, entities, and relationships from valid JSON response', async () => {
     const provider = mockProvider(JSON.stringify([
       {
         content: 'Alice works at Acme',
@@ -44,50 +44,65 @@ describe('LLMExtractor', () => {
     ]));
     const extractor = new LLMExtractor({ provider });
     const ep = makeEpisode('Alice works at Acme');
-    const facts = await extractor.extract(ep);
+    const result = await extractor.extract(ep);
 
-    expect(facts).toHaveLength(1);
-    expect(facts[0].content).toBe('Alice works at Acme');
-    expect(facts[0].entity_ids).toHaveLength(2);
-    expect(facts[0].source_episode_ids).toEqual([ep.id]);
-    expect(facts[0].provenance.source).toBe('derived');
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0].content).toBe('Alice works at Acme');
+    expect(result.facts[0].entity_ids).toHaveLength(2);
+    expect(result.facts[0].source_episode_ids).toEqual([ep.id]);
+    expect(result.facts[0].provenance.source).toBe('derived');
+
+    // Entities
+    expect(result.entities).toHaveLength(2);
+    const alice = result.entities.find((e) => e.name === 'Alice');
+    const acme = result.entities.find((e) => e.name === 'Acme');
+    expect(alice?.entity_type).toBe('person');
+    expect(acme?.entity_type).toBe('organization');
+
+    // Relationships
+    expect(result.relationships).toHaveLength(1);
+    expect(result.relationships[0].relation_type).toBe('works_at');
+    expect(result.relationships[0].source_id).toBe(alice!.id);
+    expect(result.relationships[0].target_id).toBe(acme!.id);
   });
 
   it('parses JSON inside markdown code blocks', async () => {
     const json = JSON.stringify([{ content: 'Fact one', entities: [], relationships: [] }]);
     const provider = mockProvider('```json\n' + json + '\n```');
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('some text'));
+    const result = await extractor.extract(makeEpisode('some text'));
 
-    expect(facts).toHaveLength(1);
-    expect(facts[0].content).toBe('Fact one');
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0].content).toBe('Fact one');
   });
 
   it('falls back to RuleBasedExtractor on malformed JSON', async () => {
     const provider = mockProvider('this is not json at all');
     const extractor = new LLMExtractor({ provider });
     const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
-    const facts = await extractor.extract(ep);
+    const result = await extractor.extract(ep);
 
     // Should still get facts from the rule-based fallback
-    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(result.facts.length).toBeGreaterThanOrEqual(1);
   });
 
   it('falls back to RuleBasedExtractor when provider throws', async () => {
     const provider = throwingProvider(new Error('API timeout'));
     const extractor = new LLMExtractor({ provider });
     const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
-    const facts = await extractor.extract(ep);
+    const result = await extractor.extract(ep);
 
-    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(result.facts.length).toBeGreaterThanOrEqual(1);
   });
 
   it('returns empty facts for empty array response', async () => {
     const provider = mockProvider('[]');
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('some text'));
+    const result = await extractor.extract(makeEpisode('some text'));
 
-    expect(facts).toHaveLength(0);
+    expect(result.facts).toHaveLength(0);
+    expect(result.entities).toHaveLength(0);
+    expect(result.relationships).toHaveLength(0);
   });
 
   it('respects maxFactsPerEpisode', async () => {
@@ -98,19 +113,19 @@ describe('LLMExtractor', () => {
     }));
     const provider = mockProvider(JSON.stringify(manyFacts));
     const extractor = new LLMExtractor({ provider, maxFactsPerEpisode: 20 });
-    const facts = await extractor.extract(makeEpisode('lots of text'));
+    const result = await extractor.extract(makeEpisode('lots of text'));
 
-    expect(facts).toHaveLength(20);
+    expect(result.facts).toHaveLength(20);
   });
 
   it('handles object response (not array) by falling back', async () => {
     const provider = mockProvider(JSON.stringify({ content: 'not an array' }));
     const extractor = new LLMExtractor({ provider });
     const ep = makeEpisode('Alice Smith works at Acme Corp and does important work at the company.');
-    const facts = await extractor.extract(ep);
+    const result = await extractor.extract(ep);
 
     // Falls back to rule-based
-    expect(facts.length).toBeGreaterThanOrEqual(1);
+    expect(result.facts.length).toBeGreaterThanOrEqual(1);
   });
 
   it('maps entity types correctly from LLM response', async () => {
@@ -125,12 +140,17 @@ describe('LLMExtractor', () => {
       },
     ]));
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('text'));
+    const result = await extractor.extract(makeEpisode('text'));
 
-    expect(facts).toHaveLength(1);
-    expect(facts[0].entity_ids).toHaveLength(2);
-    // Entity IDs are unique UUIDs for each entity
-    expect(facts[0].entity_ids[0]).not.toBe(facts[0].entity_ids[1]);
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0].entity_ids).toHaveLength(2);
+    expect(result.facts[0].entity_ids[0]).not.toBe(result.facts[0].entity_ids[1]);
+
+    // Entity types are correctly mapped
+    const acme = result.entities.find((e) => e.name === 'Acme Corp');
+    const ny = result.entities.find((e) => e.name === 'New York');
+    expect(acme?.entity_type).toBe('organization');
+    expect(ny?.entity_type).toBe('location');
   });
 
   it('skips facts with missing content field', async () => {
@@ -140,10 +160,10 @@ describe('LLMExtractor', () => {
       { content: '', entities: [] }, // empty content
     ]));
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('text'));
+    const result = await extractor.extract(makeEpisode('text'));
 
-    expect(facts).toHaveLength(1);
-    expect(facts[0].content).toBe('Valid fact');
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0].content).toBe('Valid fact');
   });
 
   it('handles entities without name gracefully', async () => {
@@ -155,11 +175,14 @@ describe('LLMExtractor', () => {
       },
     ]));
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('text'));
+    const result = await extractor.extract(makeEpisode('text'));
 
-    expect(facts).toHaveLength(1);
+    expect(result.facts).toHaveLength(1);
     // Only the valid entity should have an ID
-    expect(facts[0].entity_ids).toHaveLength(1);
+    expect(result.facts[0].entity_ids).toHaveLength(1);
+    // Only valid entity should be in entities array
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities[0].name).toBe('Valid');
   });
 
   it('deduplicates entity IDs by name', async () => {
@@ -174,11 +197,13 @@ describe('LLMExtractor', () => {
       },
     ]));
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('text'));
+    const result = await extractor.extract(makeEpisode('text'));
 
-    expect(facts).toHaveLength(1);
+    expect(result.facts).toHaveLength(1);
     // Same entity name should reuse the same ID
-    expect(facts[0].entity_ids[0]).toBe(facts[0].entity_ids[1]);
+    expect(result.facts[0].entity_ids[0]).toBe(result.facts[0].entity_ids[1]);
+    // Only one entity in the entities array
+    expect(result.entities).toHaveLength(1);
   });
 
   it('sends prompt to provider with episode messages', async () => {
@@ -196,15 +221,147 @@ describe('LLMExtractor', () => {
   it('parses JSON with extra whitespace in code block', async () => {
     const provider = mockProvider('```\n  [{"content": "fact", "entities": []}]  \n```');
     const extractor = new LLMExtractor({ provider });
-    const facts = await extractor.extract(makeEpisode('text'));
-    expect(facts).toHaveLength(1);
+    const result = await extractor.extract(makeEpisode('text'));
+    expect(result.facts).toHaveLength(1);
   });
 
   it('sets valid_from to episode started_at', async () => {
     const provider = mockProvider(JSON.stringify([{ content: 'A fact', entities: [] }]));
     const extractor = new LLMExtractor({ provider });
     const ep = makeEpisode('text');
-    const facts = await extractor.extract(ep);
-    expect(facts[0].valid_from).toEqual(ep.started_at);
+    const result = await extractor.extract(ep);
+    expect(result.facts[0].valid_from).toEqual(ep.started_at);
+  });
+
+  it('falls back without throwing parse-failed error on malformed JSON', async () => {
+    const provider = mockProvider('not valid json');
+    const extractor = new LLMExtractor({ provider });
+    const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await extractor.extract(ep);
+
+    // Should get rule-based fallback results without a 'parse-failed' error
+    expect(result.facts.length).toBeGreaterThanOrEqual(1);
+    // The outer catch in extract() should NOT be triggered (no Error logged)
+    const outerCatchCalled = warnSpy.mock.calls.some(
+      (args) => args[0] === 'LLMExtractor failed, falling back to RuleBasedExtractor:',
+    );
+    expect(outerCatchCalled).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('times out when provider is too slow', async () => {
+    const slowProvider: LLMProvider = {
+      complete: vi.fn().mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve('[]'), 5000)),
+      ),
+    };
+    const extractor = new LLMExtractor({ provider: slowProvider, timeoutMs: 50 });
+    const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await extractor.extract(ep);
+
+    // Should fall back to rule-based due to timeout
+    expect(result.facts.length).toBeGreaterThanOrEqual(1);
+    const timedOut = warnSpy.mock.calls.some(
+      (args) => String(args[1]).includes('timed out'),
+    );
+    expect(timedOut).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('circuit breaker skips LLM after consecutive failures', async () => {
+    const failProvider = throwingProvider(new Error('API down'));
+    const extractor = new LLMExtractor({
+      provider: failProvider,
+      maxConsecutiveFailures: 2,
+      breakerCooldownMs: 60_000,
+    });
+    const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Fail twice to trip the breaker
+    await extractor.extract(ep);
+    await extractor.extract(ep);
+
+    // Third call — breaker is open, provider should NOT be called
+    const callCountBefore = (failProvider.complete as ReturnType<typeof vi.fn>).mock.calls.length;
+    const result = await extractor.extract(ep);
+    const callCountAfter = (failProvider.complete as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    expect(callCountAfter).toBe(callCountBefore); // provider not called
+    expect(result.facts.length).toBeGreaterThanOrEqual(1); // still returns fallback results
+
+    warnSpy.mockRestore();
+  });
+
+  it('circuit breaker resets after a successful call', async () => {
+    let callCount = 0;
+    const intermittentProvider: LLMProvider = {
+      complete: vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) return Promise.reject(new Error('transient'));
+        return Promise.resolve(JSON.stringify([{ content: 'LLM fact', entities: [] }]));
+      }),
+    };
+    const extractor = new LLMExtractor({
+      provider: intermittentProvider,
+      maxConsecutiveFailures: 3,
+      breakerCooldownMs: 0, // instant cooldown for test
+    });
+    const ep = makeEpisode('Alice Smith works at Acme Corp.');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Two failures — not yet tripped (threshold is 3)
+    await extractor.extract(ep);
+    await extractor.extract(ep);
+
+    // Third call succeeds — should reset the counter
+    const result = await extractor.extract(ep);
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0].content).toBe('LLM fact');
+
+    // Fourth call — provider is called (breaker was reset)
+    const result2 = await extractor.extract(ep);
+    expect(result2.facts).toHaveLength(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('drops relationships with unknown source/target names', async () => {
+    const provider = mockProvider(JSON.stringify([
+      {
+        content: 'Alice works at Acme',
+        entities: [{ name: 'Alice', type: 'person' }],
+        // "Acme" is not in entities, so this relationship should be dropped
+        relationships: [{ source: 'Alice', target: 'Acme', type: 'works_at' }],
+      },
+    ]));
+    const extractor = new LLMExtractor({ provider });
+    const result = await extractor.extract(makeEpisode('text'));
+
+    expect(result.relationships).toHaveLength(0);
+  });
+
+  it('fallback returns ExtractionResult shape', async () => {
+    const provider = throwingProvider(new Error('fail'));
+    const extractor = new LLMExtractor({ provider });
+    const ep = makeEpisode('Alice Smith works at Acme Corp and does many things for the company.');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await extractor.extract(ep);
+
+    expect(result).toHaveProperty('facts');
+    expect(result).toHaveProperty('entities');
+    expect(result).toHaveProperty('relationships');
+    expect(Array.isArray(result.facts)).toBe(true);
+    expect(Array.isArray(result.entities)).toBe(true);
+    expect(Array.isArray(result.relationships)).toBe(true);
+
+    warnSpy.mockRestore();
   });
 });

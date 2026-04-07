@@ -91,6 +91,8 @@ export interface CotDistillationOptions {
   delimiters?: ReasoningDelimiter[];
   /** Whether to extract and preserve conclusions (default true). */
   preserveConclusion?: boolean;
+  /** Characters per token ratio for token eviction estimates (default 4). */
+  charsPerToken?: number;
 }
 
 export interface CotDistillationResult {
@@ -166,8 +168,9 @@ export function distillCoT(
     }
   }
 
-  // Rough token estimate (4 chars/token)
-  const tokensEvicted = Math.floor(charsEvicted / 4);
+  // Rough token estimate
+  const charsPerToken = options?.charsPerToken ?? 4;
+  const tokensEvicted = Math.floor(charsEvicted / charsPerToken);
 
   return { distilled: result, tracesRemoved, tokensEvicted };
 }

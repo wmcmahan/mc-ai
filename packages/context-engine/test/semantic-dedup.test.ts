@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createSemanticDedupStage, precomputeEmbeddings } from '../src/memory/dedup/semantic.js';
 import type { EmbeddingProvider } from '../src/providers/types.js';
 import type { PromptSegment, BudgetConfig } from '../src/pipeline/types.js';
@@ -163,6 +163,44 @@ describe('createSemanticDedupStage', () => {
     expect(result.segments[0].content).toContain('optimization strategies');
   });
 
+  it('handles transitive similarity (A~B, B~C, A!~C) via union-find', async () => {
+    // A is similar to B, B is similar to C, but A is NOT similar to C.
+    // Union-find should cluster all three and keep only the longest.
+    const paraA = 'The research team discovered important findings about climate change impacts on agriculture.';
+    const paraB = 'The research team found significant results about climate change effects on farming systems.';
+    const paraC = 'Scientists found significant results about environmental effects on modern farming systems.';
+
+    // Custom provider: A~B (high sim), B~C (high sim), A~C (low sim)
+    const embeddingMap = new Map<string, number[]>();
+    embeddingMap.set(paraA, [1.0, 0.0, 0.0, 0.0]);
+    embeddingMap.set(paraB, [0.8, 0.6, 0.0, 0.0]); // cos(A,B) = 0.8, cos(B,C) ≈ 0.8
+    embeddingMap.set(paraC, [0.2, 0.98, 0.0, 0.0]); // cos(A,C) ≈ 0.2
+
+    const provider = new MockEmbeddingProvider();
+    const segments = [makeSegment('s1', `${paraA}\n\n${paraB}\n\n${paraC}`)];
+
+    const stage = createSemanticDedupStage({
+      provider,
+      precomputed: embeddingMap,
+      threshold: 0.7,
+    });
+
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 4096, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const result = stage.execute(segments, context);
+    const output = result.segments[0].content;
+    const paras = output.split('\n\n').filter(p => p.trim().length > 0);
+
+    // All three should cluster together; only one (longest) survives
+    expect(paras).toHaveLength(1);
+    // The longest paragraph should be kept
+    const longest = [paraA, paraB, paraC].sort((a, b) => b.length - a.length)[0];
+    expect(paras[0]).toBe(longest);
+  });
+
   it('has name semantic-dedup', () => {
     const provider = new MockEmbeddingProvider();
     expect(createSemanticDedupStage({ provider }).name).toBe('semantic-dedup');
@@ -181,5 +219,90 @@ describe('createSemanticDedupStage', () => {
 
     const result = stage.execute(segments, context);
     expect(result.segments[0].content).toBe('short\ntext\nhere');
+  });
+
+  it('caps pairwise comparison at maxItems and passes remaining items through', async () => {
+    // 5 paragraphs where first 3 are similar; cap at 3 means items 4-5 pass through undeduped
+    const similar1 = 'Multi-agent systems are significantly more expensive than single-agent setups in production';
+    const similar2 = 'Multi-agent systems are significantly more costly than single-agent setups in production';
+    const similar3 = 'Multi-agent systems are significantly more pricey than single-agent setups in production';
+    const unique1 = 'Local deployment improves data sovereignty and reduces latency for enterprises.';
+    const unique2 = 'Cloud infrastructure requires careful capacity planning and cost optimization strategies.';
+
+    const provider = new SimilarityMockProvider([
+      ['Multi-agent systems are significantly more'],
+    ]);
+
+    const segments = [makeSegment('a', [similar1, similar2, similar3, unique1, unique2].join('\n\n'))];
+    const precomputed = await precomputeEmbeddings(segments, provider);
+
+    const stage = createSemanticDedupStage({
+      provider,
+      precomputed,
+      threshold: 0.99,
+      maxItems: 3,
+    });
+
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 4096, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = stage.execute(segments, context);
+    const output = result.segments[0].content;
+
+    // Items beyond the cap should pass through
+    expect(output).toContain('sovereignty');
+    expect(output).toContain('capacity planning');
+    // Warning should have been logged
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('semantic dedup capped at 3 items'));
+    warnSpy.mockRestore();
+  });
+
+  it('logs a warning when paragraphs exceed maxItems', async () => {
+    const provider = new MockEmbeddingProvider();
+    const paragraphs = Array.from({ length: 5 }, (_, i) =>
+      `Paragraph number ${i} with enough length for comparison purposes here.`
+    );
+    const segments = [makeSegment('a', paragraphs.join('\n\n'))];
+    const precomputed = await precomputeEmbeddings(segments, provider);
+
+    const stage = createSemanticDedupStage({
+      provider,
+      precomputed,
+      maxItems: 3,
+    });
+
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 4096, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    stage.execute(segments, context);
+    expect(warnSpy).toHaveBeenCalledWith('context-engine: semantic dedup capped at 3 items (5 provided)');
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when paragraphs are within default maxItems of 500', async () => {
+    const provider = new MockEmbeddingProvider();
+    const paragraphs = Array.from({ length: 10 }, (_, i) =>
+      `Unique paragraph number ${i} with enough content for testing purposes.`
+    );
+    const segments = [makeSegment('a', paragraphs.join('\n\n'))];
+    const precomputed = await precomputeEmbeddings(segments, provider);
+
+    const stage = createSemanticDedupStage({ provider, precomputed });
+
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 4096, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    stage.execute(segments, context);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

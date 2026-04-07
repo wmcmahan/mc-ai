@@ -4,8 +4,10 @@ import {
   InMemoryMemoryIndex,
   SimpleEpisodeSegmenter,
   SimpleSemanticExtractor,
+  RuleBasedExtractor,
   SimpleThemeClusterer,
   retrieveMemory,
+  extractSubgraph,
 } from '../src/index.js';
 import type { Message, MemoryQuery } from '../src/index.js';
 
@@ -44,7 +46,7 @@ describe('Full pipeline integration', () => {
     // Step 4: Extract facts from each episode
     const allFacts = [];
     for (const ep of episodes) {
-      const facts = await extractor.extract(ep);
+      const { facts } = await extractor.extract(ep);
       for (const fact of facts) {
         // Give facts fake embeddings for testing
         const embedding = ep === episodes[0] ? [1, 0, 0] : [0, 1, 0];
@@ -88,6 +90,60 @@ describe('Full pipeline integration', () => {
     const result = await retrieveMemory(store, index, query);
     expect(result.facts.length).toBeGreaterThanOrEqual(1);
     expect(result.themes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('RuleBasedExtractor populates entities and relationships in store', async () => {
+    const store = new InMemoryMemoryStore();
+    const segmenter = new SimpleEpisodeSegmenter({ gap_threshold_ms: 60_000 });
+    const extractor = new RuleBasedExtractor();
+
+    const t1 = new Date('2024-01-01T10:00:00Z');
+    const t2 = new Date('2024-01-01T10:01:00Z');
+
+    const messages: Message[] = [
+      { id: crypto.randomUUID(), role: 'user', content: 'Alice Smith works at Acme Corp.', timestamp: t1, metadata: {} },
+      { id: crypto.randomUUID(), role: 'assistant', content: 'She manages the Widget Project there.', timestamp: t2, metadata: {} },
+    ];
+
+    // Segment → Extract → Persist
+    const episodes = await segmenter.segment(messages);
+    expect(episodes).toHaveLength(1);
+    await store.putEpisode(episodes[0]);
+
+    const { facts, entities, relationships } = await extractor.extract(episodes[0]);
+
+    // Persist entities
+    for (const entity of entities) {
+      await store.putEntity(entity);
+    }
+
+    // Persist relationships
+    for (const rel of relationships) {
+      await store.putRelationship(rel);
+    }
+
+    // Persist facts
+    for (const fact of facts) {
+      await store.putFact(fact);
+    }
+
+    // Verify entities are in store
+    expect(entities.length).toBeGreaterThanOrEqual(2);
+    const alice = entities.find((e) => e.name === 'Alice Smith');
+    expect(alice).toBeDefined();
+    const storedAlice = await store.getEntity(alice!.id);
+    expect(storedAlice).toBeDefined();
+    expect(storedAlice!.entity_type).toBe('person');
+
+    // Verify relationships are in store and traversable
+    expect(relationships.length).toBeGreaterThanOrEqual(1);
+    const aliceRels = await store.getRelationshipsForEntity(alice!.id);
+    expect(aliceRels.length).toBeGreaterThanOrEqual(1);
+
+    // Verify subgraph extraction works
+    const subgraph = await extractSubgraph(store, [alice!.id], { max_hops: 1 });
+    expect(subgraph.entities.length).toBeGreaterThanOrEqual(2);
+    expect(subgraph.relationships.length).toBeGreaterThanOrEqual(1);
   });
 
   it('empty messages produce no episodes', async () => {

@@ -33,21 +33,29 @@ export function serializeTabular(data: Record<string, unknown>[]): string {
   return [header, ...rows].join('\n');
 }
 
+function needsQuoting(value: string): boolean {
+  return /[ ;,=\n"]/.test(value);
+}
+
+function quoteValue(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return '_';
 
+  let raw: string;
   if (Array.isArray(value)) {
-    return value.map(v => formatPrimitive(v)).join(';');
-  }
-
-  if (typeof value === 'object') {
-    // Nested object: key=value pairs
-    return Object.entries(value as Record<string, unknown>)
+    raw = value.map(v => formatPrimitive(v)).join(';');
+  } else if (typeof value === 'object') {
+    raw = Object.entries(value as Record<string, unknown>)
       .map(([k, v]) => `${k}=${formatPrimitive(v)}`)
       .join(',');
+  } else {
+    raw = formatPrimitive(value);
   }
 
-  return formatPrimitive(value);
+  return needsQuoting(raw) ? quoteValue(raw) : raw;
 }
 
 function formatPrimitive(value: unknown): string {

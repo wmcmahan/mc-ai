@@ -412,11 +412,11 @@ describe('cross-segment cache awareness', () => {
 
     const turn1 = pipeline.compress({ segments: [segA, segB], budget });
 
-    // All segments unchanged -> zero work metrics
+    // All segments unchanged -> metrics reuse previous turn's values with cached flag
     const turn2 = pipeline.compress({ segments: [segA, segB], budget }, turn1.state);
-    expect(turn2.result.metrics.totalDurationMs).toBe(0);
-    expect(turn2.result.metrics.totalTokensIn).toBe(0);
-    expect(turn2.result.metrics.totalTokensOut).toBe(0);
+    expect(turn2.result.metrics.cached).toBe(true);
+    expect(turn2.result.metrics.totalTokensIn).toBe(turn1.result.metrics.totalTokensIn);
+    expect(turn2.result.metrics.totalTokensOut).toBe(turn1.result.metrics.totalTokensOut);
 
     // One segment changed -> metrics reflect some work
     const segAChanged = makeSegment({ id: 'a', content: 'changed' });

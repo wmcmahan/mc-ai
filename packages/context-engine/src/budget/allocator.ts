@@ -13,6 +13,11 @@ import type { TokenCounter } from '../providers/types.js';
 import type { CompressionStage, PromptSegment, BudgetConfig, StageContext } from '../pipeline/types.js';
 import { countSegmentTokens } from './counter.js';
 
+export interface AllocatorStageOptions {
+  /** Custom suffix appended to truncated segments (default: '\n... [truncated]'). */
+  truncationSuffix?: string;
+}
+
 export interface AllocationResult {
   /** Allocated tokens per segment (segment ID → token budget). */
   allocations: Map<string, number>;
@@ -49,6 +54,14 @@ export function allocateBudget(
     }
   }
 
+  // 1b. Check if locked segments exceed available budget
+  const overflow: string[] = [];
+  if (lockedTotal > availableBudget) {
+    for (const seg of segments) {
+      if (seg.locked) overflow.push(seg.id);
+    }
+  }
+
   // 2. Mutable segments: distribute remaining by priority
   const mutableBudget = Math.max(0, availableBudget - lockedTotal);
   const mutableSegments = segments.filter(s => !s.locked);
@@ -59,14 +72,33 @@ export function allocateBudget(
     return { allocations, overflow: [] };
   }
 
-  // First pass: proportional allocation
+  // First pass: proportional allocation with largest-remainder distribution
   const firstPass = new Map<string, number>();
-  for (const seg of mutableSegments) {
-    const share = (seg.priority / totalPriority) * mutableBudget;
-    const actual = counts.get(seg.id) ?? 0;
-    // Don't allocate more than the segment actually needs
-    const allocated = Math.min(Math.floor(share), actual);
-    firstPass.set(seg.id, allocated);
+  {
+    const entries: { id: string; floor: number; remainder: number; cap: number }[] = [];
+    let distributed = 0;
+    for (const seg of mutableSegments) {
+      const share = (seg.priority / totalPriority) * mutableBudget;
+      const actual = counts.get(seg.id) ?? 0;
+      const floor = Math.min(Math.floor(share), actual);
+      entries.push({ id: seg.id, floor, remainder: share - Math.floor(share), cap: actual });
+      distributed += floor;
+    }
+    // Distribute remaining tokens by largest fractional remainder
+    let remaining = mutableBudget - distributed;
+    if (remaining > 0) {
+      entries.sort((a, b) => b.remainder - a.remainder);
+      for (const e of entries) {
+        if (remaining <= 0) break;
+        if (e.floor < e.cap) {
+          e.floor++;
+          remaining--;
+        }
+      }
+    }
+    for (const e of entries) {
+      firstPass.set(e.id, e.floor);
+    }
   }
 
   // Second pass: redistribute surplus from under-budget segments
@@ -87,19 +119,41 @@ export function allocateBudget(
   }
 
   // Distribute surplus proportionally to segments that need more
+  // Uses largest-remainder method to avoid losing fractional tokens
   if (surplus > 0 && needsMore.length > 0) {
     const totalWant = needsMore.reduce((sum, n) => sum + n.want, 0);
-    for (const need of needsMore) {
-      const bonus = Math.min(
-        Math.floor((need.want / totalWant) * surplus),
-        need.want,
-      );
-      firstPass.set(need.id, need.have + bonus);
+
+    // First: distribute floor amounts and track remainders
+    const bonuses: { idx: number; floor: number; remainder: number; cap: number }[] = [];
+    let distributed = 0;
+    for (let i = 0; i < needsMore.length; i++) {
+      const need = needsMore[i];
+      const exact = (need.want / totalWant) * surplus;
+      const floor = Math.min(Math.floor(exact), need.want);
+      bonuses.push({ idx: i, floor, remainder: exact - floor, cap: need.want });
+      distributed += floor;
+    }
+
+    // Second: distribute remaining tokens one-at-a-time by largest remainder
+    let remaining = surplus - distributed;
+    if (remaining > 0) {
+      bonuses.sort((a, b) => b.remainder - a.remainder);
+      for (const b of bonuses) {
+        if (remaining <= 0) break;
+        if (b.floor < b.cap) {
+          b.floor++;
+          remaining--;
+        }
+      }
+    }
+
+    for (const b of bonuses) {
+      const need = needsMore[b.idx];
+      firstPass.set(need.id, need.have + b.floor);
     }
   }
 
   // Finalize allocations
-  const overflow: string[] = [];
   for (const seg of mutableSegments) {
     const allocated = firstPass.get(seg.id) ?? 0;
     const actual = counts.get(seg.id) ?? 0;
@@ -116,7 +170,8 @@ export function allocateBudget(
  * Create a pipeline stage that enforces budget allocations by truncating
  * segments that exceed their allocation.
  */
-export function createAllocatorStage(): CompressionStage {
+export function createAllocatorStage(options?: AllocatorStageOptions): CompressionStage {
+  const truncationSuffix = options?.truncationSuffix ?? '\n... [truncated]';
   return {
     name: 'budget-allocator',
     execute(segments: PromptSegment[], context: StageContext) {
@@ -135,7 +190,7 @@ export function createAllocatorStage(): CompressionStage {
         if (currentTokens <= budget) return seg;
 
         // Truncate to fit budget
-        const truncated = truncateToTokens(seg.content, budget, context.tokenCounter, context.model);
+        const truncated = truncateToTokens(seg.content, budget, context.tokenCounter, context.model, truncationSuffix);
         return { ...seg, content: truncated };
       });
 
@@ -152,9 +207,18 @@ function truncateToTokens(
   text: string,
   maxTokens: number,
   counter: TokenCounter,
-  model?: string,
+  model: string | undefined,
+  truncationSuffix: string,
 ): string {
   if (maxTokens <= 0) return '';
+
+  // No truncation needed — full text fits within budget
+  if (counter.countTokens(text, model) <= maxTokens) return text;
+
+  // Reserve tokens for the suffix so the final output stays within budget
+  const suffixTokens = counter.countTokens(truncationSuffix, model);
+  const searchBudget = maxTokens - suffixTokens;
+  if (searchBudget <= 0) return '';
 
   // Binary search for the right character cutoff
   let low = 0;
@@ -165,7 +229,7 @@ function truncateToTokens(
     const mid = Math.floor((low + high) / 2);
     const tokens = counter.countTokens(text.slice(0, mid), model);
 
-    if (tokens <= maxTokens) {
+    if (tokens <= searchBudget) {
       best = mid;
       low = mid + 1;
     } else {
@@ -173,9 +237,5 @@ function truncateToTokens(
     }
   }
 
-  const truncated = text.slice(0, best);
-  if (best < text.length) {
-    return truncated + '\n... [truncated]';
-  }
-  return truncated;
+  return text.slice(0, best) + truncationSuffix;
 }

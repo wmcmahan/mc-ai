@@ -178,5 +178,64 @@ describe('retrieveMemory', () => {
       expect(result.relationships).toHaveLength(1);
       expect(result.facts).toHaveLength(1);
     });
+
+    it('deduplicates facts shared across multiple entities', async () => {
+      const e1: Entity = {
+        id: crypto.randomUUID(),
+        name: 'X',
+        entity_type: 'concept',
+        attributes: {},
+        provenance: prov,
+        created_at: now,
+        updated_at: now,
+      };
+      const e2: Entity = {
+        id: crypto.randomUUID(),
+        name: 'Y',
+        entity_type: 'concept',
+        attributes: {},
+        provenance: prov,
+        created_at: now,
+        updated_at: now,
+      };
+      await store.putEntity(e1);
+      await store.putEntity(e2);
+
+      const rel: Relationship = {
+        id: crypto.randomUUID(),
+        source_id: e1.id,
+        target_id: e2.id,
+        relation_type: 'related',
+        weight: 1,
+        attributes: {},
+        valid_from: now,
+        provenance: prov,
+      };
+      await store.putRelationship(rel);
+
+      // Single fact referencing both entities — should appear only once
+      const sharedFact: SemanticFact = {
+        id: crypto.randomUUID(),
+        content: 'X and Y are related',
+        source_episode_ids: [],
+        entity_ids: [e1.id, e2.id],
+        provenance: prov,
+        valid_from: now,
+      };
+      await store.putFact(sharedFact);
+      await index.rebuild(store);
+
+      const result = await retrieveMemory(store, index, {
+        entity_ids: [e1.id],
+        max_hops: 1,
+        limit: 50,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      // Fact is found via both e1 and e2, but must appear exactly once
+      expect(result.facts).toHaveLength(1);
+      expect(result.facts[0].id).toBe(sharedFact.id);
+    });
   });
 });

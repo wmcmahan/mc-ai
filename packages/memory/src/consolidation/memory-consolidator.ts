@@ -5,12 +5,23 @@
  * budget. Supports near-duplicate fact merging (via embedding
  * similarity), time-decay scoring, and episode pruning.
  *
+ * Uses a collect-then-apply pattern: each phase computes its
+ * mutations without writing, then all writes are applied at the end.
+ * This prevents partial state if a write fails mid-consolidation.
+ *
  * @module consolidation/memory-consolidator
  */
 
 import type { MemoryStore } from '../interfaces/memory-store.js';
 import type { MemoryIndex } from '../interfaces/memory-index.js';
 import type { SemanticFact } from '../schemas/semantic.js';
+import type { Theme } from '../schemas/theme.js';
+
+/** Optional logger for consolidation diagnostic output. */
+export interface ConsolidationLogger {
+  debug?(message: string): void;
+  warn?(message: string): void;
+}
 
 export interface ConsolidationOptions {
   /** Max facts to retain. Oldest/lowest-scoring pruned first. */
@@ -23,6 +34,12 @@ export interface ConsolidationOptions {
   dedupThreshold?: number;
   /** Whether to hard-delete or soft-delete (invalidate). Default: 'soft'. */
   deleteMode?: 'soft' | 'hard';
+  /** Enable debug logging and mutation log in the report (default false). */
+  debug?: boolean;
+  /** Optional logger for warnings and debug output. */
+  logger?: ConsolidationLogger;
+  /** Batch size for paginated fact loading (default 1000). */
+  batchSize?: number;
 }
 
 export interface ConsolidationReport {
@@ -38,7 +55,25 @@ export interface ConsolidationReport {
   themesRemoved: number;
   /** Total records removed or invalidated. */
   totalReclaimed: number;
+  /** Mutation log, populated when debug mode is enabled. */
+  mutationLog?: Array<{ type: string; id: string }>;
 }
+
+export interface AutoConsolidationThresholds {
+  /** Trigger consolidation when active fact count exceeds this. */
+  maxFacts?: number;
+  /** Trigger consolidation when episode count exceeds this. */
+  maxEpisodes?: number;
+}
+
+// --- Mutation types (internal) ---
+
+type Mutation =
+  | { type: 'putFact'; fact: SemanticFact }
+  | { type: 'deleteFact'; id: string }
+  | { type: 'deleteEpisode'; id: string }
+  | { type: 'putTheme'; theme: Theme }
+  | { type: 'deleteTheme'; id: string };
 
 export class MemoryConsolidator {
   constructor(
@@ -46,6 +81,37 @@ export class MemoryConsolidator {
     private readonly index: MemoryIndex,
     private readonly options: ConsolidationOptions = {},
   ) {}
+
+  /**
+   * Check whether the store has grown past the given thresholds.
+   * Uses `limit: threshold + 1` to avoid loading the entire store.
+   */
+  static async shouldConsolidate(
+    store: MemoryStore,
+    thresholds: AutoConsolidationThresholds,
+  ): Promise<boolean> {
+    if (thresholds.maxFacts !== undefined) {
+      const facts = await store.findFacts({ include_invalidated: false, limit: thresholds.maxFacts + 1 });
+      if (facts.length > thresholds.maxFacts) return true;
+    }
+    if (thresholds.maxEpisodes !== undefined) {
+      const episodes = await store.listEpisodes({ limit: thresholds.maxEpisodes + 1 });
+      if (episodes.length > thresholds.maxEpisodes) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Run consolidation only if the store exceeds the given thresholds.
+   * Returns `null` if consolidation was not needed.
+   */
+  async autoConsolidate(
+    thresholds: AutoConsolidationThresholds,
+  ): Promise<ConsolidationReport | null> {
+    const needed = await MemoryConsolidator.shouldConsolidate(this.store, thresholds);
+    if (!needed) return null;
+    return this.consolidate();
+  }
 
   async consolidate(): Promise<ConsolidationReport> {
     const report: ConsolidationReport = {
@@ -57,28 +123,50 @@ export class MemoryConsolidator {
       totalReclaimed: 0,
     };
 
+    const mutations: Mutation[] = [];
     const prunedFactIds = new Set<string>();
 
-    // 1. Deduplication
-    await this.dedup(report, prunedFactIds);
+    // 1. Deduplication (collect mutations)
+    await this.planDedup(report, prunedFactIds, mutations);
 
-    // 2. Decay scoring & pruning
-    await this.decay(report, prunedFactIds);
+    // 2. Decay scoring & pruning (collect mutations, aware of dedup decisions)
+    await this.planDecay(report, prunedFactIds, mutations);
 
-    // 3. Episode pruning
-    await this.pruneEpisodes(report);
+    // 3. Episode pruning (collect mutations)
+    await this.planEpisodePrune(report, mutations);
 
-    // 4. Theme cascade cleanup
-    await this.cascadeThemes(prunedFactIds, report);
+    // 4. Theme cascade cleanup (collect mutations)
+    await this.planCascadeThemes(prunedFactIds, report, mutations);
+
+    // --- Apply all mutations ---
+    const mutationLog = await this.applyMutations(mutations);
+
+    if (this.options.debug) {
+      report.mutationLog = mutationLog;
+    }
 
     return report;
   }
 
-  private async dedup(report: ConsolidationReport, prunedFactIds: Set<string>): Promise<void> {
+  private async planDedup(
+    report: ConsolidationReport,
+    prunedFactIds: Set<string>,
+    mutations: Mutation[],
+  ): Promise<void> {
     const dedupThreshold = this.options.dedupThreshold ?? 0.9;
     const deleteMode = this.options.deleteMode ?? 'soft';
+    const batchSize = this.options.batchSize ?? 1000;
 
-    const facts = await this.store.findFacts({ include_invalidated: false, limit: 10_000 });
+    // Load facts in batches to avoid OOM on large stores
+    const facts: SemanticFact[] = [];
+    let offset = 0;
+    while (true) {
+      const batch = await this.store.findFacts({ include_invalidated: false, limit: batchSize, offset });
+      facts.push(...batch);
+      if (batch.length < batchSize) break;
+      offset += batchSize;
+    }
+
     const processed = new Set<string>();
 
     for (const fact of facts) {
@@ -94,17 +182,13 @@ export class MemoryConsolidator {
         if (processed.has(candidate.id)) continue;
         if (candidate.invalidated_by) continue;
 
-        // Determine which to keep
         const keepFact = this.pickKeeper(fact, candidate);
         const loseFact = keepFact.id === fact.id ? candidate : fact;
 
         if (deleteMode === 'soft') {
-          await this.store.putFact({
-            ...loseFact,
-            invalidated_by: keepFact.id,
-          });
+          mutations.push({ type: 'putFact', fact: { ...loseFact, invalidated_by: keepFact.id } });
         } else {
-          await this.store.deleteFact(loseFact.id);
+          mutations.push({ type: 'deleteFact', id: loseFact.id });
         }
 
         processed.add(loseFact.id);
@@ -118,19 +202,32 @@ export class MemoryConsolidator {
   }
 
   private pickKeeper(a: SemanticFact, b: SemanticFact): SemanticFact {
-    // Keep the one with more source episodes
     if (a.source_episode_ids.length !== b.source_episode_ids.length) {
       return a.source_episode_ids.length > b.source_episode_ids.length ? a : b;
     }
-    // If equal, keep the newer one
     return a.valid_from >= b.valid_from ? a : b;
   }
 
-  private async decay(report: ConsolidationReport, prunedFactIds: Set<string>): Promise<void> {
+  private async planDecay(
+    report: ConsolidationReport,
+    prunedFactIds: Set<string>,
+    mutations: Mutation[],
+  ): Promise<void> {
     const { maxFacts, decayHalfLifeDays = 30, deleteMode = 'soft' } = this.options;
     if (maxFacts === undefined) return;
+    const batchSize = this.options.batchSize ?? 1000;
 
-    const facts = await this.store.findFacts({ include_invalidated: false, limit: 10_000 });
+    // Load facts in batches to avoid OOM on large stores
+    const allFacts: SemanticFact[] = [];
+    let offset = 0;
+    while (true) {
+      const batch = await this.store.findFacts({ include_invalidated: false, limit: batchSize, offset });
+      allFacts.push(...batch);
+      if (batch.length < batchSize) break;
+      offset += batchSize;
+    }
+    // Exclude facts already marked for pruning by dedup
+    const facts = allFacts.filter((f) => !prunedFactIds.has(f.id));
     if (facts.length <= maxFacts) return;
 
     const now = Date.now();
@@ -142,19 +239,15 @@ export class MemoryConsolidator {
       return { fact, decayScore };
     });
 
-    // Sort ascending by score (lowest first = candidates for pruning)
     scored.sort((a, b) => a.decayScore - b.decayScore);
 
     const toPrune = scored.length - maxFacts;
     for (let i = 0; i < toPrune; i++) {
       const { fact } = scored[i];
       if (deleteMode === 'soft') {
-        await this.store.putFact({
-          ...fact,
-          invalidated_by: 'consolidation:decay',
-        });
+        mutations.push({ type: 'putFact', fact: { ...fact, invalidated_by: 'consolidation:decay' } });
       } else {
-        await this.store.deleteFact(fact.id);
+        mutations.push({ type: 'deleteFact', id: fact.id });
       }
       prunedFactIds.add(fact.id);
       report.factsDecayed++;
@@ -162,7 +255,11 @@ export class MemoryConsolidator {
     }
   }
 
-  private async cascadeThemes(prunedFactIds: Set<string>, report: ConsolidationReport): Promise<void> {
+  private async planCascadeThemes(
+    prunedFactIds: Set<string>,
+    report: ConsolidationReport,
+    mutations: Mutation[],
+  ): Promise<void> {
     if (prunedFactIds.size === 0) return;
 
     const themes = await this.store.listThemes();
@@ -173,15 +270,14 @@ export class MemoryConsolidator {
       if (filtered.length === theme.fact_ids.length) continue;
 
       if (filtered.length === 0) {
-        await this.store.deleteTheme(theme.id);
+        mutations.push({ type: 'deleteTheme', id: theme.id });
         report.themesRemoved++;
         report.totalReclaimed++;
       } else {
         const embedding = await this.computeCentroid(filtered);
-        await this.store.putTheme({
-          ...theme,
-          fact_ids: filtered,
-          embedding,
+        mutations.push({
+          type: 'putTheme',
+          theme: { ...theme, fact_ids: filtered, embedding },
         });
         report.themesCleanedUp++;
       }
@@ -201,37 +297,93 @@ export class MemoryConsolidator {
     if (embeddings.length === 0) return undefined;
 
     const dims = embeddings[0].length;
+    // Filter to embeddings with matching dimensionality to avoid silent corruption
+    const valid = embeddings.filter(e => e.length === dims);
+    if (valid.length === 0) return undefined;
+
     const centroid = new Array<number>(dims).fill(0);
 
-    for (const emb of embeddings) {
+    for (const emb of valid) {
       for (let i = 0; i < dims; i++) {
         centroid[i] += emb[i];
       }
     }
 
     for (let i = 0; i < dims; i++) {
-      centroid[i] /= embeddings.length;
+      centroid[i] /= valid.length;
     }
 
     return centroid;
   }
 
-  private async pruneEpisodes(report: ConsolidationReport): Promise<void> {
+  private async planEpisodePrune(
+    report: ConsolidationReport,
+    mutations: Mutation[],
+  ): Promise<void> {
     const { maxEpisodes } = this.options;
     if (maxEpisodes === undefined) return;
 
-    // listEpisodes returns newest first by default; we want oldest first for pruning
     const episodes = await this.store.listEpisodes({ limit: 10_000 });
     if (episodes.length <= maxEpisodes) return;
 
-    // Reverse so oldest is first
+    // listEpisodes returns newest first; reverse so oldest is first
     episodes.reverse();
 
     const toPrune = episodes.length - maxEpisodes;
     for (let i = 0; i < toPrune; i++) {
-      await this.store.deleteEpisode(episodes[i].id);
+      mutations.push({ type: 'deleteEpisode', id: episodes[i].id });
       report.episodesPruned++;
       report.totalReclaimed++;
     }
+  }
+
+  private async applyMutations(mutations: Mutation[]): Promise<Array<{ type: string; id: string }>> {
+    const log: Array<{ type: string; id: string }> = [];
+
+    // Pre-application validation: detect fact IDs that appear in both put and delete mutations.
+    const putFactIds = new Set<string>();
+    const deleteFactIds = new Set<string>();
+    for (const m of mutations) {
+      if (m.type === 'putFact') putFactIds.add(m.fact.id);
+      if (m.type === 'deleteFact') deleteFactIds.add(m.id);
+    }
+    const conflictingIds = new Set<string>();
+    for (const id of putFactIds) {
+      if (deleteFactIds.has(id)) {
+        (this.options.logger?.warn ?? console.warn)(`consolidation: conflicting mutations for fact ${id}, skipping`);
+        conflictingIds.add(id);
+      }
+    }
+
+    for (const mutation of mutations) {
+      // Skip conflicting fact mutations
+      if (mutation.type === 'putFact' && conflictingIds.has(mutation.fact.id)) continue;
+      if (mutation.type === 'deleteFact' && conflictingIds.has(mutation.id)) continue;
+
+      switch (mutation.type) {
+        case 'putFact':
+          await this.store.putFact(mutation.fact);
+          log.push({ type: 'putFact', id: mutation.fact.id });
+          break;
+        case 'deleteFact':
+          await this.store.deleteFact(mutation.id);
+          log.push({ type: 'deleteFact', id: mutation.id });
+          break;
+        case 'deleteEpisode':
+          await this.store.deleteEpisode(mutation.id);
+          log.push({ type: 'deleteEpisode', id: mutation.id });
+          break;
+        case 'putTheme':
+          await this.store.putTheme(mutation.theme);
+          log.push({ type: 'putTheme', id: mutation.theme.id });
+          break;
+        case 'deleteTheme':
+          await this.store.deleteTheme(mutation.id);
+          log.push({ type: 'deleteTheme', id: mutation.id });
+          break;
+      }
+    }
+
+    return log;
   }
 }

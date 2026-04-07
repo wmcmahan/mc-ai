@@ -11,6 +11,7 @@
 
 import type { EmbeddingProvider } from '../../providers/types.js';
 import type { CompressionStage, PromptSegment, StageContext } from '../../pipeline/types.js';
+import { fnv1a } from '../dedup/exact.js';
 
 export interface SemanticDedupOptions {
   /** Cosine similarity threshold for duplicate detection (default 0.90). */
@@ -21,6 +22,8 @@ export interface SemanticDedupOptions {
   provider: EmbeddingProvider;
   /** Pre-computed embeddings keyed by text content. */
   precomputed?: Map<string, number[]>;
+  /** Maximum items to compare (default 2000). When over 200 items, SimHash LSH pre-filters candidate pairs to avoid O(n²). Items beyond the cap pass through undeduped. */
+  maxItems?: number;
 }
 
 /**
@@ -60,8 +63,37 @@ export async function precomputeEmbeddings(
   return map;
 }
 
+// --- Union-Find for order-independent clustering ---
+
+function makeUnionFind(n: number) {
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const rank = new Array<number>(n).fill(0);
+
+  function find(x: number): number {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]]; // path compression
+      x = parent[x];
+    }
+    return x;
+  }
+
+  function union(a: number, b: number): void {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra === rb) return;
+    if (rank[ra] < rank[rb]) { parent[ra] = rb; }
+    else if (rank[ra] > rank[rb]) { parent[rb] = ra; }
+    else { parent[rb] = ra; rank[ra]++; }
+  }
+
+  return { find, union };
+}
+
 /**
  * Create a pipeline stage that deduplicates paragraphs by semantic similarity.
+ *
+ * Uses union-find clustering for correct transitive dedup: if A~B and B~C,
+ * all three are grouped and only the longest survives.
  *
  * Uses pre-computed embeddings when available; otherwise skips paragraphs
  * without embeddings (does not call the provider at runtime since the
@@ -95,35 +127,76 @@ export function createSemanticDedupStage(options: SemanticDedupOptions): Compres
       }
 
       // Build vectors for eligible paragraphs
+      const maxItems = options.maxItems ?? 2000;
+      if (allParagraphs.length > maxItems) {
+        console.warn(`context-engine: semantic dedup capped at ${maxItems} items (${allParagraphs.length} provided)`);
+      }
+      const compareLimit = Math.min(allParagraphs.length, maxItems);
+
       const vectors: (number[] | null)[] = allParagraphs.map(p => {
         const trimmed = p.text.trim();
         if (trimmed.length < minLength) return null;
         return precomputed.get(trimmed) ?? null;
       });
 
-      // Pairwise comparison — mark duplicates (keep longer)
-      const removed = new Set<number>();
+      const uf = makeUnionFind(allParagraphs.length);
 
-      for (let i = 0; i < allParagraphs.length; i++) {
-        if (removed.has(i)) continue;
-        const vecA = vectors[i];
-        if (!vecA) continue;
-
-        for (let j = i + 1; j < allParagraphs.length; j++) {
-          if (removed.has(j)) continue;
+      // Pairwise comparison — union similar paragraphs (capped at maxItems)
+      if (compareLimit > 200) {
+        // Use SimHash LSH pre-filter to reduce pairwise comparisons
+        const candidates = simHashBuckets(vectors, compareLimit, 64, 16);
+        for (const key of candidates) {
+          const sep = key.indexOf(':');
+          const i = parseInt(key.substring(0, sep), 10);
+          const j = parseInt(key.substring(sep + 1), 10);
+          const vecA = vectors[i];
           const vecB = vectors[j];
-          if (!vecB) continue;
+          if (!vecA || !vecB) continue;
+          if (cosineSimilarity(vecA, vecB) >= threshold) {
+            uf.union(i, j);
+          }
+        }
+      } else {
+        for (let i = 0; i < compareLimit; i++) {
+          const vecA = vectors[i];
+          if (!vecA) continue;
 
-          const sim = cosineSimilarity(vecA, vecB);
-          if (sim >= threshold) {
-            // Keep the longer paragraph (more information content)
-            if (allParagraphs[i].text.length >= allParagraphs[j].text.length) {
-              removed.add(j);
-            } else {
-              removed.add(i);
-              break;
+          for (let j = i + 1; j < compareLimit; j++) {
+            const vecB = vectors[j];
+            if (!vecB) continue;
+
+            if (cosineSimilarity(vecA, vecB) >= threshold) {
+              uf.union(i, j);
             }
           }
+        }
+      }
+
+      // Group by cluster root (only for items within the compare limit)
+      const clusters = new Map<number, number[]>();
+      for (let i = 0; i < compareLimit; i++) {
+        if (!vectors[i]) continue;
+        const root = uf.find(i);
+        let group = clusters.get(root);
+        if (!group) {
+          group = [];
+          clusters.set(root, group);
+        }
+        group.push(i);
+      }
+
+      // From each cluster, keep the longest paragraph; mark the rest as removed
+      const removed = new Set<number>();
+      for (const members of clusters.values()) {
+        if (members.length <= 1) continue;
+        let longest = members[0];
+        for (let k = 1; k < members.length; k++) {
+          if (allParagraphs[members[k]].text.length > allParagraphs[longest].text.length) {
+            longest = members[k];
+          }
+        }
+        for (const idx of members) {
+          if (idx !== longest) removed.add(idx);
         }
       }
 
@@ -148,6 +221,123 @@ export function createSemanticDedupStage(options: SemanticDedupOptions): Compres
       return { segments: output };
     },
   };
+}
+
+// ─── SimHash LSH Pre-Filter ──────────────────────────────────────
+
+/**
+ * Generate candidate duplicate pairs using SimHash-style locality-sensitive hashing.
+ *
+ * Algorithm:
+ * 1. Generate `numBits` random hyperplanes (deterministic via fnv1a seeding).
+ * 2. For each vector, compute a bit string: bit_i = sign(dot(vector, hyperplane_i)).
+ * 3. Band the bits into `numBands` bands and hash each band.
+ * 4. Items sharing a band bucket are candidate pairs.
+ *
+ * @param vectors  - Embedding vectors (null entries are skipped).
+ * @param limit    - Number of items to consider.
+ * @param numBits  - Total hash bits (default 64).
+ * @param numBands - Number of bands to split bits into (default 16 => 4 bits/band).
+ * @returns Set of candidate pair keys "i:j" where i < j.
+ */
+export function simHashBuckets(
+  vectors: (number[] | null)[],
+  limit: number,
+  numBits: number = 64,
+  numBands: number = 16,
+): Set<string> {
+  // Determine embedding dimension from first non-null vector
+  let dim = 0;
+  for (let i = 0; i < limit; i++) {
+    if (vectors[i]) { dim = vectors[i]!.length; break; }
+  }
+  if (dim === 0) return new Set();
+
+  // Generate deterministic random hyperplanes using fnv1a seeding
+  const hyperplanes: number[][] = [];
+  for (let b = 0; b < numBits; b++) {
+    const plane = new Array<number>(dim);
+    let mag = 0;
+    for (let d = 0; d < dim; d++) {
+      // Map fnv1a hash to [-1, 1]
+      const h = fnv1a('hp:' + b + ':' + d);
+      const val = (h / 0xFFFFFFFF) * 2 - 1;
+      plane[d] = val;
+      mag += val * val;
+    }
+    // Normalize to unit vector
+    mag = Math.sqrt(mag);
+    if (mag > 0) {
+      for (let d = 0; d < dim; d++) {
+        plane[d] /= mag;
+      }
+    }
+    hyperplanes.push(plane);
+  }
+
+  // Compute hash bits for each vector
+  const bitsPerBand = numBits / numBands;
+  // Store band hashes per item: bandHashes[itemIndex][bandIndex] = hash number
+  const bandHashes: (number[] | null)[] = new Array(limit);
+
+  for (let i = 0; i < limit; i++) {
+    const vec = vectors[i];
+    if (!vec) { bandHashes[i] = null; continue; }
+
+    const hashes = new Array<number>(numBands);
+    for (let band = 0; band < numBands; band++) {
+      let bandHash = 0x811c9dc5; // fnv1a offset basis
+      const startBit = band * bitsPerBand;
+      for (let k = 0; k < bitsPerBand; k++) {
+        const bitIdx = startBit + k;
+        const plane = hyperplanes[bitIdx];
+        // Compute dot product
+        let dot = 0;
+        for (let d = 0; d < dim; d++) {
+          dot += vec[d] * plane[d];
+        }
+        const bit = dot >= 0 ? 1 : 0;
+        // Mix bit into band hash
+        bandHash ^= bit;
+        bandHash = (bandHash * 0x01000193) | 0;
+      }
+      hashes[band] = bandHash >>> 0;
+    }
+    bandHashes[i] = hashes;
+  }
+
+  // Bucket items by band hash and collect candidate pairs
+  const candidates = new Set<string>();
+
+  for (let band = 0; band < numBands; band++) {
+    const buckets = new Map<number, number[]>();
+
+    for (let i = 0; i < limit; i++) {
+      const hashes = bandHashes[i];
+      if (!hashes) continue;
+      const h = hashes[band];
+      let bucket = buckets.get(h);
+      if (!bucket) {
+        bucket = [];
+        buckets.set(h, bucket);
+      }
+      bucket.push(i);
+    }
+
+    // All pairs within a bucket are candidates
+    for (const bucket of buckets.values()) {
+      if (bucket.length < 2) continue;
+      for (let a = 0; a < bucket.length; a++) {
+        for (let b = a + 1; b < bucket.length; b++) {
+          const lo = bucket[a] < bucket[b] ? bucket[a] : bucket[b];
+          const hi = bucket[a] < bucket[b] ? bucket[b] : bucket[a];
+          candidates.add(lo + ':' + hi);
+        }
+      }
+    }
+  }
+
+  return candidates;
 }
 
 // ─── Cosine Similarity (private, reimplemented) ───────────────────

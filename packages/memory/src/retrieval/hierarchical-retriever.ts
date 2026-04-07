@@ -138,10 +138,12 @@ async function retrieveByEntities(
   // Find facts referencing these entities
   const entityIdSet = new Set(subgraph.entities.map((e) => e.id));
   const allFacts: SemanticFact[] = [];
+  const seenFactIds = new Set<string>();
   for (const entityId of entityIdSet) {
     const facts = await store.findFacts({ entity_id: entityId, include_invalidated });
     for (const fact of facts) {
-      if (!allFacts.some((f) => f.id === fact.id)) {
+      if (!seenFactIds.has(fact.id)) {
+        seenFactIds.add(fact.id);
         allFacts.push(fact);
       }
     }

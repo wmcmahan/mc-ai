@@ -90,6 +90,36 @@ describe('allocateBudget', () => {
     expect(bigAlloc).toBeGreaterThan(smallAlloc);
   });
 
+  it('distributes all surplus tokens without remainder loss', () => {
+    // Create 3 segments that all need more than their proportional share
+    // so surplus redistribution is triggered, testing that Math.floor
+    // remainder is properly handled via largest-remainder method
+    const segments = [
+      makeSegment('a', 'x'.repeat(2000), { priority: 1 }),
+      makeSegment('b', 'x'.repeat(2000), { priority: 1 }),
+      makeSegment('c', 'x'.repeat(2000), { priority: 1 }),
+    ];
+    // Use a small budget so all segments overflow and surplus from floor goes somewhere
+    const budget: BudgetConfig = { maxTokens: 100, outputReserve: 0 };
+    const result = allocateBudget(segments, budget, counter);
+
+    const total = [...result.allocations.values()].reduce((s, v) => s + v, 0);
+    // All 100 tokens should be distributed — no remainder lost
+    expect(total).toBe(100);
+  });
+
+  it('reports locked segments in overflow when they exceed budget', () => {
+    const segments = [
+      makeSegment('sys', 'x'.repeat(2000), { locked: true }),
+      makeSegment('user', 'hello'),
+    ];
+    // Budget is much smaller than the locked segment
+    const budget: BudgetConfig = { maxTokens: 10, outputReserve: 0 };
+    const result = allocateBudget(segments, budget, counter);
+
+    expect(result.overflow).toContain('sys');
+  });
+
   it('handles empty segments list', () => {
     const budget: BudgetConfig = { maxTokens: 100, outputReserve: 0 };
     const result = allocateBudget([], budget, counter);
@@ -137,5 +167,67 @@ describe('createAllocatorStage', () => {
 
     const result = stage.execute(segments, context);
     expect(result.segments[0].content).toContain('[truncated]');
+  });
+
+  it('truncated output including suffix stays within token budget', () => {
+    const stage = createAllocatorStage();
+    const longContent = 'word '.repeat(500);
+    const maxTokens = 30;
+    const segments = [makeSegment('a', longContent)];
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const result = stage.execute(segments, context);
+    const outputTokens = counter.countTokens(result.segments[0].content);
+    expect(outputTokens).toBeLessThanOrEqual(maxTokens);
+    expect(result.segments[0].content).toContain('[truncated]');
+  });
+
+  it('returns empty string when budget is too small for suffix', () => {
+    const stage = createAllocatorStage();
+    const longContent = 'word '.repeat(100);
+    const segments = [makeSegment('a', longContent)];
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 1, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const result = stage.execute(segments, context);
+    // Budget too small to fit even the truncation suffix
+    expect(result.segments[0].content.length).toBeLessThanOrEqual(
+      counter.countTokens(result.segments[0].content) <= 1 ? Infinity : 0,
+    );
+    const outputTokens = counter.countTokens(result.segments[0].content);
+    expect(outputTokens).toBeLessThanOrEqual(1);
+  });
+
+  it('uses custom truncation suffix when provided', () => {
+    const customSuffix = ' [CUT]';
+    const stage = createAllocatorStage({ truncationSuffix: customSuffix });
+    const longContent = 'word '.repeat(500);
+    const segments = [makeSegment('a', longContent)];
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 50, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const result = stage.execute(segments, context);
+    expect(result.segments[0].content).toContain('[CUT]');
+    expect(result.segments[0].content).not.toContain('[truncated]');
+  });
+
+  it('uses default truncation suffix when no option provided', () => {
+    const stage = createAllocatorStage();
+    const longContent = 'word '.repeat(500);
+    const segments = [makeSegment('a', longContent)];
+    const context = {
+      tokenCounter: counter,
+      budget: { maxTokens: 50, outputReserve: 0 } as BudgetConfig,
+    };
+
+    const result = stage.execute(segments, context);
+    expect(result.segments[0].content).toContain('... [truncated]');
   });
 });

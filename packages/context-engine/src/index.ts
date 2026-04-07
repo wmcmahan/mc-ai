@@ -39,12 +39,14 @@ export type {
   PipelineInput,
   PipelineResult,
   SourceMapEntry,
+  PipelineLogger,
 } from './pipeline/types.js';
 
 export {
   SegmentRoleSchema,
   PromptSegmentSchema,
   BudgetConfigSchema,
+  noopLogger,
 } from './pipeline/types.js';
 
 export { createPipeline } from './pipeline/pipeline.js';
@@ -122,7 +124,7 @@ export {
   countTotalTokens,
 } from './budget/counter.js';
 
-export type { AllocationResult } from './budget/allocator.js';
+export type { AllocationResult, AllocatorStageOptions } from './budget/allocator.js';
 export { allocateBudget, createAllocatorStage } from './budget/allocator.js';
 
 export type { CachePolicyOptions } from './budget/cache-policy.js';
@@ -167,7 +169,7 @@ export { createAdaptiveMemoryStage } from './memory/adaptive-compressor.js';
 // --- Semantic Dedup ---
 
 export type { SemanticDedupOptions } from './memory/dedup/semantic.js';
-export { createSemanticDedupStage, precomputeEmbeddings } from './memory/dedup/semantic.js';
+export { createSemanticDedupStage, precomputeEmbeddings, simHashBuckets } from './memory/dedup/semantic.js';
 
 // --- Model-Aware Routing ---
 

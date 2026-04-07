@@ -168,7 +168,7 @@ describe('injection safety tests', () => {
     };
 
     // Should not throw
-    const facts = await extractor.extract(episode);
-    expect(Array.isArray(facts)).toBe(true);
+    const result = await extractor.extract(episode);
+    expect(Array.isArray(result.facts)).toBe(true);
   });
 });

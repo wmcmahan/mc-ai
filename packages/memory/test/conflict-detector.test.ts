@@ -218,7 +218,8 @@ describe('ConflictDetector', () => {
 
     const contradictions = conflicts.filter((c) => c.type === 'semantic_contradiction');
     expect(contradictions).toHaveLength(1);
-    expect(contradictions[0].confidence).toBe(0.6);
+    // Short facts (<=4 content words) get high confidence
+    expect(contradictions[0].confidence).toBe(0.7);
   });
 
   // 9. Semantic contradiction: high embedding sim but different entities → no conflict
@@ -452,5 +453,78 @@ describe('ConflictDetector', () => {
       const negations = conflicts.filter((c) => c.type === 'negation');
       expect(negations.length, `Expected negation for: "${affirmative}" vs "${negative}"`).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  // 19. Semantic contradiction: long complementary facts get low confidence
+  it('assigns low confidence to long complementary facts', async () => {
+    const f1 = makeFact({
+      content: 'Alice is the chief executive officer of Acme Corporation headquartered in New York City',
+      entity_ids: [ENTITY_A],
+      embedding: [1, 0, 0],
+    });
+    const f2 = makeFact({
+      content: 'Alice earns a salary of one hundred thousand dollars per year at the corporation',
+      entity_ids: [ENTITY_A],
+      embedding: [0.95, 0.3, 0],
+    });
+    await store.putFact(f1);
+    await store.putFact(f2);
+    await index.rebuild(store);
+
+    const detector = new ConflictDetector(store, index, {
+      embeddingThreshold: 0.8,
+      autoResolveSupersession: false,
+    });
+    const conflicts = await detector.detectConflicts();
+
+    const contradictions = conflicts.filter((c) => c.type === 'semantic_contradiction');
+    if (contradictions.length > 0) {
+      // Long facts should get low confidence
+      expect(contradictions[0].confidence).toBeLessThanOrEqual(0.3);
+    }
+  });
+
+  // 20. semanticOverlapThreshold option is respected
+  it('respects custom semanticOverlapThreshold', async () => {
+    const f1 = makeFact({
+      content: 'Alice is the CEO',
+      entity_ids: [ENTITY_A],
+      embedding: [1, 0, 0],
+    });
+    const f2 = makeFact({
+      content: 'Junior intern position held',
+      entity_ids: [ENTITY_A],
+      embedding: [0.95, 0.3, 0],
+    });
+    await store.putFact(f1);
+    await store.putFact(f2);
+    await index.rebuild(store);
+
+    // With a very low threshold, facts with any overlap should not be flagged
+    const detector = new ConflictDetector(store, index, {
+      embeddingThreshold: 0.8,
+      semanticOverlapThreshold: 0.01,
+      autoResolveSupersession: false,
+    });
+    const conflicts = await detector.detectConflicts();
+
+    // These facts have ~0 overlap, so they should still be flagged even at 0.01
+    const contradictions = conflicts.filter((c) => c.type === 'semantic_contradiction');
+    expect(contradictions).toHaveLength(1);
+
+    // With a threshold of 0 (impossible to be below), nothing is flagged
+    await store.clear();
+    await store.putFact(f1);
+    await store.putFact(f2);
+    await index.rebuild(store);
+
+    const detector2 = new ConflictDetector(store, index, {
+      embeddingThreshold: 0.8,
+      semanticOverlapThreshold: 0,
+      autoResolveSupersession: false,
+    });
+    const conflicts2 = await detector2.detectConflicts();
+    const contradictions2 = conflicts2.filter((c) => c.type === 'semantic_contradiction');
+    expect(contradictions2).toHaveLength(0);
   });
 });

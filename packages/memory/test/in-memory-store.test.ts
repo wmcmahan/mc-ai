@@ -109,6 +109,31 @@ describe('InMemoryMemoryStore', () => {
       expect(await store.getRelationshipsForEntity(b.id)).toHaveLength(0);
     });
 
+    it('deleteEntity cleans up counter-party relationship index (no stale refs)', async () => {
+      const a = makeEntity();
+      const b = makeEntity();
+      const c = makeEntity();
+      await store.putEntity(a);
+      await store.putEntity(b);
+      await store.putEntity(c);
+
+      // A -> B and A -> C
+      await store.putRelationship(makeRelationship(a.id, b.id));
+      await store.putRelationship(makeRelationship(a.id, c.id));
+
+      // Delete target entity B — A's index should no longer reference the A->B relationship
+      await store.deleteEntity(b.id);
+
+      const aRels = await store.getRelationshipsForEntity(a.id);
+      expect(aRels).toHaveLength(1);
+      expect(aRels[0].target_id).toBe(c.id);
+
+      // C's index should be unaffected
+      const cRels = await store.getRelationshipsForEntity(c.id);
+      expect(cRels).toHaveLength(1);
+      expect(cRels[0].source_id).toBe(a.id);
+    });
+
     it('deep-clones on read (mutation safety)', async () => {
       const entity = makeEntity({ attributes: { key: 'value' } });
       await store.putEntity(entity);

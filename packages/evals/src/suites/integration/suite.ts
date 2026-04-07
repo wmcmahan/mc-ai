@@ -190,9 +190,9 @@ async function runMemoryIngestionPipeline(): Promise<TestCaseResults> {
   const extractor = new RuleBasedExtractor();
   let totalFacts = 0;
   for (const ep of episodes) {
-    const facts = await extractor.extract(ep);
-    for (const fact of facts) await store.putFact(fact);
-    totalFacts += facts.length;
+    const result = await extractor.extract(ep);
+    for (const fact of result.facts) await store.putFact(fact);
+    totalFacts += result.facts.length;
   }
 
   // Cluster into themes
@@ -593,8 +593,8 @@ async function runEndToEnd(): Promise<TestCaseResults> {
   // Step 2: Extract facts
   const extractor = new RuleBasedExtractor();
   for (const ep of episodes) {
-    const facts = await extractor.extract(ep);
-    for (const fact of facts) await store.putFact(fact);
+    const result = await extractor.extract(ep);
+    for (const fact of result.facts) await store.putFact(fact);
   }
 
   // Step 3: Cluster into themes

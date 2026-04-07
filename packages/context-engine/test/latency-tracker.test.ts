@@ -29,9 +29,9 @@ describe('createLatencyTracker', () => {
     expect(tracker.getEfficiency('dedup')).toBe(10); // 50 tokens / 5 ms
   });
 
-  it('returns Infinity efficiency for zero-duration stage', () => {
+  it('returns zero efficiency for zero-duration stage', () => {
     const tracker = createLatencyTracker();
-    expect(tracker.getEfficiency('fast')).toBe(Infinity);
+    expect(tracker.getEfficiency('fast')).toBe(0);
   });
 
   it('respects rolling window size', () => {

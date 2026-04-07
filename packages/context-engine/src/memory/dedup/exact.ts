@@ -99,15 +99,6 @@ function splitParagraphs(content: string): string[] {
   return content.split('\n');
 }
 
-/** Rejoin paragraphs with the appropriate separator. */
-function joinParagraphs(paragraphs: string[]): string {
-  // If any paragraph contains newlines, use double-newline join
-  if (paragraphs.some(p => p.includes('\n'))) {
-    return paragraphs.join('\n\n');
-  }
-  return paragraphs.join('\n');
-}
-
 /**
  * FNV-1a hash (32-bit). Fast, deterministic, good distribution.
  * Pure TypeScript — no crypto dependency.

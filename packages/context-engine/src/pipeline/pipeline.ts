@@ -12,12 +12,13 @@ import type {
   PipelineConfig,
   PipelineInput,
   PipelineResult,
+  PipelineLogger,
   PromptSegment,
   StageContext,
   StageMetrics,
   SourceMapEntry,
 } from './types.js';
-import { BudgetConfigSchema } from './types.js';
+import { BudgetConfigSchema, noopLogger } from './types.js';
 import { DefaultTokenCounter } from '../providers/defaults.js';
 import { computeStageMetrics, aggregateMetrics } from './metrics.js';
 
@@ -40,6 +41,8 @@ import { computeStageMetrics, aggregateMetrics } from './metrics.js';
 export function createPipeline(config: PipelineConfig) {
   const tokenCounter = config.tokenCounter ?? new DefaultTokenCounter();
   const debug = config.debug ?? false;
+  const logger: PipelineLogger = config.logger ?? noopLogger;
+  const timeoutMs = config.timeoutMs;
 
   return {
     compress(input: PipelineInput): PipelineResult {
@@ -80,9 +83,16 @@ export function createPipeline(config: PipelineConfig) {
       const initialTokens = countSegments(allInitial, tokenCounter, input.model);
 
       const stageMetrics: StageMetrics[] = [];
+      const pipelineStart = performance.now();
 
       // Execute each stage on mutable segments only
       for (const stage of config.stages) {
+        // Pipeline-level timeout: skip remaining stages if budget exceeded
+        if (timeoutMs !== undefined && (performance.now() - pipelineStart) > timeoutMs) {
+          logger.warn?.(`pipeline timeout (${timeoutMs}ms) exceeded, skipping stage "${stage.name}" and remaining stages`);
+          break;
+        }
+
         const tokensIn = countSegments(mutableSegments, tokenCounter, input.model);
         const start = performance.now();
 
@@ -93,10 +103,11 @@ export function createPipeline(config: PipelineConfig) {
 
           stageMetrics.push(computeStageMetrics(stage.name, tokensIn, tokensOut, durationMs));
           mutableSegments = result.segments;
-        } catch {
+        } catch (err) {
           // Graceful degradation: pass input through on error
           const durationMs = performance.now() - start;
           stageMetrics.push(computeStageMetrics(stage.name, tokensIn, tokensIn, durationMs, true));
+          logger.warn?.(`stage "${stage.name}" threw, passing through: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 

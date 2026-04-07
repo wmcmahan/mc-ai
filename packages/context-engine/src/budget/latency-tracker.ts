@@ -76,7 +76,7 @@ export function createLatencyTracker(windowSize: number = 100): LatencyTracker {
 
     getEfficiency(stageName: string): number {
       const stats = this.getAverage(stageName);
-      if (stats.avgDurationMs === 0) return Infinity;
+      if (stats.avgDurationMs === 0) return 0;
       return stats.avgTokensSaved / stats.avgDurationMs;
     },
 

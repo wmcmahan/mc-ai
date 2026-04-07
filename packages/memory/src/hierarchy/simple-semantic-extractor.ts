@@ -9,23 +9,26 @@
  */
 
 import type { Episode } from '../schemas/episode.js';
-import type { SemanticFact } from '../schemas/semantic.js';
-import type { SemanticExtractor } from '../interfaces/semantic-extractor.js';
+import type { SemanticExtractor, ExtractionResult } from '../interfaces/semantic-extractor.js';
 
 export class SimpleSemanticExtractor implements SemanticExtractor {
-  async extract(episode: Episode): Promise<SemanticFact[]> {
+  async extract(episode: Episode): Promise<ExtractionResult> {
     const now = new Date();
 
-    return [{
-      id: crypto.randomUUID(),
-      content: episode.topic,
-      source_episode_ids: [episode.id],
-      entity_ids: [],
-      provenance: {
-        source: 'system',
-        created_at: now,
-      },
-      valid_from: episode.started_at,
-    }];
+    return {
+      facts: [{
+        id: crypto.randomUUID(),
+        content: episode.topic,
+        source_episode_ids: [episode.id],
+        entity_ids: [],
+        provenance: {
+          source: 'system',
+          created_at: now,
+        },
+        valid_from: episode.started_at,
+      }],
+      entities: [],
+      relationships: [],
+    };
   }
 }

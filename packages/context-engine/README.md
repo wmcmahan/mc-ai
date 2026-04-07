@@ -96,9 +96,11 @@ const turn2 = pipeline.compress({ segments: updatedSegments, budget }, turn1.sta
 console.log(`Cached: ${turn2.cachedSegmentCount}, Fresh: ${turn2.freshSegmentCount}`);
 ```
 
-Stages with `scope: 'cross-segment'` (e.g., fuzzy dedup) are re-run whenever
-any segment changes, even if the stage's own input segments are cached.
-Per-segment stages (the default) cache independently.
+Stages with `scope: 'cross-segment'` (e.g., fuzzy dedup) are re-run only when
+per-segment stage outputs actually change — not just when inputs change. If a
+segment's input changes but its per-segment output is identical to the previous
+turn, cross-segment stages are skipped. Per-segment stages (the default) cache
+independently.
 
 ### Manual Pipeline
 
@@ -127,6 +129,8 @@ const pipeline = createPipeline({
     createHeuristicPruningStage(),
     createAllocatorStage(),
   ],
+  logger: { warn: (msg) => console.warn(msg) },  // optional structured logging
+  timeoutMs: 500,  // optional pipeline-level timeout; remaining stages skipped if exceeded
 });
 
 const result = pipeline.compress({ segments, budget: { maxTokens: 4096, outputReserve: 512 } });
@@ -260,8 +264,8 @@ Three levels of duplicate detection:
 import { createExactDedupStage, createFuzzyDedupStage, createSemanticDedupStage } from '@mcai/context-engine';
 
 createExactDedupStage()                           // O(n) hash-based, identical content
-createFuzzyDedupStage({ threshold: 0.85 })        // O(n²) trigram Jaccard, near-duplicates
-createSemanticDedupStage({ provider, precomputed }) // O(n²) embedding cosine, same-meaning
+createFuzzyDedupStage({ threshold: 0.85 })        // trigram Jaccard, MinHash LSH pre-filter for >200 items
+createSemanticDedupStage({ provider, precomputed }) // embedding cosine, SimHash LSH pre-filter for >200 items
 ```
 
 Semantic dedup requires pre-computed embeddings (async, before pipeline):
@@ -546,7 +550,7 @@ npm run test --workspace=packages/context-engine
 npm run lint --workspace=packages/context-engine
 ```
 
-282 tests across 25 test files. All tests run in under 350ms.
+398 tests across 31 test files. All tests run in under 450ms.
 
 ## Research Foundation
 

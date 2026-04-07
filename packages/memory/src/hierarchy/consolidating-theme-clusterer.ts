@@ -196,5 +196,9 @@ export class ConsolidatingThemeClusterer implements ThemeClusterer {
 }
 
 function averageEmbeddings(a: number[], b: number[]): number[] {
+  if (a.length !== b.length) {
+    // Dimension mismatch — return the longer embedding unchanged
+    return a.length >= b.length ? [...a] : [...b];
+  }
   return a.map((val, i) => (val + b[i]) / 2);
 }

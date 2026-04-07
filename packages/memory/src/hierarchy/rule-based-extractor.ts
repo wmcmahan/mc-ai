@@ -10,14 +10,20 @@
 
 import type { Episode } from '../schemas/episode.js';
 import type { SemanticFact } from '../schemas/semantic.js';
-import type { SemanticExtractor } from '../interfaces/semantic-extractor.js';
+import type { Entity } from '../schemas/entity.js';
+import type { Relationship } from '../schemas/relationship.js';
+import type { SemanticExtractor, ExtractionResult } from '../interfaces/semantic-extractor.js';
 
 export interface RuleBasedExtractorOptions {
   /** Skip sentences shorter than this (default: 20 chars). */
   minSentenceLength?: number;
   /** Additional entity-detection regexes. */
   entityPatterns?: RegExp[];
-  /** Additional relationship verbs. */
+  /**
+   * Additional relationship verbs. Note: the inflection engine handles
+   * regular verbs only. Consonant-doubling verbs (e.g., "stop" → "stopped")
+   * are not supported — use pre-inflected forms or the base form.
+   */
   relationshipVerbs?: string[];
 }
 
@@ -27,10 +33,10 @@ export interface ExtractedEntity {
 }
 
 const DEFAULT_RELATIONSHIP_VERBS = [
-  'works_at', 'reports_to', 'manages', 'leads', 'created',
-  'authored', 'owns', 'uses', 'depends_on', 'contains',
-  'belongs_to', 'collaborates_with', 'reviewed', 'approved',
-  'deployed', 'tested', 'maintains', 'supports', 'blocks', 'requires',
+  'work_at', 'report_to', 'manage', 'lead', 'create',
+  'author', 'own', 'use', 'depend_on', 'contain',
+  'belong_to', 'collaborate_with', 'review', 'approve',
+  'deploy', 'test', 'maintain', 'support', 'block', 'require',
 ];
 
 /**
@@ -93,11 +99,13 @@ export class RuleBasedExtractor implements SemanticExtractor {
     }
   }
 
-  async extract(episode: Episode): Promise<SemanticFact[]> {
+  async extract(episode: Episode): Promise<ExtractionResult> {
     const now = new Date();
     const entityNameToId = new Map<string, string>();
+    const entityNameToType = new Map<string, string>();
     const seenNormalized = new Set<string>();
     const facts: SemanticFact[] = [];
+    const relationships: Relationship[] = [];
 
     for (const message of episode.messages) {
       const sentences = splitSentences(message.content);
@@ -110,10 +118,11 @@ export class RuleBasedExtractor implements SemanticExtractor {
         if (seenNormalized.has(normalized)) continue;
         seenNormalized.add(normalized);
 
-        const entities = this.extractEntities(trimmed);
-        const entityIds = entities.map((e) => {
+        const detectedEntities = this.extractEntities(trimmed);
+        const entityIds = detectedEntities.map((e) => {
           if (!entityNameToId.has(e.name)) {
             entityNameToId.set(e.name, crypto.randomUUID());
+            entityNameToType.set(e.name, e.type);
           }
           return entityNameToId.get(e.name)!;
         });
@@ -129,10 +138,87 @@ export class RuleBasedExtractor implements SemanticExtractor {
           },
           valid_from: episode.started_at,
         });
+
+        // Extract relationships between detected entities in this sentence
+        const sentenceRels = this.extractRelationships(
+          trimmed, detectedEntities, entityNameToId, episode.started_at, now,
+        );
+        relationships.push(...sentenceRels);
       }
     }
 
-    return facts;
+    // Build Entity records from the name→id map
+    const entities: Entity[] = [...entityNameToId.entries()].map(([name, id]) => ({
+      id,
+      name,
+      entity_type: entityNameToType.get(name) ?? 'concept',
+      attributes: {},
+      provenance: { source: 'derived' as const, created_at: now },
+      created_at: now,
+      updated_at: now,
+    }));
+
+    return { facts, entities, relationships };
+  }
+
+  /**
+   * Scan a sentence for verb patterns between known entities.
+   * Looks for `<entityA> ... <verb> ... <entityB>` patterns.
+   */
+  private extractRelationships(
+    sentence: string,
+    detectedEntities: ExtractedEntity[],
+    entityNameToId: Map<string, string>,
+    validFrom: Date,
+    now: Date,
+  ): Relationship[] {
+    if (detectedEntities.length < 2) return [];
+
+    const relationships: Relationship[] = [];
+    const lowerSentence = sentence.toLowerCase();
+
+    // Find the position of each entity in the sentence using word-boundary matching
+    const entityPositions = detectedEntities
+      .map((e) => {
+        const escaped = e.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = sentence.match(new RegExp(`(?<![a-zA-Z])${escaped}(?![a-zA-Z])`));
+        return { entity: e, index: match?.index ?? -1 };
+      })
+      .filter((ep) => ep.index >= 0)
+      .sort((a, b) => a.index - b.index);
+
+    // For each adjacent entity pair, look for verb forms between them
+    for (let i = 0; i < entityPositions.length - 1; i++) {
+      const source = entityPositions[i];
+      const target = entityPositions[i + 1];
+
+      const between = lowerSentence.slice(
+        source.index + source.entity.name.length,
+        target.index,
+      );
+
+      for (const [form, canonical] of this.verbFormMap) {
+        if (between.includes(form)) {
+          const sourceId = entityNameToId.get(source.entity.name);
+          const targetId = entityNameToId.get(target.entity.name);
+          if (sourceId && targetId) {
+            relationships.push({
+              id: crypto.randomUUID(),
+              source_id: sourceId,
+              target_id: targetId,
+              relation_type: canonical,
+              weight: 1,
+              attributes: {},
+              valid_from: validFrom,
+              provenance: { source: 'derived' as const, created_at: now },
+            });
+          }
+          break; // One relationship per entity pair
+        }
+      }
+    }
+
+    return relationships;
   }
 
   /** Expose entity extraction for reuse by other components. */

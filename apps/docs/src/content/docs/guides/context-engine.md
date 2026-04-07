@@ -67,6 +67,35 @@ for (const turn of turns) {
 }
 ```
 
+The incremental pipeline tracks per-segment output hashes, so cross-segment stages (like fuzzy dedup) only re-run when per-segment outputs actually change — not just when inputs change. This avoids expensive re-runs when a segment's content changes but its compressed output stays the same.
+
+## Pipeline safety
+
+### Timeout
+
+Set a pipeline-level timeout to bound total compression time. Remaining stages are skipped if exceeded:
+
+```typescript
+const pipeline = createPipeline({
+  stages: [...],
+  timeoutMs: 200,  // hard cap at 200ms
+});
+```
+
+### Logger
+
+Route diagnostic output through a structured logger:
+
+```typescript
+const pipeline = createPipeline({
+  stages: [...],
+  logger: {
+    warn: (msg) => myLogger.warn(msg),
+    debug: (msg) => myLogger.debug(msg),
+  },
+});
+```
+
 ## Query-aware compression
 
 When the user's query is known, pass it to the heuristic scorer to boost relevant tokens:

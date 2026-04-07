@@ -61,7 +61,7 @@ await store.putRelationship({
   id: crypto.randomUUID(),
   source_id: aliceId,
   target_id: acmeId,
-  relation_type: 'works_at',
+  relation_type: 'work_at',
   weight: 1.0,
   attributes: {},
   valid_from: new Date('2024-01-01'),
@@ -79,7 +79,7 @@ Minimal extraction: one fact per episode (the topic). Use for bootstrapping or w
 
 ### RuleBasedExtractor
 
-Pattern-based extraction producing 3-10 facts per episode. Detects entities (capitalized names, @handles, camelCase, ACRONYMS) and relationships (works_at, manages, depends_on, and ~30 other verbs). No LLM required.
+Pattern-based extraction producing 3-10 facts per episode. Detects entities (capitalized names, @handles, camelCase, ACRONYMS) and relationships (work_at, manage, depend_on, and ~20 other base verbs with automatic inflection). Entity matching uses word boundaries to prevent false positives (e.g., "Smith" won't match inside "Blacksmith"). No LLM required.
 
 ```typescript
 import { RuleBasedExtractor } from '@mcai/memory';
@@ -195,6 +195,8 @@ const consolidator = new MemoryConsolidator(store, index, {
   decayHalfLifeDays: 30,    // time-based relevance decay
   dedupThreshold: 0.9,      // cosine similarity for near-duplicate detection
   deleteMode: 'soft',       // 'soft' (invalidate) or 'hard' (delete)
+  batchSize: 1000,          // paginated fact loading (avoids OOM on large stores)
+  logger: { warn: console.warn },  // optional structured logging
 });
 
 const report = await consolidator.consolidate();
@@ -231,8 +233,8 @@ Three conflict types:
 | Type | Detection | Confidence |
 |------|-----------|------------|
 | `negation` | One fact contains negation words, high word overlap | 0.8 |
-| `supersession` | Same entities, similar content, >1 day apart | 0.9 |
-| `semantic_contradiction` | High embedding similarity, shared entities, low text overlap | 0.6 |
+| `supersession` | Same entities, similar content, >N days apart (configurable via `supersessionDayThreshold`, default 1) | 0.9 |
+| `semantic_contradiction` | High embedding similarity, shared entities, low text overlap | 0.3-0.7 (scaled by fact length) |
 
 Three resolution policies:
 

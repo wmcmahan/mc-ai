@@ -152,7 +152,7 @@ const rel: Relationship = {
   id: crypto.randomUUID(),
   source_id: aliceId,
   target_id: acmeId,
-  relation_type: 'works_at',
+  relation_type: 'work_at',
   weight: 1.0,
   attributes: { department: 'engineering' },
   valid_from: new Date('2024-01-01'),
@@ -164,7 +164,7 @@ await store.putRelationship(rel);
 
 // Query by entity
 const outgoing = await store.getRelationshipsForEntity(aliceId, { direction: 'outgoing' });
-const workRels = await store.getRelationshipsForEntity(aliceId, { relation_type: 'works_at' });
+const workRels = await store.getRelationshipsForEntity(aliceId, { relation_type: 'work_at' });
 ```
 
 ### Subgraph Extraction
@@ -314,7 +314,7 @@ const extractor = new RuleBasedExtractor({
 const facts = await extractor.extract(episode);
 // Produces multiple facts per episode with entity_ids populated
 // Detects: capitalized names, @handles, camelCase, ACRONYMS
-// Extracts relationships: works_at, manages, depends_on, etc.
+// Extracts relationships: work_at, manage, depend_on, etc.
 
 // Entity extraction is available standalone:
 const entities = extractor.extractEntities('Alice Smith works at Acme Corp');
@@ -389,6 +389,8 @@ const consolidator = new MemoryConsolidator(store, index, {
   decayHalfLifeDays: 30,
   dedupThreshold: 0.9,
   deleteMode: 'soft',
+  batchSize: 1000,  // paginated fact loading to avoid OOM on large stores
+  logger: { warn: (msg) => console.warn(msg) },  // optional structured logging
 });
 
 const report = await consolidator.consolidate();
@@ -406,6 +408,7 @@ import { ConflictDetector } from '@mcai/memory';
 const detector = new ConflictDetector(store, index, {
   autoResolveSupersession: true,
   embeddingThreshold: 0.8,
+  supersessionDayThreshold: 1,  // minimum days apart for supersession (configurable)
   policy: 'negation-invalidates-positive',
 });
 

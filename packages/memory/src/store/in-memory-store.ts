@@ -58,14 +58,19 @@ export class InMemoryMemoryStore implements MemoryStore {
   async deleteEntity(id: string): Promise<boolean> {
     const deleted = this.entities.delete(id);
     if (deleted) {
-      // Clean up relationship index
+      // Clean up relationships and deindex from BOTH endpoints
       const relIds = this.entityRelationships.get(id);
       if (relIds) {
-        for (const relId of relIds) {
-          this.relationships.delete(relId);
+        for (const relId of [...relIds]) {  // spread: deindex mutates the set
+          const rel = this.relationships.get(relId);
+          if (rel) {
+            this.relationships.delete(relId);
+            this.deindexRelationship(rel);
+          }
         }
-        this.entityRelationships.delete(id);
       }
+      // Belt-and-suspenders: remove the deleted entity's index entry
+      this.entityRelationships.delete(id);
     }
     return deleted;
   }

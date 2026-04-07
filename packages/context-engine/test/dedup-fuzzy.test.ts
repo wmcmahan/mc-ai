@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { trigramSet, jaccardSimilarity, fuzzyDedup, createFuzzyDedupStage } from '../src/memory/dedup/fuzzy.js';
 import type { PromptSegment, BudgetConfig } from '../src/pipeline/types.js';
 import { DefaultTokenCounter } from '../src/providers/defaults.js';
@@ -112,6 +112,74 @@ describe('fuzzyDedup', () => {
     const result = fuzzyDedup(['only one item here for testing']);
     expect(result.unique).toHaveLength(1);
     expect(result.removed).toBe(0);
+  });
+
+  it('produces order-independent results', () => {
+    const base = 'Multi-agent systems cost 5-10x more than single-agent setups in production environments';
+    const a = base + ' today and tomorrow';
+    const b = base + ' now and forever';
+    const c = base + ' currently and always';
+
+    const order1 = fuzzyDedup([a, b, c], { threshold: 0.8 });
+    const order2 = fuzzyDedup([c, b, a], { threshold: 0.8 });
+    const order3 = fuzzyDedup([b, a, c], { threshold: 0.8 });
+
+    // Same items should survive regardless of input order
+    const kept1 = new Set(order1.unique);
+    const kept2 = new Set(order2.unique);
+    const kept3 = new Set(order3.unique);
+    expect(kept1).toEqual(kept2);
+    expect(kept2).toEqual(kept3);
+  });
+
+  it('keeps the shortest item from a cluster of similar items', () => {
+    const short = 'Multi-agent systems cost 5-10x more in production';
+    const medium = 'Multi-agent systems cost 5-10x more in production environments today';
+    const long = 'Multi-agent systems cost 5-10x more in production environments today and tomorrow morning';
+
+    const result = fuzzyDedup([long, medium, short], { threshold: 0.7 });
+    expect(result.unique).toHaveLength(1);
+    expect(result.unique[0]).toBe(short);
+  });
+
+  it('caps pairwise comparison at maxItems and passes remaining items through', () => {
+    const base = 'Multi-agent systems cost 5-10x more than single-agent setups in production environments';
+    // Items 0-2 are similar (within cap of 3), items 3-4 are beyond cap
+    const items = [
+      base + ' today',
+      base + ' now',
+      base + ' currently',
+      base + ' forever',
+      'Completely different content about local deployment and data sovereignty compliance requirements',
+    ];
+    const result = fuzzyDedup(items, { threshold: 0.8, maxItems: 3 });
+    // First 3 items should be deduped (similar), items 3 and 4 pass through undeduped
+    expect(result.unique).toContain(items[3]);
+    expect(result.unique).toContain(items[4]);
+    // At least some of the first 3 should be deduped
+    expect(result.removed).toBeGreaterThan(0);
+  });
+
+  it('logs a warning when items exceed maxItems', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const items = [
+      'First item is long enough for comparison here and there',
+      'Second item is long enough for comparison here and now',
+      'Third item is long enough for comparison here and today',
+      'Fourth item is long enough for comparison here and currently',
+      'Fifth item is long enough for comparison here and forever',
+    ];
+    fuzzyDedup(items, { maxItems: 3 });
+    expect(warnSpy).toHaveBeenCalledWith('context-engine: fuzzy dedup capped at 3 items (5 provided)');
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when items are within default maxItems of 500', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const items = Array.from({ length: 10 }, (_, i) => `Unique item number ${i} with sufficient length for comparison`);
+    fuzzyDedup(items);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 

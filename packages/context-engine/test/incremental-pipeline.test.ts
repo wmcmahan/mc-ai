@@ -245,7 +245,7 @@ describe('createIncrementalPipeline', () => {
     expect(turn2.state.turnNumber).toBe(2);
   });
 
-  it('metrics reflect zero work for cached segments', () => {
+  it('metrics reuse previous turn values when all segments cached', () => {
     const pipeline = createIncrementalPipeline({
       stages: [createFormatStage()],
     });
@@ -258,10 +258,30 @@ describe('createIncrementalPipeline', () => {
     const turn1 = pipeline.compress({ segments, budget });
     const turn2 = pipeline.compress({ segments, budget }, turn1.state);
 
-    // All cached -> zero duration, zero tokens through pipeline
-    expect(turn2.result.metrics.totalDurationMs).toBe(0);
-    expect(turn2.result.metrics.totalTokensIn).toBe(0);
-    expect(turn2.result.metrics.totalTokensOut).toBe(0);
+    // All cached -> metrics should reflect last turn's real values, not zeros
+    expect(turn2.result.metrics.totalTokensIn).toBe(turn1.result.metrics.totalTokensIn);
+    expect(turn2.result.metrics.totalTokensOut).toBe(turn1.result.metrics.totalTokensOut);
+    expect(turn2.result.metrics.cached).toBe(true);
+  });
+
+  it('metrics are fresh (not cached) when segments change', () => {
+    const pipeline = createIncrementalPipeline({
+      stages: [createFormatStage()],
+    });
+
+    const budget = makeBudget();
+    const turn1 = pipeline.compress({
+      segments: [makeSegment({ id: 'a', content: jsonContent(sampleData) })],
+      budget,
+    });
+
+    const turn2 = pipeline.compress({
+      segments: [makeSegment({ id: 'a', content: jsonContent(sampleData2) })],
+      budget,
+    }, turn1.state);
+
+    expect(turn2.result.metrics.totalTokensIn).toBeGreaterThan(0);
+    expect(turn2.result.metrics.cached).toBeUndefined();
   });
 
   it('mixed: some cached, some fresh, order preserved', () => {
@@ -398,6 +418,60 @@ describe('createIncrementalPipeline', () => {
     const content2 = turn2.result.segments[0].content;
     expect(content2).toBe(content2.toUpperCase());
     expect(content2).not.toBe(content); // different data
+  });
+
+  it('all state Maps match segment count across additions and removals', () => {
+    const pipeline = createIncrementalPipeline({
+      stages: [createUppercaser()],
+    });
+    const budget = makeBudget();
+
+    // Turn 1: [a, b, c]
+    const turn1 = pipeline.compress({
+      segments: [
+        makeSegment({ id: 'a', content: 'alpha' }),
+        makeSegment({ id: 'b', content: 'beta' }),
+        makeSegment({ id: 'c', content: 'gamma' }),
+      ],
+      budget,
+    });
+    expect(turn1.state.segmentHashes.size).toBe(3);
+    expect(turn1.state.compressedSegments.size).toBe(3);
+    expect(turn1.state.perSegmentOutputs.size).toBe(3);
+
+    // Turn 2: [a, b, c, d] — addition
+    const turn2 = pipeline.compress({
+      segments: [
+        makeSegment({ id: 'a', content: 'alpha' }),
+        makeSegment({ id: 'b', content: 'beta' }),
+        makeSegment({ id: 'c', content: 'gamma' }),
+        makeSegment({ id: 'd', content: 'delta' }),
+      ],
+      budget,
+    }, turn1.state);
+    expect(turn2.state.segmentHashes.size).toBe(4);
+    expect(turn2.state.compressedSegments.size).toBe(4);
+    expect(turn2.state.perSegmentOutputs.size).toBe(4);
+
+    // Turn 3: [a, d] — removal of b, c
+    const turn3 = pipeline.compress({
+      segments: [
+        makeSegment({ id: 'a', content: 'alpha' }),
+        makeSegment({ id: 'd', content: 'delta' }),
+      ],
+      budget,
+    }, turn2.state);
+    expect(turn3.state.segmentHashes.size).toBe(2);
+    expect(turn3.state.compressedSegments.size).toBe(2);
+    expect(turn3.state.perSegmentOutputs.size).toBe(2);
+
+    // Verify removed IDs are gone from ALL maps
+    expect(turn3.state.segmentHashes.has('b')).toBe(false);
+    expect(turn3.state.segmentHashes.has('c')).toBe(false);
+    expect(turn3.state.compressedSegments.has('b')).toBe(false);
+    expect(turn3.state.compressedSegments.has('c')).toBe(false);
+    expect(turn3.state.perSegmentOutputs.has('b')).toBe(false);
+    expect(turn3.state.perSegmentOutputs.has('c')).toBe(false);
   });
 
   it('state is self-contained (can be serialized and restored conceptually)', () => {

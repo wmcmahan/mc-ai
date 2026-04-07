@@ -51,6 +51,17 @@ export type SegmentRole = z.infer<typeof SegmentRoleSchema>;
 export type PromptSegment = z.infer<typeof PromptSegmentSchema>;
 export type BudgetConfig = z.infer<typeof BudgetConfigSchema>;
 
+// --- Logger ---
+
+/** Optional logger for pipeline diagnostic output. */
+export interface PipelineLogger {
+  debug?(message: string): void;
+  warn?(message: string): void;
+}
+
+/** No-op logger (default when none provided). */
+export const noopLogger: PipelineLogger = {};
+
 // --- Non-Schema Types ---
 
 /** Per-stage compression metrics. */
@@ -83,6 +94,8 @@ export interface PipelineMetrics {
   totalDurationMs: number;
   /** Per-stage breakdown. */
   stages: StageMetrics[];
+  /** True when all segments were served from cache (no compression ran this turn). */
+  cached?: boolean;
 }
 
 /** Context available to each compression stage. */
@@ -123,6 +136,10 @@ export interface PipelineConfig {
   tokenCounter?: TokenCounter;
   /** Enable debug mode (source maps, extra metrics). */
   debug?: boolean;
+  /** Optional logger for warnings and debug output (defaults to no-op). */
+  logger?: PipelineLogger;
+  /** Pipeline-level timeout in ms. Remaining stages are skipped if exceeded. */
+  timeoutMs?: number;
 }
 
 /** Input to a pipeline compression call. */

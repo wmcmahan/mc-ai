@@ -1,7 +1,7 @@
 /**
  * Semantic Extractor Interface
  *
- * Distills episodes into atomic semantic facts.
+ * Distills episodes into atomic semantic facts, entities, and relationships.
  * Level 1 → Level 2 of the xMemory hierarchy.
  *
  * @module interfaces/semantic-extractor
@@ -9,8 +9,20 @@
 
 import type { Episode } from '../schemas/episode.js';
 import type { SemanticFact } from '../schemas/semantic.js';
+import type { Entity } from '../schemas/entity.js';
+import type { Relationship } from '../schemas/relationship.js';
+
+/** Result of extracting semantic knowledge from an episode. */
+export interface ExtractionResult {
+  /** Atomic facts extracted from the episode. */
+  facts: SemanticFact[];
+  /** Entities detected in the episode (knowledge graph nodes). */
+  entities: Entity[];
+  /** Relationships between entities (knowledge graph edges). */
+  relationships: Relationship[];
+}
 
 export interface SemanticExtractor {
-  /** Extract atomic facts from an episode. */
-  extract(episode: Episode): Promise<SemanticFact[]>;
+  /** Extract facts, entities, and relationships from an episode. */
+  extract(episode: Episode): Promise<ExtractionResult>;
 }

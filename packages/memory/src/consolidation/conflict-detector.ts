@@ -32,8 +32,12 @@ export interface ConflictDetectorOptions {
   autoResolveSupersession?: boolean;
   /** Cosine similarity threshold for contradiction detection (default: 0.8). */
   embeddingThreshold?: number;
+  /** Word overlap threshold below which facts may be contradictory (default: 0.3). */
+  semanticOverlapThreshold?: number;
   /** Default conflict resolution policy. */
   policy?: ConflictResolutionPolicy;
+  /** Minimum time difference in days for supersession detection (default: 1). */
+  supersessionDayThreshold?: number;
 }
 
 /** Common English stop words to exclude from word overlap analysis. */
@@ -163,14 +167,23 @@ export class ConflictDetector {
         if (!sharedEntities) continue;
 
         // Low text overlap => potential contradiction
+        const overlapThreshold = this.options.semanticOverlapThreshold ?? 0.3;
         const overlap = this.wordOverlap(fact.content, candidate.content);
-        if (overlap < 0.3) {
+        if (overlap < overlapThreshold) {
+          // Scale confidence by content length: short facts are more likely
+          // genuine contradictions; longer facts with low overlap are often
+          // complementary rather than contradictory.
+          const wordsA = this.tokenize(fact.content);
+          const wordsB = this.tokenize(candidate.content);
+          const minWords = Math.min(wordsA.length, wordsB.length);
+          const confidence = minWords <= 4 ? 0.7 : minWords <= 8 ? 0.5 : 0.3;
+
           pairKeys.add(pk);
           conflicts.push({
             factA: fact,
             factB: candidate,
             type: 'semantic_contradiction',
-            confidence: 0.6,
+            confidence,
           });
         }
       }
@@ -339,16 +352,18 @@ export class ConflictDetector {
 
   private checkSupersession(a: SemanticFact, b: SemanticFact): Conflict | null {
     const timeDiffMs = Math.abs(a.valid_from.getTime() - b.valid_from.getTime());
-    const oneDayMs = 24 * 60 * 60 * 1000;
+    const thresholdDays = this.options.supersessionDayThreshold ?? 1;
+    const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
 
-    if (timeDiffMs <= oneDayMs) return null;
+    if (timeDiffMs <= thresholdMs) return null;
 
-    // Remove dates/numbers for content comparison
-    const stripDatesNumbers = (text: string) =>
-      text.replace(/\d+/g, '').replace(/\s+/g, ' ').trim();
+    // Normalize dates/timestamps for content comparison while preserving
+    // semantically meaningful numbers (e.g., "3 children", "100 employees")
+    const normalizeForComparison = (text: string) =>
+      text.replace(/\d{4}[-/]\d{2}[-/]\d{2}/g, '').replace(/\d{1,2}:\d{2}(?::\d{2})?/g, '').replace(/\s+/g, ' ').trim();
 
-    const cleanA = stripDatesNumbers(a.content);
-    const cleanB = stripDatesNumbers(b.content);
+    const cleanA = normalizeForComparison(a.content);
+    const cleanB = normalizeForComparison(b.content);
     const overlap = this.wordOverlap(cleanA, cleanB);
 
     if (overlap <= 0.4) return null;

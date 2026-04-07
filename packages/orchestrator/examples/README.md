@@ -19,6 +19,7 @@ Runnable examples for `@mcai/orchestrator`.
 | [map-reduce](./map-reduce/) | Map-Reduce | 4-node fan-out: Splitter decomposes a topic, Map fans out to parallel Researchers, Synthesizer merges results |
 | [eval-loop](./eval-loop/) | Conditional Cycle | 3-node cyclic graph: Writer drafts, Evaluator scores, loops back until quality gate (score >= 0.8) passes |
 | [streaming](./streaming/) | Streaming | Real-time event streaming with token-by-token output via `stream()` async generator |
+| [context-and-memory](./context-and-memory/) | Memory + Compression | Persistent memory hierarchy with context compression: seed memory, run workflow, ingest output, consolidate, detect conflicts |
 | [evals](./evals/) | Eval Framework | Example eval suites showing how to write assertions against workflow outputs |
 
 ## Quick Start
@@ -31,6 +32,7 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/human-in-the-loop/human-in-the-loo
 ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/map-reduce/map-reduce.ts
 ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/eval-loop/eval-loop.ts
 ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/streaming/streaming.ts
+ANTHROPIC_API_KEY=sk-ant-... npx tsx examples/context-and-memory/context-and-memory.ts
 ```
 
 ## Next Steps

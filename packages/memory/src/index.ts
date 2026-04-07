@@ -57,7 +57,7 @@ export type {
 } from './interfaces/memory-index.js';
 
 export type { EpisodeSegmenter } from './interfaces/episode-segmenter.js';
-export type { SemanticExtractor } from './interfaces/semantic-extractor.js';
+export type { SemanticExtractor, ExtractionResult } from './interfaces/semantic-extractor.js';
 export type { ThemeClusterer } from './interfaces/theme-clusterer.js';
 export type { EmbeddingProvider } from './interfaces/embedding-provider.js';
 
@@ -102,7 +102,7 @@ export type { TemporalRecord, TemporalFilterOptions } from './retrieval/temporal
 // ─── Consolidation ───────────────────────────────────────────────
 
 export { MemoryConsolidator } from './consolidation/memory-consolidator.js';
-export type { ConsolidationOptions, ConsolidationReport } from './consolidation/memory-consolidator.js';
+export type { ConsolidationOptions, ConsolidationReport, AutoConsolidationThresholds, ConsolidationLogger } from './consolidation/memory-consolidator.js';
 
 export { ConflictDetector } from './consolidation/conflict-detector.js';
 export type { ConflictDetectorOptions, Conflict, ConflictResolutionPolicy, ConflictResolutionReport } from './consolidation/conflict-detector.js';

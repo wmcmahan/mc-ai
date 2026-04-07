@@ -137,6 +137,8 @@ const consolidator = new MemoryConsolidator(store, index, {
   maxEpisodes: 200,
   decayHalfLifeDays: 30,
   dedupThreshold: 0.9,
+  batchSize: 1000,           // paginated fact loading for large stores
+  logger: { warn: console.warn },
 });
 
 // Run after each workflow, or on a schedule
@@ -155,6 +157,7 @@ import { ConflictDetector } from '@mcai/memory';
 const detector = new ConflictDetector(store, index, {
   policy: 'negation-invalidates-positive',
   autoResolveSupersession: true,
+  supersessionDayThreshold: 1,  // configurable; default 1 day
 });
 
 const conflicts = await detector.detectConflicts();
