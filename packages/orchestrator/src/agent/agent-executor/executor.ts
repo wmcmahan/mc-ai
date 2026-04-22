@@ -111,6 +111,8 @@ export async function executeAgent(
     contextCompressor?: import('../context-compressor.js').ContextCompressor;
     /** Callback fired when context compression runs. */
     onContextCompressed?: (metrics: import('../context-compressor.js').ContextCompressionMetrics) => void;
+    /** Default write key from node config for orchestrator-managed text output. */
+    default_write_key?: string;
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -140,16 +142,19 @@ export async function executeAgent(
       : config;
     const model = agentFactory.getModel(effectiveConfig);
 
+    // Wrap resolved tools into AI SDK v6 tool() format (before prompt so we
+    // can detect save_to_memory presence for conditional instructions)
+    const tools = buildToolSet(rawTools, agent_id);
+    const hasSaveToMemoryTool = 'save_to_memory' in tools;
+
     // Build context-aware prompt (with injection guards)
     const systemPrompt = buildSystemPrompt(config, stateView, {
       contextCompressor: options?.contextCompressor,
       model: effectiveConfig.model,
       onCompressed: options?.onContextCompressed,
+      hasSaveToMemoryTool,
     });
     const taskPrompt = buildTaskPrompt(stateView, attempt);
-
-    // Wrap resolved tools into AI SDK v6 tool() format
-    const tools = buildToolSet(rawTools, agent_id);
 
     logger.info('executing', {
       agent_id,
@@ -298,7 +303,7 @@ export async function executeAgent(
 
     // Extract memory updates from tool results
     const fallbackKey = options?.node_id ? `${options.node_id}_output` : 'agent_response';
-    const memoryUpdates = extractMemoryUpdates(text, toolCalls, config.write_keys, fallbackKey);
+    const memoryUpdates = extractMemoryUpdates(text, toolCalls, config.write_keys, fallbackKey, options?.default_write_key);
 
     // Apply MCP taint: if any MCP tools were called during this execution,
     // mark all output memory keys as tainted by MCP tool origin.

@@ -17,22 +17,22 @@ import { executeAnnealingLoop } from './annealing.js';
 import { executeSwarmAgentNode } from './swarm.js';
 import { resolveModelForAgent } from './resolve-model.js';
 
-const SAVE_TO_MEMORY_SOURCE: ToolSource = { type: 'builtin', name: 'save_to_memory' };
-
 const logger = createLogger('runner.node.agent');
 
 /**
- * Ensure `save_to_memory` is present in tool sources when the agent has write_keys.
+ * Pass through tool sources unchanged.
  *
- * `save_to_memory` is the only mechanism for agents to write to the state
- * blackboard. It's already gated by `write_keys` permissions, so requiring
- * explicit declaration adds no security value — just boilerplate that's easy
- * to forget.
+ * Previously this function auto-injected `save_to_memory` when the agent had
+ * `write_keys`. This is no longer needed because the orchestrator now captures
+ * agent text output directly and routes it to the appropriate write key via
+ * {@link extractMemoryUpdates}. Agents that need structured multi-key writes
+ * can still explicitly declare `save_to_memory` in their tools array.
+ *
+ * The function signature is preserved for backward compatibility with all
+ * 7 call sites across node executors.
  */
-export function ensureSaveToMemory(sources: ToolSource[], writeKeys?: string[]): ToolSource[] {
-  if (!writeKeys || writeKeys.length === 0) return sources;
-  const already = sources.some((s) => s.type === 'builtin' && s.name === 'save_to_memory');
-  return already ? sources : [...sources, SAVE_TO_MEMORY_SOURCE];
+export function ensureSaveToMemory(sources: ToolSource[], _writeKeys?: string[]): ToolSource[] {
+  return sources;
 }
 
 /**
@@ -94,6 +94,7 @@ export async function executeAgentNode(
     onToolCallComplete,
     drainTaintEntries: ctx.deps.drainTaintEntries,
     ...(modelOverride ? { model_override: modelOverride } : {}),
+    ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
     contextCompressor: ctx.contextCompressor,
     onContextCompressed: ctx.onContextCompressed
       ? (metrics) => ctx.onContextCompressed!({

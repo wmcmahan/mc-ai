@@ -57,9 +57,11 @@ When an agent node runs, the **agent executor**:
 2. Creates a **state view** — a precise slice of `WorkflowState.memory` based on `read_keys`
 3. Injects the goal, constraints, and state view into the prompt
 4. Streams the LLM execution via `ai` with the configured tools
-5. Captures all `save_to_memory` outputs across all steps
+5. Captures the agent's text output and automatically routes it to the node's write key (or `default_write_key` if specified)
 6. Validates write permissions (rejecting writes to restricted keys)
 7. Packages the result into an action payload
+
+For agents that need to write structured data to **multiple** memory keys, declare `save_to_memory` explicitly in the agent's `tools` array. Single-key agents do not need it — the orchestrator handles output capture automatically.
 
 All external tool inputs are automatically flagged as **tainted**. The executor propagates this taint to any memory keys written by the agent, ensuring downstream nodes can track the origin of the data.
 
@@ -74,7 +76,7 @@ const writerId = registry.register({
   model_preference: 'medium',              // resolved at runtime based on budget
   provider: 'anthropic',
   system_prompt: 'You write clear summaries.',
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['notes'], write_keys: ['draft'] },
 });
 ```

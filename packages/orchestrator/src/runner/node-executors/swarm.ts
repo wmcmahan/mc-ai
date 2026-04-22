@@ -73,6 +73,7 @@ export async function executeSwarmAgentNode(
     onToken,
     drainTaintEntries: ctx.deps.drainTaintEntries,
     ...(modelOverride ? { model_override: modelOverride } : {}),
+    ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
   });
 
   const updates = action.payload.updates as Record<string, unknown>;

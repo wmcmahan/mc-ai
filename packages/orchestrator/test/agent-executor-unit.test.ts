@@ -250,6 +250,63 @@ describe('extractMemoryUpdates', () => {
     expect(result).toHaveProperty('research_output');
     expect(result).not.toHaveProperty('research_notes');
   });
+
+  // ─── defaultWriteKey (orchestrator-managed output) ──────────────────
+
+  it('uses defaultWriteKey when fallbackKey is not in allowedKeys (multi-key)', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['research_notes', 'summary'],   // multi-key, ambiguous
+      'research_output',               // not in allowedKeys
+      'research_notes',                // defaultWriteKey resolves ambiguity
+    );
+    expect(result).toEqual({ research_notes: 'Research findings' });
+  });
+
+  it('defaultWriteKey is ignored when fallbackKey matches allowedKeys', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['research_output', 'summary'],
+      'research_output',               // already in allowedKeys
+      'summary',                       // defaultWriteKey should NOT override
+    );
+    expect(result).toEqual({ research_output: 'Research findings' });
+  });
+
+  it('defaultWriteKey is ignored when save_to_memory tool calls exist', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [makeToolCall('summary', 'Structured data')],
+      ['research_notes', 'summary'],
+      'research_output',
+      'research_notes',                // should be ignored — tool call wins
+    );
+    expect(result).toEqual({ summary: 'Structured data' });
+  });
+
+  it('falls back to single-key heuristic when defaultWriteKey is not in allowedKeys', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['notes'],                       // single key
+      'research_output',               // not in allowedKeys
+      'invalid_key',                   // defaultWriteKey also not in allowedKeys
+    );
+    expect(result).toEqual({ notes: 'Research findings' });
+  });
+
+  it('drops response when multi-key and defaultWriteKey is not in allowedKeys', () => {
+    const result = extractMemoryUpdates(
+      'Research findings',
+      [],
+      ['notes', 'summary'],           // multi-key, ambiguous
+      'research_output',              // not in allowedKeys
+      'invalid_key',                  // defaultWriteKey also not valid
+    );
+    expect(Object.keys(result)).toHaveLength(0);
+  });
 });
 
 // ─── validateMemoryUpdatePermissions ───────────────────────────────────

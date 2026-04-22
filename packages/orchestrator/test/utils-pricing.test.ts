@@ -78,10 +78,22 @@ describe('MODEL_PRICING', () => {
     expect(MODEL_PRICING['claude-opus-4-20250514']).toBeDefined();
   });
 
-  it('has positive pricing for all models', () => {
+  it('has non-negative pricing for all models', () => {
     for (const [, pricing] of Object.entries(MODEL_PRICING)) {
-      expect(pricing.inputPerMToken).toBeGreaterThan(0);
-      expect(pricing.outputPerMToken).toBeGreaterThan(0);
+      expect(pricing.inputPerMToken).toBeGreaterThanOrEqual(0);
+      expect(pricing.outputPerMToken).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('has positive pricing for cloud provider models', () => {
+    expect(MODEL_PRICING['gpt-4o']!.inputPerMToken).toBeGreaterThan(0);
+    expect(MODEL_PRICING['claude-sonnet-4-20250514']!.inputPerMToken).toBeGreaterThan(0);
+  });
+
+  it('has zero pricing for local Ollama models', () => {
+    expect(MODEL_PRICING['llama3.1:8b']!.inputPerMToken).toBe(0);
+    expect(MODEL_PRICING['llama3.1:8b']!.outputPerMToken).toBe(0);
+    expect(MODEL_PRICING['qwen2.5:7b']!.inputPerMToken).toBe(0);
+    expect(MODEL_PRICING['qwen2.5:7b']!.outputPerMToken).toBe(0);
   });
 });

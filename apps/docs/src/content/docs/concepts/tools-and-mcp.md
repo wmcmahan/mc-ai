@@ -29,6 +29,22 @@ const RESEARCH_AGENT = agentRegistry.register({
 });
 ```
 
+:::note
+The `save_to_memory` tool is **opt-in**. The orchestrator automatically captures agent text output and routes it to the node's write key, so single-key agents don't need it. Declare `save_to_memory` explicitly only when an agent needs to write structured data to **multiple** memory keys.
+:::
+
+```typescript
+// Single-key agent — no save_to_memory needed
+const WRITER = agentRegistry.register({
+  name: 'Writer',
+  model: 'claude-sonnet-4-20250514',
+  provider: 'anthropic',
+  system_prompt: 'You write clear summaries.',
+  tools: [],
+  permissions: { read_keys: ['notes'], write_keys: ['draft'] },
+});
+```
+
 Optionally, you can filter to specific tools from an MCP server by providing `tool_names`:
 
 ```typescript
@@ -57,6 +73,8 @@ Graph nodes can override an agent's configured tools for a specific execution st
   write_keys: ['initial_notes'],
 }
 ```
+
+In this example, `save_to_memory` is included because the node may need to write structured data to multiple keys. For nodes that write to a single key, you can omit it — the orchestrator captures text output automatically.
 
 ## MCP Server Registry
 

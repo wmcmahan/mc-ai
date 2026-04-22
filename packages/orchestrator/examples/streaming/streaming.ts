@@ -41,7 +41,6 @@ const RESEARCHER_ID = registry.register({
   system_prompt: [
     'You are a research specialist.',
     'Given a goal, produce concise, factual research notes as bullet points.',
-    'You MUST save your output by calling save_to_memory with key "research_notes".',
   ].join(' '),
   temperature: 0.5,
   max_steps: 3,
@@ -60,7 +59,6 @@ const WRITER_ID = registry.register({
   system_prompt: [
     'You are a professional writer.',
     'Using the provided research notes, produce a clear and engaging summary under 200 words.',
-    'You MUST save your output by calling save_to_memory with key "draft".',
   ].join(' '),
   temperature: 0.7,
   max_steps: 3,

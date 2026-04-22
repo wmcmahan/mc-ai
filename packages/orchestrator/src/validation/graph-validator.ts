@@ -129,6 +129,16 @@ export function validateGraph(graph: Graph): ValidationResult {
 
   for (const node of graph.nodes) {
     validateNodeByType(node, nodeMap, outgoingEdges, errors, warnings);
+
+    // default_write_key must be a member of write_keys
+    if (node.default_write_key) {
+      const hasWildcard = node.write_keys.includes('*');
+      if (!hasWildcard && !node.write_keys.includes(node.default_write_key)) {
+        errors.push(
+          `Node '${node.id}': default_write_key '${node.default_write_key}' is not in write_keys [${node.write_keys.join(', ')}]`,
+        );
+      }
+    }
   }
 
   // ── Reachability (BFS with index pointer for O(1) dequeue) ───────────

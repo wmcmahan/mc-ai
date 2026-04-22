@@ -83,6 +83,9 @@ export type {
 export { ProviderRegistry, createProviderRegistry, registerBuiltInProviders } from './agent/provider-registry.js';
 export type { LanguageModelFactory, ProviderOptions } from './agent/provider-registry.js';
 export { UnsupportedProviderError } from './agent/agent-factory/errors.js';
+export { registerOllamaProvider } from './agent/ollama-provider.js';
+export type { OllamaModelFactory, OllamaProviderOptions } from './agent/ollama-provider.js';
+export { OLLAMA_MODELS } from './agent/constants.js';
 
 // ─── Context Compression ───────────────────────────────────────────
 export type {

@@ -71,7 +71,7 @@ logger.info(`Registered MCP servers: ${registered.join(', ')}`);
 
 const agentRegistry = new InMemoryAgentRegistry();
 
-// Research agent: uses web-search MCP server + builtin save_to_memory
+// Research agent: uses web-search MCP server + fetch MCP server
 const RESEARCHER_ID = agentRegistry.register({
   name: 'Web Research Agent',
   description: 'Researches topics using web search and URL fetching',
@@ -82,12 +82,10 @@ const RESEARCHER_ID = agentRegistry.register({
     'Use brave_web_search to find current information about the topic.',
     'Use fetch to read specific URLs when you need deeper content from a search result.',
     'Synthesize your findings into concise, factual research notes.',
-    'Save your research using save_to_memory with key "research_notes".',
   ].join(' '),
   temperature: 0.5,
   max_steps: 8, // More steps to allow search → fetch → summarize chains
   tools: [
-    { type: 'builtin', name: 'save_to_memory' },
     // { type: 'mcp', server_id: 'web-search' },  // Brave web search
     { type: 'mcp', server_id: 'fetch' },       // URL content fetching
   ] satisfies ToolSource[],
@@ -106,11 +104,10 @@ const WRITER_ID = agentRegistry.register({
   system_prompt: [
     'You are a writer. Using the research notes, produce a clear, well-structured summary.',
     'Include key facts and cite sources when available.',
-    'Save your output using save_to_memory with key "summary".',
   ].join(' '),
   temperature: 0.7,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: {
     read_keys: ['research_notes'],
     write_keys: ['summary'],

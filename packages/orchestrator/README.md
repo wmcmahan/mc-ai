@@ -52,10 +52,10 @@ const agentId = registry.register({
   name: 'Writer',
   model: 'claude-sonnet-4-20250514',
   provider: 'anthropic',
-  system_prompt: 'Write a summary. Save it with save_to_memory key "draft".',
+  system_prompt: 'Write a summary of the goal.',
   temperature: 0.7,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['goal'], write_keys: ['draft'] },
 });
 configureAgentFactory(registry);
@@ -97,6 +97,13 @@ console.log(result.memory.draft);
 The `ProviderRegistry` supports any Vercel AI SDK-compatible provider. OpenAI and Anthropic are built-in; register additional providers at startup:
 
 Agents can then use `provider: 'groq'` or `provider: 'ollama'` in their config. The registry also supports provider inference — a model in the provider's known model list auto-resolves to that provider when `provider` is omitted. Use `addModel()` to register new model names at runtime.
+
+For local models via Ollama, use the built-in `registerOllamaProvider()` helper which handles factory injection and model registration:
+
+```typescript
+import { registerOllamaProvider } from '@mcai/orchestrator';
+registerOllamaProvider(providers); // uses OLLAMA_BASE_URL or defaults to http://localhost:11434
+```
 
 ### Streaming
 
@@ -180,6 +187,7 @@ Compression metrics are emitted as `context:compressed` stream events and can be
 | [map-reduce](./examples/map-reduce/) | Map-Reduce | Fan-out to parallel workers, synthesize results |
 | [eval-loop](./examples/eval-loop/) | Conditional Cycle | Iterative refinement with quality gate via conditional edges |
 | [streaming](./examples/streaming/) | Streaming | Real-time event streaming with token-by-token output via `stream()` |
+| [ollama-local](./examples/ollama-local/) | Local Models | Run workflows with Ollama local models via `registerOllamaProvider()` |
 
 ```bash
 cd packages/orchestrator

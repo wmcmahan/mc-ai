@@ -83,6 +83,7 @@ export async function executeAnnealingLoop(
       onToken,
       drainTaintEntries: ctx.deps.drainTaintEntries,
       ...(modelOverride ? { model_override: modelOverride } : {}),
+      ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
     });
 
     // Evaluate quality via evaluator agent or JSONPath extraction

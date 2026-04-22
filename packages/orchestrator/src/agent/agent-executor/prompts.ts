@@ -28,6 +28,8 @@ export interface BuildPromptOptions {
   model?: string;
   /** Callback fired when compression runs (for observability). */
   onCompressed?: (metrics: ContextCompressionMetrics) => void;
+  /** Whether the agent has the save_to_memory tool available. */
+  hasSaveToMemoryTool?: boolean;
 }
 
 /**
@@ -93,9 +95,11 @@ ${memoryJson}
 </data>
 
 ## Instructions
-- Use the save_to_memory tool to store your findings
+${options?.hasSaveToMemoryTool
+    ? `- Use the save_to_memory tool to store your findings
 - Only write to memory keys you have permission for: ${config.write_keys.join(', ')}
-- Keys starting with underscore (_) are reserved and cannot be written to
+- Keys starting with underscore (_) are reserved and cannot be written to`
+    : `- Write your response as plain text — your output will be automatically saved by the orchestrator`}
 - Be concise and actionable`;
 }
 

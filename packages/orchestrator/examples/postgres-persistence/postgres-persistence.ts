@@ -86,7 +86,6 @@ async function ensureAgentsRegistered() {
     system_prompt: [
       'You are a research specialist.',
       'Produce concise, factual research notes on the given topic.',
-      'Save your findings using save_to_memory with key "research_notes".',
     ].join(' '),
     temperature: 0.5,
     max_steps: 3,
@@ -105,7 +104,6 @@ async function ensureAgentsRegistered() {
     system_prompt: [
       'You are a professional writer.',
       'Using the research notes, produce a clear article under 300 words.',
-      'Save your output using save_to_memory with key "article".',
     ].join(' '),
     temperature: 0.7,
     max_steps: 3,

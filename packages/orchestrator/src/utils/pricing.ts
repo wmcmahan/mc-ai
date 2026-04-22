@@ -45,6 +45,24 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
   'claude-haiku-4-5-20251001': { inputPerMToken: 0.80, outputPerMToken: 4.00 },
   'claude-3-5-sonnet-20241022': { inputPerMToken: 3.00, outputPerMToken: 15.00 },
   'claude-3-5-haiku-20241022': { inputPerMToken: 0.80, outputPerMToken: 4.00 },
+  // Ollama / local models (no API cost)
+  'llama3.1': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.1:8b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.1:70b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.2': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.2:3b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.3': { inputPerMToken: 0, outputPerMToken: 0 },
+  'llama3.3:70b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'qwen2.5': { inputPerMToken: 0, outputPerMToken: 0 },
+  'qwen2.5:7b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'mistral': { inputPerMToken: 0, outputPerMToken: 0 },
+  'mistral:7b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'gemma2': { inputPerMToken: 0, outputPerMToken: 0 },
+  'gemma2:9b': { inputPerMToken: 0, outputPerMToken: 0 },
+  'gemma3': { inputPerMToken: 0, outputPerMToken: 0 },
+  'phi3': { inputPerMToken: 0, outputPerMToken: 0 },
+  'deepseek-r1': { inputPerMToken: 0, outputPerMToken: 0 },
+  'deepseek-r1:8b': { inputPerMToken: 0, outputPerMToken: 0 },
 };
 
 /** Models already warned about (prevents repeated log noise). */

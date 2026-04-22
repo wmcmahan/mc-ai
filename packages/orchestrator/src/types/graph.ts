@@ -355,6 +355,16 @@ export const GraphNodeSchema = z.object({
   read_keys: z.array(z.string()).default(['*']),
   /** Memory keys this node may write (empty = deny-all). */
   write_keys: z.array(z.string()).default([]),
+  /**
+   * Default memory key for orchestrator-managed text output.
+   *
+   * When an agent produces text without calling `save_to_memory`, the
+   * orchestrator routes the response to this key. Required when the node
+   * has multiple `write_keys` and `save_to_memory` is not in the tools
+   * array. Must be a member of `write_keys`. Not needed for single-key
+   * agents (the orchestrator infers the target automatically).
+   */
+  default_write_key: z.string().optional(),
 
   // ── Resilience ──
   /** Retry and backoff configuration. */

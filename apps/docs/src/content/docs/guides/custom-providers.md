@@ -39,8 +39,21 @@ providers.register('groq', (modelId) => groq(modelId), {
 
 ### Ollama (local)
 
+The simplest way to add Ollama support is the built-in helper:
+
 ```typescript
-import { createOllama } from 'ollama-ai-provider';
+import { registerOllamaProvider } from '@mcai/orchestrator';
+
+registerOllamaProvider(providers, {
+  models: ['llama3.2', 'mistral', 'codellama'],
+  // baseURL defaults to 'http://localhost:11434/api'
+});
+```
+
+Under the hood this uses `@ai-sdk/openai` with Ollama's OpenAI-compatible endpoint. If you prefer the dedicated Ollama provider package, you can register it manually:
+
+```typescript
+import { createOllama } from 'ollama-ai-provider-v2';
 
 const ollama = createOllama({ baseURL: 'http://localhost:11434/api' });
 
@@ -71,7 +84,7 @@ const FAST_AGENT = registry.register({
   model: 'llama-3.3-70b-versatile',
   provider: 'groq',
   system_prompt: 'You are a research specialist...',
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['goal'], write_keys: ['notes'] },
 });
 ```
@@ -134,6 +147,7 @@ These models are pre-registered and available out of the box:
 |----------|--------|
 | `openai` | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4`, `o1-preview`, `o1-mini`, `o3`, `o3-mini`, `o4-mini` |
 | `anthropic` | `claude-opus-4-20250514`, `claude-sonnet-4-20250514`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229` |
+| `ollama` | Any local model (register via `registerOllamaProvider()` with your model list) |
 
 ## Next steps
 

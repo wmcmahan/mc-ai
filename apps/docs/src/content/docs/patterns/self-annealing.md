@@ -48,7 +48,6 @@ const WRITER_ID = registry.register({
     'Your task: write a concise, engaging explanation of the given topic for a general audience.',
     'If memory.feedback and memory.suggestions are present, you are revising a previous draft — use that feedback to improve.',
     'If no feedback exists, write from scratch.',
-    'You MUST save your output by calling save_to_memory with key "draft".',
   ].join(' '),
   temperature: 0.7,
   tools: [],

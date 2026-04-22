@@ -445,4 +445,39 @@ describe('Graph Validation', () => {
       )).toBe(true);
     });
   });
+
+  describe('default_write_key validation', () => {
+    test('should error if default_write_key is not in write_keys', () => {
+      const graph = createValidGraph();
+      graph.nodes[0].write_keys = ['research_notes', 'summary'];
+      graph.nodes[0].default_write_key = 'invalid_key';
+
+      const result = validateGraph(graph);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e =>
+        e.includes('default_write_key') && e.includes('invalid_key')
+      )).toBe(true);
+    });
+
+    test('should pass if default_write_key is in write_keys', () => {
+      const graph = createValidGraph();
+      graph.nodes[0].write_keys = ['research_notes', 'summary'];
+      graph.nodes[0].default_write_key = 'research_notes';
+
+      const result = validateGraph(graph);
+
+      expect(result.errors.some(e => e.includes('default_write_key'))).toBe(false);
+    });
+
+    test('should pass if write_keys includes wildcard', () => {
+      const graph = createValidGraph();
+      graph.nodes[0].write_keys = ['*'];
+      graph.nodes[0].default_write_key = 'anything';
+
+      const result = validateGraph(graph);
+
+      expect(result.errors.some(e => e.includes('default_write_key'))).toBe(false);
+    });
+  });
 });

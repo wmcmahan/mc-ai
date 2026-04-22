@@ -89,7 +89,7 @@ const EVALUATOR_ID = registry.register({
   provider: 'anthropic',
   system_prompt: [
     'Evaluate the poem strictly on its metrical structure and emotional impact.',
-    'Return your evaluation by calling save_to_memory with key "score" as a number between 0.0 and 1.0.',
+    'Return a single number between 0.0 and 1.0 representing the quality score.',
   ].join(' '),
   temperature: 0.1,
   tools: [],

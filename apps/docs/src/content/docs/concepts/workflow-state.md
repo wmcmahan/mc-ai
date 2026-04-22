@@ -99,7 +99,7 @@ stateDiagram-v2
 
 ## Memory
 
-The `memory` object is the primary data exchange between nodes. It's an arbitrary key-value store — you define the keys based on your workflow's needs. Agents write to it via the built-in `save_to_memory` tool and read from it via their filtered state view (controlled by `read_keys` on the node).
+The `memory` object is the primary data exchange between nodes. It's an arbitrary key-value store — you define the keys based on your workflow's needs. Agents write to it via their text output, which the orchestrator automatically routes to the node's write key. For agents that need to write structured data to multiple keys, the `save_to_memory` tool can be declared explicitly. Agents read from memory via their filtered state view (controlled by `read_keys` on the node).
 
 - **Use descriptive keys** — `research_notes` is better than `data` or `result`
 - **Reference, don't store** — avoid large blobs in memory; store them externally and keep a reference
@@ -114,7 +114,7 @@ The `memory` object is the primary data exchange between nodes. It's an arbitrar
 
 **Graph State** is the `memory` object. It's persisted after every node execution, enabling crash recovery and time-travel debugging.
 
-**Thread Context** is the raw LLM conversation history within a single agent execution. Each agent has its own thread — agents don't see each other's raw messages. The agent extracts what matters via `save_to_memory`, and the thread is discarded.
+**Thread Context** is the raw LLM conversation history within a single agent execution. Each agent has its own thread — agents don't see each other's raw messages. The orchestrator automatically captures the agent's text output and routes it to the appropriate write key, and the thread is discarded.
 
 ## Action types
 

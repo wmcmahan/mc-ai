@@ -65,7 +65,7 @@ async function main() {
     name: 'Research Writer',
     model: 'claude-sonnet-4-20250514', // Ensure this matches your provider
     provider: 'anthropic',
-    system_prompt: 'You are an expert technical writer. Write a concise summary of the goal. Save it with the save_to_memory tool using the key "draft".',
+    system_prompt: 'You are an expert technical writer. Write a concise summary of the goal.',
     temperature: 0.7,
     max_steps: 3,
     tools: [],

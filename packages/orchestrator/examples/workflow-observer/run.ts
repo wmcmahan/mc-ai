@@ -86,11 +86,10 @@ const TARGET_RESEARCHER_ID = agentRegistry.register({
   system_prompt: [
     'You are a research specialist. Produce detailed research notes on the topic in the goal.',
     'Cover key concepts, recent developments, and practical applications.',
-    'You MUST call save_to_memory with key "research_notes" containing your analysis.',
   ].join('\n'),
   temperature: 0.5,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['goal'], write_keys: ['research_notes'] },
 });
 
@@ -101,11 +100,10 @@ const TARGET_WRITER_ID = agentRegistry.register({
   provider: 'anthropic',
   system_prompt: [
     'You are a writer. Read the research_notes and produce a concise, polished summary.',
-    'You MUST call save_to_memory with key "summary" containing the final summary.',
   ].join('\n'),
   temperature: 0.7,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['goal', 'research_notes'], write_keys: ['summary'] },
 });
 
@@ -148,12 +146,12 @@ const TOKEN_ANALYST_ID = agentRegistry.register({
     '- Token distribution across agents — is one agent disproportionately expensive?',
     '- Whether max_steps were exhausted on any agent (burned steps without output)',
     '',
-    'Save your analysis to memory key "token_analysis" as a structured string.',
+    'Produce your analysis as a structured string.',
     'Include severity level (info/warning/critical) for each finding.',
   ].join('\n'),
   temperature: 0.3,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: {
     read_keys: ['target_events', 'target_snapshot'],
     write_keys: ['token_analysis'],
@@ -175,12 +173,12 @@ const STALL_DETECTOR_ID = agentRegistry.register({
     '- Nodes visited multiple times without state progression',
     '- Unexpectedly long gaps between events (potential hangs)',
     '',
-    'Save your analysis to memory key "stall_analysis" as a structured string.',
+    'Produce your analysis as a structured string.',
     'Include severity level (info/warning/critical) for each finding.',
   ].join('\n'),
   temperature: 0.3,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: {
     read_keys: ['target_events', 'target_snapshot'],
     write_keys: ['stall_analysis'],
@@ -204,12 +202,12 @@ const ERROR_CLASSIFIER_ID = agentRegistry.register({
     'Check target_snapshot.last_error and any internal_dispatched events with internal_type "_fail".',
     'If no errors occurred, explicitly state that the run was error-free.',
     '',
-    'Save your analysis to memory key "error_analysis" as a structured string.',
+    'Produce your analysis as a structured string.',
     'Include severity level (info/warning/critical) for each finding.',
   ].join('\n'),
   temperature: 0.3,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: {
     read_keys: ['target_events', 'target_snapshot'],
     write_keys: ['error_analysis'],
@@ -232,11 +230,10 @@ const REPORT_WRITER_ID = agentRegistry.register({
     '4. Recommended actions for each issue',
     '',
     'Format as a clean markdown report.',
-    'Save to memory key "triage_report".',
   ].join('\n'),
   temperature: 0.4,
   max_steps: 3,
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: {
     read_keys: ['token_analysis', 'stall_analysis', 'error_analysis', 'target_snapshot'],
     write_keys: ['triage_report'],

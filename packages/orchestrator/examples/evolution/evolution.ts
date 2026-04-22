@@ -51,7 +51,6 @@ const CANDIDATE_ID = registry.register({
     'If a parent tagline is provided (from a previous winning generation),',
     'use it as inspiration but create something distinct and improved.',
     'The tagline should be under 15 words, catchy, and memorable.',
-    'Save your tagline using save_to_memory with key "candidate_output".',
   ].join(' '),
   temperature: 0.9, // High creativity (overridden by evolution temperature annealing)
   max_steps: 3,

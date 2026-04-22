@@ -51,6 +51,7 @@ export async function executeWorkerWithStateView(
         abortSignal: ctx.abortSignal,
         onToken,
         drainTaintEntries: ctx.deps.drainTaintEntries,
+        ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
       });
     }
     case 'tool': {

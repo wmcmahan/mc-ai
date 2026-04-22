@@ -192,7 +192,7 @@ const researcherId = registry.register({
   model_preference: 'high',
   provider: 'anthropic',
   system_prompt: 'You research topics thoroughly.',
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['goal'], write_keys: ['research'] },
 });
 
@@ -202,7 +202,7 @@ const writerId = registry.register({
   model_preference: 'medium',
   provider: 'anthropic',
   system_prompt: 'You write clear, concise summaries.',
-  tools: [{ type: 'builtin', name: 'save_to_memory' }],
+  tools: [],
   permissions: { read_keys: ['research'], write_keys: ['summary'] },
 });
 
