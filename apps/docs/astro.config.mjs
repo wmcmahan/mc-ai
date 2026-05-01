@@ -1,19 +1,11 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
-import rehypeMermaid from 'rehype-mermaid';
 import vercel from '@astrojs/vercel';
 
 export default defineConfig({
   adapter: vercel(),
   output: 'server',
-  markdown: {
-    syntaxHighlight: {
-      type: 'shiki',
-      excludeLangs: ['mermaid', 'math'],
-    },
-    rehypePlugins: [rehypeMermaid],
-  },
   integrations: [
     mermaid({ autoTheme: true }), // must come before starlight
     starlight({

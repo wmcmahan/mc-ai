@@ -15,7 +15,6 @@
     "@vercel/analytics": "^2.0.1",
     "astro": "^6.2.1",
     "astro-mermaid": "^2.0.1",
-    "mermaid": "^11.14.0",
-    "rehype-mermaid": "^3.0.0"
+    "mermaid": "^11.14.0"
   }
 }
