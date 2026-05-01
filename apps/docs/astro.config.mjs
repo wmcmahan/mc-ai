@@ -4,6 +4,7 @@ import mermaid from 'astro-mermaid';
 import vercel from '@astrojs/vercel';
 
 export default defineConfig({
+  site: 'https://mc-ai-docs.vercel.app',
   adapter: vercel(),
   output: 'server',
   integrations: [
