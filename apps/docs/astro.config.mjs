@@ -3,6 +3,7 @@ import starlight from '@astrojs/starlight';
 import mermaid from 'astro-mermaid';
 
 export default defineConfig({
+  output: 'server',
   integrations: [
     mermaid({ autoTheme: true }), // must come before starlight
     starlight({
