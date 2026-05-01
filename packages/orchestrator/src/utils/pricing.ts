@@ -42,7 +42,7 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
   'claude-opus-4-20250514': { inputPerMToken: 15.00, outputPerMToken: 75.00 },
   'claude-sonnet-4-20250514': { inputPerMToken: 3.00, outputPerMToken: 15.00 },
   'claude-sonnet-4-6': { inputPerMToken: 3.00, outputPerMToken: 15.00 },
-  'claude-haiku-4-5-20251001': { inputPerMToken: 0.80, outputPerMToken: 4.00 },
+  'claude-haiku-4-5-20251001': { inputPerMToken: 1.00, outputPerMToken: 5.00 },
   'claude-3-5-sonnet-20241022': { inputPerMToken: 3.00, outputPerMToken: 15.00 },
   'claude-3-5-haiku-20241022': { inputPerMToken: 0.80, outputPerMToken: 4.00 },
   // Ollama / local models (no API cost)

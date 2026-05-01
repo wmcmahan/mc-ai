@@ -87,6 +87,7 @@ function mockStreamResult(updates: Record<string, unknown>) {
   return {
     text: Promise.resolve('I have completed the task.'),
     usage: Promise.resolve({ inputTokens: 100, outputTokens: 50, totalTokens: 150 }),
+    totalUsage: Promise.resolve({ inputTokens: 100, outputTokens: 50, totalTokens: 150 }),
     steps: Promise.resolve([{ toolCalls, toolResults }]),
     textStream: (async function* () { yield 'done'; })(),
   };

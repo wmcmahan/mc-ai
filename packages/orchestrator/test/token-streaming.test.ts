@@ -83,6 +83,7 @@ function mockStreamTextResult(deltas: string[]) {
     text: Promise.resolve(fullText),
     textStream: asyncIterableFrom(deltas),
     usage: Promise.resolve({ inputTokens: 50, outputTokens: 25, totalTokens: 75 }),
+    totalUsage: Promise.resolve({ inputTokens: 50, outputTokens: 25, totalTokens: 75 }),
     steps: Promise.resolve([{ toolCalls: [], toolResults: [] }]),
     toolCalls: Promise.resolve([]),
     toolResults: Promise.resolve([]),

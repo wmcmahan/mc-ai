@@ -11,4 +11,7 @@ docker-compose.override.yml
 .agents/
 .claude/
 apps/docs/.astro
+sandbox/
 app/docs/.vercel
+docs/plans/
+docs/brainstorms

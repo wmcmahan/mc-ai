@@ -630,7 +630,7 @@ export class GraphRunner extends EventEmitter {
         loadAgent: (agentId: string) => agentFactory.loadAgent(agentId),
         getTaintRegistry,
         resolveTools: this.toolResolver
-          ? (sources) => this.toolResolver!.resolveTools(sources)
+          ? (sources, agentId) => this.toolResolver!.resolveTools(sources, agentId)
           : resolveBuiltinsOnly,
         drainTaintEntries: this.toolResolver?.drainTaintEntries
           ? () => this.toolResolver!.drainTaintEntries!()

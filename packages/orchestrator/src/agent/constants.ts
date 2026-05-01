@@ -54,6 +54,8 @@ export const OPENAI_MODELS = [
 /** Known Anthropic model identifiers for provider inference and validation. */
 export const ANTHROPIC_MODELS = [
   'claude-opus-4-20250514', 'claude-sonnet-4-20250514',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
   'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022',
   'claude-3-opus-20240229',
 ];

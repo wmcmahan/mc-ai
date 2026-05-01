@@ -78,15 +78,15 @@ function mockStreamTextResult(overrides: Record<string, unknown> = {}) {
     ? (overrides.toolResults as Promise<any[]>)
     : Promise.resolve([]);
 
+  const defaultUsage = Promise.resolve({
+    inputTokens: 100,
+    outputTokens: 50,
+    totalTokens: 150,
+  });
   return {
     text: overrides.text ?? Promise.resolve('Agent response text'),
-    usage: overrides.usage ?? Promise.resolve({
-      inputTokens: 100,
-      outputTokens: 50,
-      totalTokens: 150,
-    }),
-    // AI SDK v6 steps use `input` (not `args`) for tool call arguments.
-    // Transform test data to match the real SDK shape.
+    usage: overrides.usage ?? defaultUsage,
+    totalUsage: (overrides as any).totalUsage ?? overrides.usage ?? defaultUsage,
     steps: Promise.all([toolCalls, toolResults]).then(([calls, results]) => [
       {
         toolCalls: calls.map((c: any) => ({

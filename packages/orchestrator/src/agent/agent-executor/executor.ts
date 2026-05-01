@@ -233,12 +233,10 @@ export async function executeAgent(
         text = await result.text;
       }
 
-      // Track token usage
-      usage = await result.usage;
+      // Track AGGREGATE token usage across ALL tool-use rounds
+      usage = await result.totalUsage;
 
       // Extract tool calls and results from ALL steps.
-      // result.toolCalls only contains the LAST step's calls, so save_to_memory
-      // calls from earlier steps would be lost. Use result.steps instead.
       steps = ((await result.steps) ?? []) as AgentStep[];
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
