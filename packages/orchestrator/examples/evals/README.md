@@ -1,6 +1,6 @@
 # Eval Suites
 
-Example eval suites demonstrating the `@mcai/orchestrator` eval framework. Each suite defines a graph, seeds input data, and asserts against the final workflow state.
+Example eval suites demonstrating the `@cycgraph/orchestrator` eval framework. Each suite defines a graph, seeds input data, and asserts against the final workflow state.
 
 ## Available Suites
 
@@ -13,7 +13,7 @@ Example eval suites demonstrating the `@mcai/orchestrator` eval framework. Each 
 ## Writing Your Own
 
 ```typescript
-import type { EvalSuite, Graph } from '@mcai/orchestrator';
+import type { EvalSuite, Graph } from '@cycgraph/orchestrator';
 
 const myGraph: Graph = { /* ... */ };
 
@@ -41,7 +41,7 @@ export const suite: EvalSuite = {
 Run with `runEval()`:
 
 ```typescript
-import { runEval } from '@mcai/orchestrator';
+import { runEval } from '@cycgraph/orchestrator';
 import { suite } from './my-suite.js';
 
 const report = await runEval(suite);

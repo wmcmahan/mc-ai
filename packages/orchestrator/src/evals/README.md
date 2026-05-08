@@ -1,6 +1,6 @@
 # Eval System — Technical Reference
 
-> **Scope**: This document covers the internal architecture of the eval subsystem in `@mcai/orchestrator`. It is intended for contributors writing eval suites, adding new assertion types, or modifying the eval runner.
+> **Scope**: This document covers the internal architecture of the eval subsystem in `@cycgraph/orchestrator`. It is intended for contributors writing eval suites, adding new assertion types, or modifying the eval runner.
 
 ---
 

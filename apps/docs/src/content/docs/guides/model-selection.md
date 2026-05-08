@@ -3,7 +3,7 @@ title: Budget-Aware Model Selection
 description: Automatically select the right model based on capability needs and remaining budget.
 ---
 
-MC-AI can dynamically choose which LLM model to use for each agent at runtime. Instead of hardcoding a model, agents declare a **capability tier** (`high`, `medium`, or `low`), and the engine resolves it to a concrete model — downgrading automatically when the workflow budget is running low.
+cycgraph can dynamically choose which LLM model to use for each agent at runtime. Instead of hardcoding a model, agents declare a **capability tier** (`high`, `medium`, or `low`), and the engine resolves it to a concrete model — downgrading automatically when the workflow budget is running low.
 
 ## How it works
 
@@ -25,8 +25,8 @@ MC-AI can dynamically choose which LLM model to use for each agent at runtime. I
 A `ModelTierMap` maps each capability tier to concrete model IDs per provider:
 
 ```typescript
-import { defaultModelResolver } from '@mcai/orchestrator';
-import type { ModelTierMap } from '@mcai/orchestrator';
+import { defaultModelResolver } from '@cycgraph/orchestrator';
+import type { ModelTierMap } from '@cycgraph/orchestrator';
 
 const tierMap: ModelTierMap = {
   high:   { anthropic: 'claude-opus-4-20250514',    openai: 'o3' },
@@ -74,7 +74,7 @@ import {
   GraphRunner,
   configureAgentFactory,
   configureProviderRegistry,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 // Once at startup:
 configureProviderRegistry(providers);
@@ -153,7 +153,7 @@ Unknown models are assigned a conservative fallback cost of $0.05 per call (fail
 You can replace the default resolver with any function matching the `ModelResolver` signature:
 
 ```typescript
-import type { ModelResolver } from '@mcai/orchestrator';
+import type { ModelResolver } from '@cycgraph/orchestrator';
 
 const myResolver: ModelResolver = (preference, provider, remainingBudgetUsd) => {
   // Your custom logic here
@@ -175,8 +175,8 @@ import {
   defaultModelResolver,
   createGraph,
   createWorkflowState,
-} from '@mcai/orchestrator';
-import type { ModelTierMap } from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
+import type { ModelTierMap } from '@cycgraph/orchestrator';
 
 // 1. Set up providers (wired globally)
 const providers = createProviderRegistry();

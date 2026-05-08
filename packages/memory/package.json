@@ -1,5 +1,5 @@
 {
-  "name": "@mcai/memory",
+  "name": "@cycgraph/memory",
   "version": "1.0.0",
   "description": "Temporal and hierarchical memory service for LLM agents — knowledge graph, episode segmentation, semantic deduplication, and efficient retrieval.",
   "keywords": [
@@ -34,6 +34,9 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist"

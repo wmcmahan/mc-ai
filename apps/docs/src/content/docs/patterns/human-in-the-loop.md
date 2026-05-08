@@ -41,7 +41,7 @@ See the [full runnable code](https://github.com/wmcmahan/mc-ai/tree/main/package
 Instead of managing complex pausing logic in code, you simply declare an `approval` node in your `createGraph` definition.
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Human-in-the-Loop',
@@ -153,7 +153,7 @@ When using the [WorkflowWorker](/concepts/distributed-execution/) for distribute
 5. A worker (same or different) picks up the resume job, recovers via event log, applies the response, and continues
 
 ```typescript
-import { InMemoryWorkflowQueue } from '@mcai/orchestrator';
+import { InMemoryWorkflowQueue } from '@cycgraph/orchestrator';
 
 const queue = new InMemoryWorkflowQueue();
 

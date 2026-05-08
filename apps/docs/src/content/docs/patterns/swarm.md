@@ -42,7 +42,7 @@ A swarm node is just an `agent` node with `swarm_config` attached. There is no s
 ### 1. The specialist agents
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
@@ -89,7 +89,7 @@ const PYTHON_WRITER_ID = registry.register({
 Each peer is a standard `agent` node with `swarm_config` listing the other peers it can hand off to. Edges define what happens when no handoff is requested — typically a default forward path or a route to a terminal node.
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Data Analysis Swarm',

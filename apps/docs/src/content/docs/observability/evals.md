@@ -3,14 +3,14 @@ title: Evaluations
 description: Verify workflow behavior with automated eval suites.
 ---
 
-Unit tests check *code* — does the function crash? Evals check *behavior* — did the workflow produce the right result? MC-AI includes a built-in eval framework for defining test cases, running workflows, and asserting on the final state.
+Unit tests check *code* — does the function crash? Evals check *behavior* — did the workflow produce the right result? cycgraph includes a built-in eval framework for defining test cases, running workflows, and asserting on the final state.
 
 ## Quick start
 
 Define a suite, run it, and inspect the report:
 
 ```typescript
-import { runEval, EvalSuite } from '@mcai/orchestrator';
+import { runEval, EvalSuite } from '@cycgraph/orchestrator';
 
 const suite: EvalSuite = {
   name: 'My First Eval',
@@ -161,7 +161,7 @@ interface AssertionResult {
 
 ## Example eval suites
 
-MC-AI ships with three example suites that demonstrate common patterns.
+cycgraph ships with three example suites that demonstrate common patterns.
 
 ### Linear completion
 

@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry Tracing for @mcai/orchestrator
+ * OpenTelemetry Tracing for @cycgraph/orchestrator
  *
  * Opt-in distributed tracing via OTLP HTTP exporter.
  * Traces are sent to Jaeger (or any OTel-compatible backend).

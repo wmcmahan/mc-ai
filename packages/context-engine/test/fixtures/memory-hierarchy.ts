@@ -173,7 +173,7 @@ export const EPISODES: HierarchyEpisode[] = [
 export const ENTITIES: GraphEntity[] = [
   { id: 'ent-alice', name: 'Alice', entity_type: 'person', attributes: { role: 'lead engineer', department: 'platform' } },
   { id: 'ent-bob', name: 'Bob', entity_type: 'person', attributes: { role: 'infrastructure engineer', department: 'platform' } },
-  { id: 'ent-platform', name: 'MC-AI Platform', entity_type: 'project', attributes: { status: 'active', started: '2026-01' } },
+  { id: 'ent-platform', name: 'cycgraph Platform', entity_type: 'project', attributes: { status: 'active', started: '2026-01' } },
   { id: 'ent-api', name: 'API Gateway', entity_type: 'component', attributes: { rate_limit: '1000 req/s', protocol: 'REST' } },
   { id: 'ent-acme', name: 'Acme Corp', entity_type: 'organization', attributes: { industry: 'technology' } },
   // Invalidated entity
@@ -198,7 +198,7 @@ export const COMMUNITIES: CommunitySummary[] = [
   {
     id: 'comm-1',
     label: 'Platform Engineering Team',
-    summary: 'Alice leads the platform engineering team at Acme Corp. Bob handles infrastructure. They are building the MC-AI orchestration platform with a graph-based workflow engine.',
+    summary: 'Alice leads the platform engineering team at Acme Corp. Bob handles infrastructure. They are building the cycgraph orchestration platform with a graph-based workflow engine.',
     entity_ids: ['ent-alice', 'ent-bob', 'ent-platform', 'ent-acme'],
     level: 1,
     weight: 0.95,
@@ -206,7 +206,7 @@ export const COMMUNITIES: CommunitySummary[] = [
   {
     id: 'comm-2',
     label: 'API Architecture',
-    summary: 'The API gateway uses rate limiting at 1000 req/s per tenant. It is a REST-based component of the MC-AI platform.',
+    summary: 'The API gateway uses rate limiting at 1000 req/s per tenant. It is a REST-based component of the cycgraph platform.',
     entity_ids: ['ent-api', 'ent-platform'],
     level: 2,
     weight: 0.75,

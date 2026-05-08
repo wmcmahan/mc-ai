@@ -7,7 +7,7 @@
 import { db } from './connection.js';
 import { agents } from './schema.js';
 import { eq, desc } from 'drizzle-orm';
-import type { AgentRegistry, AgentRegistryEntry, AgentRegistryInput } from '@mcai/orchestrator';
+import type { AgentRegistry, AgentRegistryEntry, AgentRegistryInput } from '@cycgraph/orchestrator';
 
 export class DrizzleAgentRegistry implements AgentRegistry {
   async loadAgent(id: string): Promise<AgentRegistryEntry | null> {

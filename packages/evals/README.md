@@ -1,6 +1,6 @@
-# @mcai/evals
+# @cycgraph/evals
 
-Automated eval harness and quality-assurance gatekeeper for `@mcai/*` packages. Evaluates whether algorithmic changes in one module silently degrade the reasoning or schema-compliance of another.
+Automated eval harness and quality-assurance gatekeeper for `@cycgraph/*` packages. Evaluates whether algorithmic changes in one module silently degrade the reasoning or schema-compliance of another.
 
 Built on [promptfoo](https://www.promptfoo.dev/) for programmatic test orchestration, with Zod structural assertions and LLM-as-judge semantic evaluation.
 
@@ -21,7 +21,7 @@ Results are aggregated into a **Semantic Drift %** metric. If drift exceeds 5%, 
 Metrics that evaluate output quality without a reference answer:
 
 ```typescript
-import { INSTRUCTION_FOLLOWING, OUTPUT_QUALITY, SAFETY } from '@mcai/evals';
+import { INSTRUCTION_FOLLOWING, OUTPUT_QUALITY, SAFETY } from '@cycgraph/evals';
 
 // - INSTRUCTION_FOLLOWING: Does the output follow instructions?
 // - OUTPUT_QUALITY: Is the output complete, clear, and correct?
@@ -33,7 +33,7 @@ import { INSTRUCTION_FOLLOWING, OUTPUT_QUALITY, SAFETY } from '@mcai/evals';
 Verify that your LLM judge scores align with ground-truth expectations:
 
 ```typescript
-import { calibrateJudge, getCalibrationSet, ANSWER_RELEVANCY } from '@mcai/evals';
+import { calibrateJudge, getCalibrationSet, ANSWER_RELEVANCY } from '@cycgraph/evals';
 
 const calibrationSet = getCalibrationSet('answer_relevancy');
 const result = await calibrateJudge(calibrationSet, ANSWER_RELEVANCY, callJudge);
@@ -47,7 +47,7 @@ const result = await calibrateJudge(calibrationSet, ANSWER_RELEVANCY, callJudge)
 Pure assertions that require no LLM:
 
 ```typescript
-import { assertGreaterThanOrEqual, assertSetEquals, assertStable } from '@mcai/evals';
+import { assertGreaterThanOrEqual, assertSetEquals, assertStable } from '@cycgraph/evals';
 
 assertGreaterThanOrEqual('compression_ratio', 0.35, 0.30, 'Minimum 30% reduction');
 assertSetEquals('required_keys', outputKeys, expectedKeys, 'All keys preserved');

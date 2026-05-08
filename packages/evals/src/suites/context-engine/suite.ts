@@ -1,7 +1,7 @@
 /**
  * Context Engine Eval Suite
  *
- * Two-track evaluation for @mcai/context-engine:
+ * Two-track evaluation for @cycgraph/context-engine:
  * - Deterministic track: compression ratio, information preservation,
  *   budget compliance, dedup correctness, format stability
  * - Semantic track: LLM-as-judge quality gate for compressed prompts
@@ -32,8 +32,8 @@ import {
   serializeGraph,
   selectFormat,
   DefaultTokenCounter,
-} from '@mcai/context-engine';
-import type { PromptSegment, BudgetConfig, MemoryPayload } from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
+import type { PromptSegment, BudgetConfig, MemoryPayload } from '@cycgraph/context-engine';
 import {
   assertGreaterThanOrEqual,
   assertLessThanOrEqual,

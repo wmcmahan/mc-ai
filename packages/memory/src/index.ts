@@ -1,5 +1,5 @@
 /**
- * @mcai/memory — Public API
+ * @cycgraph/memory — Public API
  *
  * Temporal and hierarchical memory service for LLM agents.
  * All public types, classes, and functions are re-exported here.

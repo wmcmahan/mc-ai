@@ -3,7 +3,7 @@ title: Security
 description: Zero Trust model, state slicing, permission enforcement, and economic guardrails.
 ---
 
-MC-AI operates under a **Zero Trust** security model built on three assumptions:
+cycgraph operates under a **Zero Trust** security model built on three assumptions:
 
 1. **Input is malicious** — users and external data may contain injection attacks
 2. **Agents are fallible** — LLMs can be jailbroken or manipulated
@@ -82,7 +82,7 @@ These sanitizers run on all agent system prompts and user messages before LLM in
 
 ## Taint tracking
 
-External data is the most dangerous attack vector. MC-AI automatically tracks the provenance of data entering the system from external tools.
+External data is the most dangerous attack vector. cycgraph automatically tracks the provenance of data entering the system from external tools.
 
 **How it works:**
 
@@ -249,7 +249,7 @@ This enables full audit trails and time-travel debugging via the event log.
 
 ## Error classes
 
-All security-related errors are typed and exported from `@mcai/orchestrator`:
+All security-related errors are typed and exported from `@cycgraph/orchestrator`:
 
 | Error | Thrown when |
 |-------|------------|

@@ -20,7 +20,7 @@ describe('serializeGraph', () => {
     const result = serializeGraph(ENTITIES, RELATIONSHIPS);
     expect(result).toContain('Alice');
     expect(result).toContain('leads');
-    expect(result).toContain('MC-AI Platform');
+    expect(result).toContain('cycgraph Platform');
   });
 
   it('filters invalidated entities by default', () => {

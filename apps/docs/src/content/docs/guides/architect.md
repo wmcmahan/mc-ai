@@ -12,7 +12,7 @@ Generated graphs are **never executed automatically** — they're returned for r
 The `generateWorkflow()` function takes a prompt and returns a validated `Graph`:
 
 ```typescript
-import { generateWorkflow } from '@mcai/orchestrator';
+import { generateWorkflow } from '@cycgraph/orchestrator';
 
 const { graph, metadata } = await generateWorkflow({
   prompt: 'Monitor Hacker News for AI news, summarize daily, post to Slack',
@@ -65,7 +65,7 @@ This is useful for incrementally building up complex workflows through conversat
 Once you have a graph, use it like any other — create state and run:
 
 ```typescript
-import { GraphRunner, createWorkflowState } from '@mcai/orchestrator';
+import { GraphRunner, createWorkflowState } from '@cycgraph/orchestrator';
 
 const state = createWorkflowState({
   workflow_id: graph.id,
@@ -86,7 +86,7 @@ Instead of calling `generateWorkflow()` directly, you can give the Architect's b
 The publish and get tools need to save/load graphs from your storage backend. Call `initArchitectTools()` once at application startup with `saveGraph` and `loadGraph` callbacks. Any persistence implementation works — in-memory for development, Drizzle/Postgres for production:
 
 ```typescript
-import { InMemoryPersistenceProvider, initArchitectTools } from '@mcai/orchestrator';
+import { InMemoryPersistenceProvider, initArchitectTools } from '@cycgraph/orchestrator';
 
 const persistence = new InMemoryPersistenceProvider();
 
@@ -96,7 +96,7 @@ initArchitectTools({
 });
 ```
 
-For production, swap in `DrizzlePersistenceProvider` from `@mcai/orchestrator-postgres` — the callback signatures are identical.
+For production, swap in `DrizzlePersistenceProvider` from `@cycgraph/orchestrator-postgres` — the callback signatures are identical.
 
 :::note
 The draft tool works without initialization — it only generates graphs in memory. The publish and get tools will throw `ArchitectError` if called before `initArchitectTools()`.
@@ -105,7 +105,7 @@ The draft tool works without initialization — it only generates graphs in memo
 ### Step 2: Register an agent with Architect tools
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 

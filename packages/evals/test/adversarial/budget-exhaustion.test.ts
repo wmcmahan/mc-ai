@@ -3,8 +3,8 @@ import {
   allocateBudget,
   createPipeline,
   DefaultTokenCounter,
-} from '@mcai/context-engine';
-import type { PromptSegment, BudgetConfig } from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
+import type { PromptSegment, BudgetConfig } from '@cycgraph/context-engine';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 

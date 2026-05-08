@@ -1,13 +1,13 @@
-# @mcai/context-engine
+# @cycgraph/context-engine
 
 Framework-agnostic context optimization engine. Composable compression pipeline that makes every token count — especially for small and local models.
 
-Built as a standalone package with zero orchestrator dependencies. Works with any LLM framework (Vercel AI SDK, LangChain, raw API calls) or as the context management layer inside `@mcai/orchestrator`.
+Built as a standalone package with zero orchestrator dependencies. Works with any LLM framework (Vercel AI SDK, LangChain, raw API calls) or as the context management layer inside `@cycgraph/orchestrator`.
 
 ## Install
 
 ```bash
-npm install @mcai/context-engine
+npm install @cycgraph/context-engine
 ```
 
 Requires Node.js 22+. Only runtime dependency is `zod`.
@@ -52,7 +52,7 @@ All tiers are implemented. Higher tiers add capabilities via provider interfaces
 The simplest way to use the engine — pick a preset:
 
 ```typescript
-import { createOptimizedPipeline } from '@mcai/context-engine';
+import { createOptimizedPipeline } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -81,7 +81,7 @@ Auto-select from latency budget: `createOptimizedPipeline({ maxLatencyMs: 20 })`
 For multi-turn conversations, the incremental pipeline caches unchanged segments across turns:
 
 ```typescript
-import { createIncrementalPipeline } from '@mcai/context-engine';
+import { createIncrementalPipeline } from '@cycgraph/context-engine';
 
 const pipeline = createIncrementalPipeline({
   stages: [createFormatStage(), createExactDedupStage()],
@@ -116,7 +116,7 @@ import {
   createHeuristicPruningStage,
   createAllocatorStage,
   applyCachePolicy,
-} from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
 
 const segments = applyCachePolicy(rawSegments, { lockSystem: true, lockTools: true });
 
@@ -142,7 +142,7 @@ Slots into `prepareStep` for automatic per-call compression:
 
 ```typescript
 import { streamText } from 'ai';
-import { createOptimizedPipeline } from '@mcai/context-engine';
+import { createOptimizedPipeline } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'fast' });
 
@@ -159,14 +159,14 @@ const result = await streamText({
 });
 ```
 
-### MC-AI Orchestrator Integration
+### cycgraph Orchestrator Integration
 
 Optional context compression for all agent and supervisor prompts:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import type { ContextCompressor } from '@mcai/orchestrator';
-import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import type { ContextCompressor } from '@cycgraph/orchestrator';
+import { createOptimizedPipeline, serialize } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -211,7 +211,7 @@ Locked segments bypass all compression stages. Use for system prompts and tool s
 Every pipeline run reports per-stage metrics:
 
 ```typescript
-import { formatMetricsSummary } from '@mcai/context-engine';
+import { formatMetricsSummary } from '@cycgraph/context-engine';
 
 console.log(formatMetricsSummary(result.metrics));
 // Total: 1200 → 420 tokens (65.0% reduction, 12.3ms)
@@ -248,7 +248,7 @@ Auto-detects data shape and serializes to token-efficient format:
 | Flat objects | `key: value` lines | 15-25% |
 
 ```typescript
-import { serialize, createFormatStage } from '@mcai/context-engine';
+import { serialize, createFormatStage } from '@cycgraph/context-engine';
 
 serialize([{ name: 'Alice', score: 92 }, { name: 'Bob', score: 87 }]);
 // @name @score
@@ -261,7 +261,7 @@ serialize([{ name: 'Alice', score: 92 }, { name: 'Bob', score: 87 }]);
 Three levels of duplicate detection:
 
 ```typescript
-import { createExactDedupStage, createFuzzyDedupStage, createSemanticDedupStage } from '@mcai/context-engine';
+import { createExactDedupStage, createFuzzyDedupStage, createSemanticDedupStage } from '@cycgraph/context-engine';
 
 createExactDedupStage()                           // O(n) hash-based, identical content
 createFuzzyDedupStage({ threshold: 0.85 })        // trigram Jaccard, MinHash LSH pre-filter for >200 items
@@ -271,7 +271,7 @@ createSemanticDedupStage({ provider, precomputed }) // embedding cosine, SimHash
 Semantic dedup requires pre-computed embeddings (async, before pipeline):
 
 ```typescript
-import { precomputeEmbeddings } from '@mcai/context-engine';
+import { precomputeEmbeddings } from '@cycgraph/context-engine';
 
 const embeddings = await precomputeEmbeddings(segments, embeddingProvider);
 const stage = createSemanticDedupStage({ provider: embeddingProvider, precomputed: embeddings });
@@ -282,7 +282,7 @@ const stage = createSemanticDedupStage({ provider: embeddingProvider, precompute
 Rule-based token importance scoring (no ML required). Six weighted rules: stop word penalty, filler phrase detection, position boost, frequency penalty, named entity boost, structural marker boost.
 
 ```typescript
-import { createHeuristicPruningStage } from '@mcai/context-engine';
+import { createHeuristicPruningStage } from '@cycgraph/context-engine';
 
 createHeuristicPruningStage()  // default weights
 createHeuristicPruningStage({ stopWordWeight: 0.3, entityWeight: 0.2 })  // custom
@@ -293,7 +293,7 @@ Preserves named entities, numbers, and structural markers while removing filler 
 #### Query-Contrastive Scoring
 
 ```typescript
-import { createHeuristicPruningStage } from '@mcai/context-engine';
+import { createHeuristicPruningStage } from '@cycgraph/context-engine';
 
 const stage = createHeuristicPruningStage({
   queryWeight: 0.20, // boost tokens relevant to the query
@@ -308,7 +308,7 @@ const stage = createHeuristicPruningStage({
 Detects and evicts reasoning traces (`<think>`, `<reasoning>`, `<scratchpad>`, etc.) from System-2 model outputs. Extracts conclusions, removes verbose reasoning.
 
 ```typescript
-import { distillCoT, createCotDistillationStage } from '@mcai/context-engine';
+import { distillCoT, createCotDistillationStage } from '@cycgraph/context-engine';
 
 // Standalone
 const result = distillCoT(content);
@@ -327,7 +327,7 @@ Ships with delimiters for DeepSeek, Anthropic, OpenAI, and generic formats. Conf
 Local self-information scoring without an external provider:
 
 ```typescript
-import { createNGramScorer } from '@mcai/context-engine';
+import { createNGramScorer } from '@cycgraph/context-engine';
 
 // Local self-information scoring — no external provider needed
 const scorer = createNGramScorer({ n: 3, granularity: 'sentence' });
@@ -340,7 +340,7 @@ const scorer = createNGramScorer({ n: 3, granularity: 'sentence' });
 Perplexity-based token scoring via `CompressionProvider`. Tokens with high surprisal (domain terms, numbers, novel concepts) are preserved. Predictable tokens (articles, filler) are pruned.
 
 ```typescript
-import { precomputeImportanceScores, createSelfInformationStage } from '@mcai/context-engine';
+import { precomputeImportanceScores, createSelfInformationStage } from '@cycgraph/context-engine';
 
 const scores = await precomputeImportanceScores(segments, compressionProvider, {
   granularity: 'sentence',  // 'token' | 'phrase' | 'sentence'
@@ -355,7 +355,7 @@ const stage = createSelfInformationStage({ precomputed: scores });
 Prioritizes memory facts by theme size and recency:
 
 ```typescript
-import { createAdaptiveMemoryStage } from '@mcai/context-engine';
+import { createAdaptiveMemoryStage } from '@cycgraph/context-engine';
 
 const stage = createAdaptiveMemoryStage({
   recencyBoostDays: 7,
@@ -370,15 +370,15 @@ const stage = createAdaptiveMemoryStage({
 
 ## Memory Formatting
 
-Format pre-built memory hierarchy payloads from `@mcai/memory` (or any compatible source) into token-efficient prompt blocks. Context-engine defines its own input interfaces — no dependency on `@mcai/memory`.
+Format pre-built memory hierarchy payloads from `@cycgraph/memory` (or any compatible source) into token-efficient prompt blocks. Context-engine defines its own input interfaces — no dependency on `@cycgraph/memory`.
 
 ### Hierarchy Formatter
 
 Formats themes → facts → episodes in top-down structure:
 
 ```typescript
-import { formatHierarchy, createHierarchyFormatterStage } from '@mcai/context-engine';
-import type { MemoryPayload } from '@mcai/context-engine';
+import { formatHierarchy, createHierarchyFormatterStage } from '@cycgraph/context-engine';
+import type { MemoryPayload } from '@cycgraph/context-engine';
 
 const payload: MemoryPayload = { themes, facts, episodes };
 const formatted = formatHierarchy(payload);
@@ -398,7 +398,7 @@ Pipeline stage detects segments with `metadata.contentType === 'hierarchy'`.
 Formats entity-relationship subgraphs. Auto-detects tabular vs adjacency format:
 
 ```typescript
-import { serializeGraph, createGraphSerializerStage } from '@mcai/context-engine';
+import { serializeGraph, createGraphSerializerStage } from '@cycgraph/context-engine';
 
 serializeGraph(entities, relationships);
 // Entities (person):
@@ -416,7 +416,7 @@ serializeGraph(entities, relationships);
 Formats pre-clustered community summaries from GraphRAG/Leiden:
 
 ```typescript
-import { formatCommunities } from '@mcai/context-engine';
+import { formatCommunities } from '@cycgraph/context-engine';
 
 formatCommunities(communities, { sortByRelevance: true, maxLevel: 2 });
 ```
@@ -426,7 +426,7 @@ formatCommunities(communities, { sortByRelevance: true, maxLevel: 2 });
 Selects compression format based on target model capabilities. Small models get compact JSON; capable models get TOON/nested formats.
 
 ```typescript
-import { selectFormat, resolveModelProfile, createFormatSelectorStage } from '@mcai/context-engine';
+import { selectFormat, resolveModelProfile, createFormatSelectorStage } from '@cycgraph/context-engine';
 
 resolveModelProfile('gemma-2-9b');   // → { prefersJson: true, supportsTabular: false, ... }
 resolveModelProfile('claude-sonnet'); // → { prefersJson: false, supportsTabular: true, ... }
@@ -442,7 +442,7 @@ Ships with profiles for GPT-4o, Claude, Llama, DeepSeek, Qwen, Gemini, Mistral, 
 Pre-processor that locks qualifying segments to preserve API prompt cache hits:
 
 ```typescript
-import { applyCachePolicy, computePrefixHashes, measureCacheHitRate } from '@mcai/context-engine';
+import { applyCachePolicy, computePrefixHashes, measureCacheHitRate } from '@cycgraph/context-engine';
 
 const locked = applyCachePolicy(segments, { lockSystem: true, lockTools: true });
 
@@ -456,7 +456,7 @@ const hitRate = measureCacheHitRate(currentHashes, previousHashes);
 Measure segment stability across turns:
 
 ```typescript
-import { diagnoseCacheStability, computeSegmentHashMap } from '@mcai/context-engine';
+import { diagnoseCacheStability, computeSegmentHashMap } from '@cycgraph/context-engine';
 
 const previousHashes = computeSegmentHashMap(previousSegments);
 const diagnostics = diagnoseCacheStability(currentSegments, previousHashes);
@@ -472,7 +472,7 @@ const diagnostics = diagnoseCacheStability(currentSegments, previousHashes);
 Wraps any stage and bypasses it when the latency cost exceeds token savings:
 
 ```typescript
-import { createCircuitBreaker, createLatencyTracker } from '@mcai/context-engine';
+import { createCircuitBreaker, createLatencyTracker } from '@cycgraph/context-engine';
 
 const tracker = createLatencyTracker();
 const safeMlStage = createCircuitBreaker(mlStage, tracker, {
@@ -508,8 +508,8 @@ The engine scales with available providers but always works without them:
 For production, implement `CompressionProvider` against your inference server (Ollama, vLLM, TGI, or any API that returns per-token log-probabilities):
 
 ```typescript
-import type { CompressionProvider } from '@mcai/context-engine';
-import { precomputeImportanceScores } from '@mcai/context-engine';
+import type { CompressionProvider } from '@cycgraph/context-engine';
+import { precomputeImportanceScores } from '@cycgraph/context-engine';
 
 // Example: Ollama running locally on port 11434
 const ollamaProvider: CompressionProvider = {
@@ -536,7 +536,7 @@ Optional exact token counting via `gpt-tokenizer`:
 
 ```typescript
 import { encode } from 'gpt-tokenizer';
-import { createTiktokenCounter } from '@mcai/context-engine';
+import { createTiktokenCounter } from '@cycgraph/context-engine';
 
 const counter = createTiktokenCounter(encode);
 ```

@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: What MC-AI is, why it exists, and how it differs from other orchestration frameworks.
+description: What cycgraph is, why it exists, and how it differs from other orchestration frameworks.
 ---
 
-MC-AI is an **agentic orchestration engine** built on a Cyclic State Graph architecture. It empowers you to build complex, fault-tolerant, multi-step AI workflows reliably in production.
+cycgraph is an **agentic orchestration engine** built on a Cyclic State Graph architecture. It empowers you to build complex, fault-tolerant, multi-step AI workflows reliably in production.
 
-## Why use MC-AI?
+## Why use cycgraph?
 
 Most AI orchestration frameworks model workflows as linear chains or strict DAGs (Directed Acyclic Graphs) — agent A calls agent B, which calls agent C. This works well for simple pipelines, but falls apart when you need:
 
@@ -14,11 +14,11 @@ Most AI orchestration frameworks model workflows as linear chains or strict DAGs
 - Multiple candidates to **evolve in parallel** across generations to find the absolute best solution.
 - A workflow to **pause for human review**, and resume safely hours later without context loss.
 
-MC-AI solves this by using a **Cyclic State Graph**. Nodes in the graph can loop, revisit previous nodes, and make runtime routing decisions by reading from a single shared state object — `WorkflowState.memory`.
+cycgraph solves this by using a **Cyclic State Graph**. Nodes in the graph can loop, revisit previous nodes, and make runtime routing decisions by reading from a single shared state object — `WorkflowState.memory`.
 
 ## Core mental model
 
-Everything in MC-AI revolves around four core concepts:
+Everything in cycgraph revolves around four core concepts:
 
 | Concept | What it is |
 |---------|-----------| 
@@ -59,9 +59,9 @@ flowchart TB
 
 Because the `GraphRunner` is a lightweight TypeScript library, there's no heavy control plane to spin up. You can embed it directly in your Fastify/Express server, run it in a serverless function, or scale horizontally using the built-in [`WorkflowWorker`](/concepts/distributed-execution/) — which distributes workflows across multiple processes with automatic crash recovery.
 
-## What MC-AI is not
+## What cycgraph is not
 
-- **Not a chatbot UI builder** — MC-AI is a backend workflow engine.
+- **Not a chatbot UI builder** — cycgraph is a backend workflow engine.
 - **Not a low-code tool** — Workflows are defined in TypeScript with full type safety, not a drag-and-drop builder.
 - **Not tied to a specific model** — We use the Vercel AI SDK under the hood, so you can use Anthropic, OpenAI, Groq, local models, or any other compatible provider.
 

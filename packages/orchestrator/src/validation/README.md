@@ -1,6 +1,6 @@
 # Validation — Technical Reference
 
-> **Scope**: This document covers the graph validation system in `@mcai/orchestrator`. It is intended for contributors modifying validation rules, adding checks for new node types, or integrating validation into new subsystems.
+> **Scope**: This document covers the graph validation system in `@cycgraph/orchestrator`. It is intended for contributors modifying validation rules, adding checks for new node types, or integrating validation into new subsystems.
 
 ---
 
@@ -27,7 +27,7 @@ The validation module provides structural integrity checks for `Graph` definitio
 The main validation function. Runs all checks in a single pass with pre-built lookup structures for `O(N + E)` performance.
 
 ```typescript
-import { validateGraph } from '@mcai/orchestrator';
+import { validateGraph } from '@cycgraph/orchestrator';
 
 const result = validateGraph(graph);
 if (!result.valid) {

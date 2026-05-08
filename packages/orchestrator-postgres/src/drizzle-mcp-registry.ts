@@ -7,8 +7,8 @@
 import { db } from './connection.js';
 import { mcp_servers } from './schema.js';
 import { eq } from 'drizzle-orm';
-import type { MCPServerRegistry } from '@mcai/orchestrator';
-import type { MCPServerEntry } from '@mcai/orchestrator';
+import type { MCPServerRegistry } from '@cycgraph/orchestrator';
+import type { MCPServerEntry } from '@cycgraph/orchestrator';
 
 export class DrizzleMCPServerRegistry implements MCPServerRegistry {
   async saveServer(entry: MCPServerEntry): Promise<void> {

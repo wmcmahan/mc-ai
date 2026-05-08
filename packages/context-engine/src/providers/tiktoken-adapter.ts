@@ -7,7 +7,7 @@
  * Usage:
  * ```ts
  * import { encode } from 'gpt-tokenizer';
- * import { createTiktokenCounter } from '@mcai/context-engine';
+ * import { createTiktokenCounter } from '@cycgraph/context-engine';
  *
  * const counter = createTiktokenCounter(encode);
  * ```

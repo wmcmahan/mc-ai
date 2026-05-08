@@ -1,6 +1,6 @@
 ---
 title: Error Handling
-description: How errors are defined, categorized, and recovered from in MC-AI workflows.
+description: How errors are defined, categorized, and recovered from in cycgraph workflows.
 ---
 
 The orchestrator has a structured error hierarchy so that every failure mode has a clear type, category, and recovery path. Errors are never swallowed — they either trigger a retry, trip a circuit breaker, or terminate the run with a precise reason.

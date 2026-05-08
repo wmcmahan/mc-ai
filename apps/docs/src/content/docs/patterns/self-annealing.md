@@ -42,7 +42,7 @@ See the [full runnable code](https://github.com/wmcmahan/mc-ai/tree/main/package
 The pattern relies on pairing two complementing agents: one instructed to listen to feedback, and the other instructed to provide ruthless, structured feedback.
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
@@ -92,7 +92,7 @@ const EVALUATOR_ID = registry.register({
 The magic happens in the graph edges. By using `conditional` edges based on the `memory.score` value produced by the Evaluator, we can dynamically loop backward or break out of the cycle.
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Eval Loop',

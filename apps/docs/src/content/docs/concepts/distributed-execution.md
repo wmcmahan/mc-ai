@@ -3,7 +3,7 @@ title: Distributed Execution
 description: Scale workflow execution across multiple processes with per-workflow worker assignment.
 ---
 
-MC-AI's `GraphRunner` runs entirely within a single Node.js process. For production deployments with concurrent workflows, the **WorkflowWorker** distributes execution across multiple processes — each workflow runs on one worker for its entire lifetime, using the existing `GraphRunner` unmodified.
+cycgraph's `GraphRunner` runs entirely within a single Node.js process. For production deployments with concurrent workflows, the **WorkflowWorker** distributes execution across multiple processes — each workflow runs on one worker for its entire lifetime, using the existing `GraphRunner` unmodified.
 
 Workers poll the queue, claim jobs atomically, and execute workflows. Crashed workers are detected via **visibility timeouts** — if a worker stops heartbeating, the job is reclaimed and re-executed on another worker using event log replay.
 
@@ -12,7 +12,7 @@ Workers poll the queue, claim jobs atomically, and execute workflows. Crashed wo
 The `WorkflowQueue` interface is the core abstraction. It provides SQS-style semantics with visibility timeouts, priority ordering, and dead-lettering.
 
 ```typescript
-import { InMemoryWorkflowQueue } from '@mcai/orchestrator';
+import { InMemoryWorkflowQueue } from '@cycgraph/orchestrator';
 
 const queue = new InMemoryWorkflowQueue();
 
@@ -68,7 +68,7 @@ import {
   InMemoryWorkflowQueue,
   InMemoryPersistenceProvider,
   InMemoryEventLogWriter,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const worker = new WorkflowWorker({
   queue,
@@ -179,7 +179,7 @@ if (depth.dead_letter > 0) {
 The existing `setQueueDepthProvider()` works with the queue:
 
 ```typescript
-import { setQueueDepthProvider } from '@mcai/orchestrator';
+import { setQueueDepthProvider } from '@cycgraph/orchestrator';
 
 setQueueDepthProvider(async () => {
   const depth = await queue.getQueueDepth();
@@ -191,8 +191,8 @@ setQueueDepthProvider(async () => {
 
 | Implementation | Package | Use Case |
 |---------------|---------|----------|
-| `InMemoryWorkflowQueue` | `@mcai/orchestrator` | Testing, single-process deployments |
-| `DrizzleWorkflowQueue` | `@mcai/orchestrator-postgres` | Production (uses `FOR UPDATE SKIP LOCKED`) — *coming soon* |
+| `InMemoryWorkflowQueue` | `@cycgraph/orchestrator` | Testing, single-process deployments |
+| `DrizzleWorkflowQueue` | `@cycgraph/orchestrator-postgres` | Production (uses `FOR UPDATE SKIP LOCKED`) — *coming soon* |
 
 ## Next steps
 

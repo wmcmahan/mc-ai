@@ -8,12 +8,12 @@ The orchestrator depends only on **interfaces** for storage — concrete impleme
 ## Architecture
 
 ```
-@mcai/orchestrator (interfaces + in-memory implementations)
+@cycgraph/orchestrator (interfaces + in-memory implementations)
         │
-        └── @mcai/orchestrator-postgres (Drizzle/Postgres implementations)
+        └── @cycgraph/orchestrator-postgres (Drizzle/Postgres implementations)
 ```
 
-The core `@mcai/orchestrator` package has **zero database dependencies**. All persistence contracts are defined as TypeScript interfaces in `persistence/interfaces.ts`, with in-memory implementations provided for development and testing.
+The core `@cycgraph/orchestrator` package has **zero database dependencies**. All persistence contracts are defined as TypeScript interfaces in `persistence/interfaces.ts`, with in-memory implementations provided for development and testing.
 
 ## Interfaces
 
@@ -111,7 +111,7 @@ import {
   InMemoryAgentRegistry,
   InMemoryMCPServerRegistry,
   InMemoryWorkflowQueue,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const persistence = new InMemoryPersistenceProvider();
 const agents = new InMemoryAgentRegistry();
@@ -121,7 +121,7 @@ const queue = new InMemoryWorkflowQueue();
 
 ## Postgres implementation
 
-The `@mcai/orchestrator-postgres` package provides production-grade Drizzle ORM implementations:
+The `@cycgraph/orchestrator-postgres` package provides production-grade Drizzle ORM implementations:
 
 - `DrizzlePersistenceProvider`
 - `DrizzleAgentRegistry`
@@ -131,7 +131,7 @@ The `@mcai/orchestrator-postgres` package provides production-grade Drizzle ORM 
 - `DrizzleRetentionService`
 
 ```typescript
-import { DrizzlePersistenceProvider, DrizzleAgentRegistry } from '@mcai/orchestrator-postgres';
+import { DrizzlePersistenceProvider, DrizzleAgentRegistry } from '@cycgraph/orchestrator-postgres';
 ```
 
 ## Wiring persistence into the runner
@@ -155,7 +155,7 @@ The GraphRunner tracks consecutive persistence failures. If `persistStateFn` fai
 `loadEvents(run_id)` returns the raw, ordered event rows for a run. Use it to inspect what happened during execution, replay actions through reducers in test code, or rebuild state for a debugger UI.
 
 ```typescript
-import type { WorkflowEvent } from '@mcai/orchestrator';
+import type { WorkflowEvent } from '@cycgraph/orchestrator';
 
 const events = await persistence.loadEvents(runId);
 
@@ -185,12 +185,12 @@ Every call to `saveWorkflowState()` creates a new version. This enables:
 
 ## Differential state persistence
 
-For long-running workflows with large memory, persisting the full `WorkflowState` on every step can be expensive. MC-AI provides a `StateDeltaTracker` that computes diffs between consecutive state snapshots and persists only what changed.
+For long-running workflows with large memory, persisting the full `WorkflowState` on every step can be expensive. cycgraph provides a `StateDeltaTracker` that computes diffs between consecutive state snapshots and persists only what changed.
 
 ### Setup
 
 ```typescript
-import { GraphRunner, StateDeltaTracker } from '@mcai/orchestrator';
+import { GraphRunner, StateDeltaTracker } from '@cycgraph/orchestrator';
 
 const runner = new GraphRunner(graph, state, {
   persistStateFn: async (state) => {

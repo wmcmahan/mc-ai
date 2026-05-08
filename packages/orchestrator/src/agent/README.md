@@ -1,6 +1,6 @@
 # Agent System — Technical Reference
 
-> **Scope**: This document covers the internal architecture of the agent subsystem in `@mcai/orchestrator`. It is intended for contributors modifying agent execution, factory loading, evaluation, or supervision logic.
+> **Scope**: This document covers the internal architecture of the agent subsystem in `@cycgraph/orchestrator`. It is intended for contributors modifying agent execution, factory loading, evaluation, or supervision logic.
 
 ---
 
@@ -42,7 +42,7 @@ graph TD
     AE --> AF["AgentFactory"]
     SE --> AF
     EV --> AF
-    AF --> DB["@mcai/orchestrator-postgres"]
+    AF --> DB["@cycgraph/orchestrator-postgres"]
     AF --> SDK["AI SDK Providers"]
     AE --> ST["streamText()"]
     SE --> GO["generateObject()"]
@@ -236,20 +236,20 @@ Generates a minimal, deny-all fallback config:
 
 ### Lazy DB Import
 
-The factory uses a module-level singleton pattern for `@mcai/orchestrator-postgres` and `drizzle-orm` imports:
+The factory uses a module-level singleton pattern for `@cycgraph/orchestrator-postgres` and `drizzle-orm` imports:
 
 ```typescript
-let _dbModulePromise: Promise<typeof import('@mcai/orchestrator-postgres')> | null = null;
+let _dbModulePromise: Promise<typeof import('@cycgraph/orchestrator-postgres')> | null = null;
 
 function getDbModule() {
   if (!_dbModulePromise) {
-    _dbModulePromise = import('@mcai/orchestrator-postgres');
+    _dbModulePromise = import('@cycgraph/orchestrator-postgres');
   }
   return _dbModulePromise;
 }
 ```
 
-**Why:** The original code called `import('@mcai/orchestrator-postgres')` on every cache miss. Dynamic imports have overhead (module resolution, WeakRef lookups). The singleton ensures the import runs exactly once.
+**Why:** The original code called `import('@cycgraph/orchestrator-postgres')` on every cache miss. Dynamic imports have overhead (module resolution, WeakRef lookups). The singleton ensures the import runs exactly once.
 
 ---
 

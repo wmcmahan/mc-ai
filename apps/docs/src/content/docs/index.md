@@ -1,5 +1,5 @@
 ---
-title: MC-AI
+title: cycgraph
 description: Production-grade agentic orchestration on a Cyclic State Graph. Build complex multi-agent workflows that loop, branch, and recover.
 template: splash
 hero:
@@ -15,11 +15,11 @@ hero:
       variant: secondary
 ---
 
-## Why MC-AI
+## Why cycgraph
 
 Most agent frameworks model workflows as DAGs — agent A calls B calls C. That works for simple pipelines and breaks for everything else: looping back on validation feedback, supervisors that route dynamically, populations that evolve in parallel, workflows that pause for human review and resume hours later.
 
-MC-AI solves this with a **Cyclic State Graph**: nodes that can loop, revisit prior nodes, and make routing decisions by reading from a shared state object. Every state transition is auditable. Workflows survive crashes. Agents can't see what they shouldn't.
+cycgraph solves this with a **Cyclic State Graph**: nodes that can loop, revisit prior nodes, and make routing decisions by reading from a shared state object. Every state transition is auditable. Workflows survive crashes. Agents can't see what they shouldn't.
 
 ## What you get
 
@@ -34,7 +34,7 @@ MC-AI solves this with a **Cyclic State Graph**: nodes that can loop, revisit pr
 ## Get started
 
 ```bash
-npm install @mcai/orchestrator
+npm install @cycgraph/orchestrator
 ```
 
 Pick the path that fits where you are:

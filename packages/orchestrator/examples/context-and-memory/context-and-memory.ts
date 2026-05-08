@@ -7,10 +7,10 @@
  * receives compressed, relevant memory facts in its prompt.
  *
  * Demonstrates:
- * - @mcai/memory: episode segmentation, rule-based fact extraction,
+ * - @cycgraph/memory: episode segmentation, rule-based fact extraction,
  *   theme clustering, hierarchical retrieval, conflict detection,
  *   and memory consolidation
- * - @mcai/context-engine: incremental compression pipeline with
+ * - @cycgraph/context-engine: incremental compression pipeline with
  *   format compression, fuzzy dedup, and budget allocation
  * - Orchestrator integration via contextCompressor + memoryRetriever
  *
@@ -28,9 +28,9 @@ import {
   createLogger,
   createGraph,
   createWorkflowState,
-} from '@mcai/orchestrator';
-import type { ContextCompressor } from '@mcai/orchestrator';
-import type { MemoryRetriever } from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
+import type { ContextCompressor } from '@cycgraph/orchestrator';
+import type { MemoryRetriever } from '@cycgraph/orchestrator';
 
 import {
   InMemoryMemoryStore,
@@ -41,8 +41,8 @@ import {
   MemoryConsolidator,
   ConflictDetector,
   retrieveMemory,
-} from '@mcai/memory';
-import type { Message } from '@mcai/memory';
+} from '@cycgraph/memory';
+import type { Message } from '@cycgraph/memory';
 
 import {
   createIncrementalPipeline,
@@ -51,8 +51,8 @@ import {
   createFuzzyDedupStage,
   createAllocatorStage,
   serialize,
-} from '@mcai/context-engine';
-import type { PipelineState } from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
+import type { PipelineState } from '@cycgraph/context-engine';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
 
@@ -66,7 +66,7 @@ const logger = createLogger('example');
 
 // ─── 1. Set up the memory system ────────────────────────────────────────
 // In-memory implementations for the example. Production would use
-// DrizzleMemoryStore / DrizzleMemoryIndex from @mcai/orchestrator-postgres.
+// DrizzleMemoryStore / DrizzleMemoryIndex from @cycgraph/orchestrator-postgres.
 
 const memoryStore = new InMemoryMemoryStore();
 const memoryIndex = new InMemoryMemoryIndex();

@@ -1,5 +1,5 @@
 /**
- * Structured Logger for @mcai/orchestrator
+ * Structured Logger for @cycgraph/orchestrator
  *
  * Production-grade JSON logging with log levels, async context correlation,
  * and structured error serialization.

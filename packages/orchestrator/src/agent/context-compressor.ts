@@ -2,7 +2,7 @@
  * Context Compressor Type
  *
  * Narrow adapter interface for optional context compression in prompts.
- * The orchestrator owns this type; `@mcai/context-engine` is one implementation.
+ * The orchestrator owns this type; `@cycgraph/context-engine` is one implementation.
  *
  * Follows the `ModelResolver` pattern: a pure function type configured on
  * `GraphRunnerOptions`, injected through `NodeExecutorContext`, used in

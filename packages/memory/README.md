@@ -1,4 +1,4 @@
-# @mcai/memory
+# @cycgraph/memory
 
 Temporal and hierarchical memory service for LLM agents. Provides a knowledge graph with temporal validity, xMemory-inspired hierarchical organization (messages → episodes → facts → themes), and efficient top-down retrieval.
 
@@ -7,7 +7,7 @@ Built as a standalone package with zero orchestrator dependencies. Ships with wo
 ## Install
 
 ```bash
-npm install @mcai/memory
+npm install @cycgraph/memory
 ```
 
 Requires Node.js 22+.
@@ -56,8 +56,8 @@ import {
   SimpleSemanticExtractor,
   SimpleThemeClusterer,
   retrieveMemory,
-} from '@mcai/memory';
-import type { Message, MemoryQuery } from '@mcai/memory';
+} from '@cycgraph/memory';
+import type { Message, MemoryQuery } from '@cycgraph/memory';
 
 const store = new InMemoryMemoryStore();
 const index = new InMemoryMemoryIndex();
@@ -113,8 +113,8 @@ const result = await retrieveMemory(store, index, query);
 ### Entities
 
 ```typescript
-import { InMemoryMemoryStore } from '@mcai/memory';
-import type { Entity } from '@mcai/memory';
+import { InMemoryMemoryStore } from '@cycgraph/memory';
+import type { Entity } from '@cycgraph/memory';
 
 const store = new InMemoryMemoryStore();
 
@@ -146,7 +146,7 @@ const all = await store.findEntities({ include_invalidated: true });
 Directed edges with temporal validity windows:
 
 ```typescript
-import type { Relationship } from '@mcai/memory';
+import type { Relationship } from '@cycgraph/memory';
 
 const rel: Relationship = {
   id: crypto.randomUUID(),
@@ -172,7 +172,7 @@ const workRels = await store.getRelationshipsForEntity(aliceId, { relation_type:
 BFS traversal from seed entities:
 
 ```typescript
-import { extractSubgraph } from '@mcai/memory';
+import { extractSubgraph } from '@cycgraph/memory';
 
 const subgraph = await extractSubgraph(store, [aliceId], {
   max_hops: 2,
@@ -198,7 +198,7 @@ Top-down search following the xMemory pattern:
 6. Get relationships between entities
 
 ```typescript
-import { retrieveMemory } from '@mcai/memory';
+import { retrieveMemory } from '@cycgraph/memory';
 
 const result = await retrieveMemory(store, index, {
   embedding: queryVector,
@@ -232,7 +232,7 @@ const result = await retrieveMemory(store, index, {
 Filter records by validity windows:
 
 ```typescript
-import { isValidAt, isChangedSince, filterValid } from '@mcai/memory';
+import { isValidAt, isChangedSince, filterValid } from '@cycgraph/memory';
 
 // Check individual records
 isValidAt(relationship, new Date());        // within [valid_from, valid_until)?
@@ -251,7 +251,7 @@ const validFacts = filterValid(allFacts, {
 The `MemoryIndex` provides embedding-based search over all record types:
 
 ```typescript
-import { InMemoryMemoryIndex } from '@mcai/memory';
+import { InMemoryMemoryIndex } from '@cycgraph/memory';
 
 const index = new InMemoryMemoryIndex();
 await index.rebuild(store); // build from store contents
@@ -276,7 +276,7 @@ The in-memory index uses brute-force cosine similarity. Production backends impl
 Groups messages into topic-coherent episodes based on time gaps:
 
 ```typescript
-import { SimpleEpisodeSegmenter } from '@mcai/memory';
+import { SimpleEpisodeSegmenter } from '@cycgraph/memory';
 
 const segmenter = new SimpleEpisodeSegmenter({
   gap_threshold_ms: 5 * 60 * 1000, // 5 minute gap = new episode
@@ -291,7 +291,7 @@ const episodes = await segmenter.segment(messages);
 Distills episodes into atomic facts:
 
 ```typescript
-import { SimpleSemanticExtractor } from '@mcai/memory';
+import { SimpleSemanticExtractor } from '@cycgraph/memory';
 
 const extractor = new SimpleSemanticExtractor();
 const facts = await extractor.extract(episode);
@@ -305,7 +305,7 @@ const facts = await extractor.extract(episode);
 Extracts 3-10 facts per episode with entity and relationship detection:
 
 ```typescript
-import { RuleBasedExtractor } from '@mcai/memory';
+import { RuleBasedExtractor } from '@cycgraph/memory';
 
 const extractor = new RuleBasedExtractor({
   minSentenceLength: 20,  // skip short sentences
@@ -326,8 +326,8 @@ const entities = extractor.extractEntities('Alice Smith works at Acme Corp');
 LLM-backed extraction with rule-based fallback:
 
 ```typescript
-import { LLMExtractor } from '@mcai/memory';
-import type { LLMProvider } from '@mcai/memory';
+import { LLMExtractor } from '@cycgraph/memory';
+import type { LLMProvider } from '@cycgraph/memory';
 
 const provider: LLMProvider = {
   complete: async (prompt) => { /* call your LLM */ return jsonResponse; },
@@ -343,7 +343,7 @@ const facts = await extractor.extract(episode);
 Groups facts into thematic clusters using embedding similarity:
 
 ```typescript
-import { SimpleThemeClusterer } from '@mcai/memory';
+import { SimpleThemeClusterer } from '@cycgraph/memory';
 
 const clusterer = new SimpleThemeClusterer({
   similarity_threshold: 0.7, // min similarity to join existing theme
@@ -361,7 +361,7 @@ Facts without embeddings are assigned to a "General" fallback theme.
 Two-pass clustering that merges near-duplicate themes after assignment:
 
 ```typescript
-import { ConsolidatingThemeClusterer } from '@mcai/memory';
+import { ConsolidatingThemeClusterer } from '@cycgraph/memory';
 
 const clusterer = new ConsolidatingThemeClusterer({
   assignmentThreshold: 0.7,  // min similarity to join theme
@@ -381,7 +381,7 @@ const themes = await clusterer.cluster(facts, existingThemes);
 Deduplicates, decays, and prunes memory records to stay within budget:
 
 ```typescript
-import { MemoryConsolidator } from '@mcai/memory';
+import { MemoryConsolidator } from '@cycgraph/memory';
 
 const consolidator = new MemoryConsolidator(store, index, {
   maxFacts: 1000,
@@ -403,7 +403,7 @@ const report = await consolidator.consolidate();
 Detects and auto-resolves contradictory facts:
 
 ```typescript
-import { ConflictDetector } from '@mcai/memory';
+import { ConflictDetector } from '@cycgraph/memory';
 
 const detector = new ConflictDetector(store, index, {
   autoResolveSupersession: true,
@@ -452,7 +452,7 @@ const themes = await store.getThemes(themeIds);
 This package is embedding-agnostic. Provide your own implementation:
 
 ```typescript
-import type { EmbeddingProvider } from '@mcai/memory';
+import type { EmbeddingProvider } from '@cycgraph/memory';
 
 const openaiEmbeddings: EmbeddingProvider = {
   dimensions: 1536,
@@ -472,7 +472,7 @@ const openaiEmbeddings: EmbeddingProvider = {
 All record types have Zod schemas for validation:
 
 ```typescript
-import { EntitySchema, RelationshipSchema, MemoryQuerySchema } from '@mcai/memory';
+import { EntitySchema, RelationshipSchema, MemoryQuerySchema } from '@cycgraph/memory';
 
 const entity = EntitySchema.parse(untrustedInput);
 const query = MemoryQuerySchema.parse(requestBody); // applies defaults
@@ -492,9 +492,9 @@ const query = MemoryQuerySchema.parse(requestBody); // applies defaults
 
 ## Production Backend
 
-Production deployments use `@mcai/orchestrator-postgres` which provides `DrizzleMemoryStore` and `DrizzleMemoryIndex` backed by Postgres + pgvector HNSW.
+Production deployments use `@cycgraph/orchestrator-postgres` which provides `DrizzleMemoryStore` and `DrizzleMemoryIndex` backed by Postgres + pgvector HNSW.
 
-See the [@mcai/orchestrator-postgres README](../orchestrator-postgres/README.md) for setup.
+See the [@cycgraph/orchestrator-postgres README](../orchestrator-postgres/README.md) for setup.
 
 ## Development
 

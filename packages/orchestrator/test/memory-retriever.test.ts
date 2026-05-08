@@ -10,16 +10,16 @@ import type {
   MemoryRetriever,
   MemoryRetrievalResult,
   GraphRunnerOptions,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 describe('MemoryRetriever type exports', () => {
-  it('MemoryRetriever type is importable from @mcai/orchestrator', () => {
+  it('MemoryRetriever type is importable from @cycgraph/orchestrator', () => {
     // Type-level check — if this compiles, the type is exported.
     const retriever: MemoryRetriever = vi.fn().mockResolvedValue(null);
     expect(retriever).toBeDefined();
   });
 
-  it('MemoryRetrievalResult type is importable from @mcai/orchestrator', () => {
+  it('MemoryRetrievalResult type is importable from @cycgraph/orchestrator', () => {
     const result: MemoryRetrievalResult = {
       facts: [{ content: 'test', validFrom: new Date() }],
       entities: [{ name: 'Entity', type: 'person' }],

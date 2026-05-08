@@ -10,7 +10,7 @@ import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
 import { DrizzleMemoryStore } from '../src/drizzle-memory-store.js';
 import { DrizzleMemoryIndex } from '../src/drizzle-memory-index.js';
 import { randomUUID } from 'node:crypto';
-import type { Entity, SemanticFact, Theme, Episode, Provenance } from '@mcai/memory';
+import type { Entity, SemanticFact, Theme, Episode, Provenance } from '@cycgraph/memory';
 
 /** Generate a normalised random 1536-dim vector. */
 function randomEmbedding(): number[] {

@@ -1,7 +1,7 @@
 /**
  * Postgres Persistence — Runnable Example
  *
- * Demonstrates how to use the `@mcai/orchestrator-postgres` adapter for
+ * Demonstrates how to use the `@cycgraph/orchestrator-postgres` adapter for
  * durable state persistence, event sourcing, and usage tracking with a
  * real PostgreSQL database.
  *
@@ -26,7 +26,7 @@ import {
   createGraph,
   createWorkflowState,
   createLogger,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 import {
   getDb,
@@ -35,7 +35,7 @@ import {
   DrizzleEventLogWriter,
   DrizzleUsageRecorder,
   DrizzleAgentRegistry,
-} from '@mcai/orchestrator-postgres';
+} from '@cycgraph/orchestrator-postgres';
 
 // ─── 0. Validate environment ─────────────────────────────────────────────
 

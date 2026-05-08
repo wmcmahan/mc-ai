@@ -5,7 +5,7 @@
  * Suitable for prototyping, testing, and lightweight deployments.
  *
  * Data is lost when the process exits — use the Drizzle/Postgres
- * implementations from `@mcai/orchestrator-postgres` for production.
+ * implementations from `@cycgraph/orchestrator-postgres` for production.
  *
  * @module persistence/in-memory
  */

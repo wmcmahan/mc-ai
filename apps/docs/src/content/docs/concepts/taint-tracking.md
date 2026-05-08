@@ -1,6 +1,6 @@
 ---
 title: Taint Tracking
-description: How MC-AI tracks external data provenance to prevent untrusted data from driving security-sensitive decisions.
+description: How cycgraph tracks external data provenance to prevent untrusted data from driving security-sensitive decisions.
 ---
 
 Any data that enters a workflow from an external source (MCP tools, web searches, APIs) is automatically marked as **tainted**. Taint metadata records where the data came from, when it arrived, and whether downstream agents have processed it. This allows supervisors and security-sensitive nodes to distinguish trusted internal state from untrusted external inputs.
@@ -43,7 +43,7 @@ All functions operate on the workflow `memory` object:
 Mark a memory key as tainted with provenance metadata.
 
 ```typescript
-import { markTainted } from '@mcai/orchestrator';
+import { markTainted } from '@cycgraph/orchestrator';
 
 markTainted(state.memory, 'search_results', {
   source: 'mcp_tool',
@@ -58,7 +58,7 @@ markTainted(state.memory, 'search_results', {
 Check if a memory key is tainted.
 
 ```typescript
-import { isTainted } from '@mcai/orchestrator';
+import { isTainted } from '@cycgraph/orchestrator';
 
 if (isTainted(state.memory, 'search_results')) {
   // Do not use this data for routing decisions
@@ -70,7 +70,7 @@ if (isTainted(state.memory, 'search_results')) {
 Get the full taint metadata for a specific key. Returns `undefined` if the key is not tainted.
 
 ```typescript
-import { getTaintInfo } from '@mcai/orchestrator';
+import { getTaintInfo } from '@cycgraph/orchestrator';
 
 const info = getTaintInfo(state.memory, 'search_results');
 if (info?.source === 'mcp_tool') {
@@ -83,7 +83,7 @@ if (info?.source === 'mcp_tool') {
 Get the full taint registry (all tainted keys and their metadata).
 
 ```typescript
-import { getTaintRegistry } from '@mcai/orchestrator';
+import { getTaintRegistry } from '@cycgraph/orchestrator';
 
 const registry = getTaintRegistry(state.memory);
 // { search_results: { source: 'mcp_tool', ... }, summary: { source: 'derived', ... } }
@@ -94,7 +94,7 @@ const registry = getTaintRegistry(state.memory);
 Propagate taint from inputs to outputs. If any key in memory is tainted, all `outputKeys` are marked as `derived`-tainted. Returns the new taint entries (empty if no propagation occurred).
 
 ```typescript
-import { propagateDerivedTaint } from '@mcai/orchestrator';
+import { propagateDerivedTaint } from '@cycgraph/orchestrator';
 
 const newEntries = propagateDerivedTaint(state.memory, ['summary', 'draft'], 'writer-agent');
 ```

@@ -91,7 +91,7 @@ export class NoopEmbeddingProvider implements EmbeddingProvider {
   async embed(_texts: string[]): Promise<number[][]> {
     throw new Error(
       'EmbeddingProvider not configured. Semantic features (semantic dedup, similarity search) ' +
-      'require an embedding provider. Pass one via pipeline config or use @mcai/context-engine ' +
+      'require an embedding provider. Pass one via pipeline config or use @cycgraph/context-engine ' +
       'with a provider adapter (e.g., OpenAI, transformers.js).',
     );
   }

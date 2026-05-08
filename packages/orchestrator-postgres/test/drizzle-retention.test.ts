@@ -9,7 +9,7 @@ import { describe, test, expect } from 'vitest';
 import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
 import { DrizzleRetentionService } from '../src/drizzle-retention.js';
 import { DrizzlePersistenceProvider } from '../src/drizzle-persistence.js';
-import { createWorkflowState, createGraph } from '@mcai/orchestrator';
+import { createWorkflowState, createGraph } from '@cycgraph/orchestrator';
 import { getDb } from './setup.js';
 import { workflow_runs } from '../src/schema.js';
 import { eq } from 'drizzle-orm';

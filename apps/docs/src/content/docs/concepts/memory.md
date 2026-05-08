@@ -3,9 +3,9 @@ title: Memory System
 description: Temporal hierarchical knowledge graph for persistent agent memory across workflow runs.
 ---
 
-The **Memory System** (`@mcai/memory`) provides a temporal knowledge graph with xMemory-inspired hierarchical organization. It gives agents persistent, queryable memory that survives across workflow runs — not just the ephemeral `WorkflowState.memory` that exists within a single execution.
+The **Memory System** (`@cycgraph/memory`) provides a temporal knowledge graph with xMemory-inspired hierarchical organization. It gives agents persistent, queryable memory that survives across workflow runs — not just the ephemeral `WorkflowState.memory` that exists within a single execution.
 
-The memory package is standalone with zero orchestrator dependencies. It works with any application or as the memory layer inside `@mcai/orchestrator` via the `memoryRetriever` option.
+The memory package is standalone with zero orchestrator dependencies. It works with any application or as the memory layer inside `@cycgraph/orchestrator` via the `memoryRetriever` option.
 
 ## Architecture
 
@@ -42,8 +42,8 @@ Entities and relationships form a directed graph with temporal awareness:
 - **Provenance tracking** — every record knows its origin (agent, tool, human, system, derived)
 
 ```typescript
-import { InMemoryMemoryStore } from '@mcai/memory';
-import type { Entity, Relationship } from '@mcai/memory';
+import { InMemoryMemoryStore } from '@cycgraph/memory';
+import type { Entity, Relationship } from '@cycgraph/memory';
 
 const store = new InMemoryMemoryStore();
 
@@ -95,7 +95,7 @@ Minimal extraction: one fact per episode (the topic). Use for bootstrapping or w
 Pattern-based extraction producing 3-10 facts per episode. Detects entities (capitalized names, @handles, camelCase, ACRONYMS) and relationships (work_at, manage, depend_on, and ~20 other base verbs with automatic inflection). Entity matching uses word boundaries to prevent false positives (e.g., "Smith" won't match inside "Blacksmith"). No LLM required.
 
 ```typescript
-import { RuleBasedExtractor } from '@mcai/memory';
+import { RuleBasedExtractor } from '@cycgraph/memory';
 
 const extractor = new RuleBasedExtractor({ minSentenceLength: 20 });
 const facts = await extractor.extract(episode);
@@ -110,8 +110,8 @@ const entities = extractor.extractEntities('Alice Smith works at Acme Corp');
 LLM-backed extraction for maximum quality. Uses an injectable `LLMProvider` interface (bring your own LLM). Falls back to `RuleBasedExtractor` on failure.
 
 ```typescript
-import { LLMExtractor } from '@mcai/memory';
-import type { LLMProvider } from '@mcai/memory';
+import { LLMExtractor } from '@cycgraph/memory';
+import type { LLMProvider } from '@cycgraph/memory';
 
 const provider: LLMProvider = {
   complete: async (prompt) => { /* call your LLM */ return response; },
@@ -135,7 +135,7 @@ Two-pass clustering that prevents theme proliferation:
 2. **Merge pass** — pairwise cosine similarity between all theme centroids; themes above `mergeThreshold` are merged, centroids recomputed
 
 ```typescript
-import { ConsolidatingThemeClusterer } from '@mcai/memory';
+import { ConsolidatingThemeClusterer } from '@cycgraph/memory';
 
 const clusterer = new ConsolidatingThemeClusterer({
   assignmentThreshold: 0.7,  // min similarity to join existing theme
@@ -153,7 +153,7 @@ const themes = await clusterer.cluster(facts, existingThemes);
 Top-down search: match themes by embedding similarity, expand to facts, apply temporal filters, expand to episodes, collect entities and relationships.
 
 ```typescript
-import { retrieveMemory } from '@mcai/memory';
+import { retrieveMemory } from '@cycgraph/memory';
 
 const result = await retrieveMemory(store, index, {
   embedding: queryVector,
@@ -180,7 +180,7 @@ const result = await retrieveMemory(store, index, {
 ### Temporal filtering
 
 ```typescript
-import { isValidAt, filterValid } from '@mcai/memory';
+import { isValidAt, filterValid } from '@cycgraph/memory';
 
 isValidAt(relationship, new Date());  // within [valid_from, valid_until)?
 
@@ -200,7 +200,7 @@ Over time, memory accumulates duplicates, outdated facts, and contradictions. Th
 Prunes and deduplicates memory records to stay within budget:
 
 ```typescript
-import { MemoryConsolidator } from '@mcai/memory';
+import { MemoryConsolidator } from '@cycgraph/memory';
 
 const consolidator = new MemoryConsolidator(store, index, {
   maxFacts: 1000,           // prune lowest-scoring facts over this count
@@ -227,7 +227,7 @@ Consolidation cascades to themes: when facts are pruned, the themes that referen
 Identifies contradictory, negating, or superseding facts:
 
 ```typescript
-import { ConflictDetector } from '@mcai/memory';
+import { ConflictDetector } from '@cycgraph/memory';
 
 const detector = new ConflictDetector(store, index, {
   autoResolveSupersession: true,
@@ -261,14 +261,14 @@ Three resolution policies:
 
 | Backend | Package | Use Case |
 |---------|---------|----------|
-| `InMemoryMemoryStore` | `@mcai/memory` | Testing and lightweight use |
-| `InMemoryMemoryIndex` | `@mcai/memory` | Brute-force cosine similarity |
-| `DrizzleMemoryStore` | `@mcai/orchestrator-postgres` | Production Postgres |
-| `DrizzleMemoryIndex` | `@mcai/orchestrator-postgres` | pgvector HNSW indexes |
+| `InMemoryMemoryStore` | `@cycgraph/memory` | Testing and lightweight use |
+| `InMemoryMemoryIndex` | `@cycgraph/memory` | Brute-force cosine similarity |
+| `DrizzleMemoryStore` | `@cycgraph/orchestrator-postgres` | Production Postgres |
+| `DrizzleMemoryIndex` | `@cycgraph/orchestrator-postgres` | pgvector HNSW indexes |
 
 ```typescript
 // Production setup
-import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@mcai/orchestrator-postgres';
+import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@cycgraph/orchestrator-postgres';
 
 const store = new DrizzleMemoryStore();
 const index = new DrizzleMemoryIndex();
@@ -279,8 +279,8 @@ const index = new DrizzleMemoryIndex();
 Inject memory retrieval into `GraphRunner` via the `memoryRetriever` option:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import { InMemoryMemoryStore, InMemoryMemoryIndex, retrieveMemory } from '@mcai/memory';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import { InMemoryMemoryStore, InMemoryMemoryIndex, retrieveMemory } from '@cycgraph/memory';
 
 const store = new InMemoryMemoryStore();
 const index = new InMemoryMemoryIndex();

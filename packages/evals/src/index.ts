@@ -1,8 +1,8 @@
 /**
- * @mcai/evals — Public API
+ * @cycgraph/evals — Public API
  *
  * Automated eval harness and quality-assurance gatekeeper for
- * @mcai/* packages. Re-exports all public types and schemas.
+ * @cycgraph/* packages. Re-exports all public types and schemas.
  *
  * @packageDocumentation
  */

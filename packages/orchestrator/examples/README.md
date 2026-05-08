@@ -1,6 +1,6 @@
 # Examples
 
-Runnable examples for `@mcai/orchestrator`.
+Runnable examples for `@cycgraph/orchestrator`.
 
 ## Prerequisites
 

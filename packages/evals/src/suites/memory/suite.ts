@@ -1,7 +1,7 @@
 /**
  * Memory Eval Suite
  *
- * Two-track evaluation for @mcai/memory:
+ * Two-track evaluation for @cycgraph/memory:
  * - Deterministic track: temporal filtering, subgraph extraction,
  *   segmentation determinism, retrieval correctness
  * - Semantic track: LLM-as-judge for memory-assisted Q&A quality
@@ -18,15 +18,15 @@ import {
   extractSubgraph,
   filterValid,
   isValidAt,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 import type {
   Entity,
   Relationship,
   SemanticFact,
   Message,
   MemoryQuery,
-} from '@mcai/memory';
-import { retrieveMemory } from '@mcai/memory';
+} from '@cycgraph/memory';
+import { retrieveMemory } from '@cycgraph/memory';
 import {
   assertGreaterThanOrEqual,
   assertEqual,

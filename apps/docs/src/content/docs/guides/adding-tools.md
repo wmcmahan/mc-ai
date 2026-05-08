@@ -15,7 +15,7 @@ import {
   registerDefaultMCPServers,
   MCPConnectionManager,
   GraphRunner,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const mcpRegistry = new InMemoryMCPServerRegistry();
 await registerDefaultMCPServers(mcpRegistry);
@@ -37,7 +37,7 @@ This registers two servers: `web-search` (Brave Search via `npx`, requires `BRAV
 To execute a workflow with MCP tools, inject an `MCPConnectionManager` (configured with your registry) into the `GraphRunner`.
 
 ```typescript
-import { GraphRunner, MCPConnectionManager } from '@mcai/orchestrator';
+import { GraphRunner, MCPConnectionManager } from '@cycgraph/orchestrator';
 
 async function runWorkflow(state) {
   // 1. Create the resolver with your configured registry

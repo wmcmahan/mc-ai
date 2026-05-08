@@ -30,7 +30,7 @@ import {
   createLogger,
   createGraph,
   createWorkflowState,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 // ─── 0. Fail fast if no API key ──────────────────────────────────────────
 

@@ -10,7 +10,7 @@ A **Graph** defines the deterministic structure of a workflow — which nodes ex
 Use the `createGraph` helper to build a validated `Graph` object. The `id` is auto-generated if omitted:
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: "Research Pipeline",

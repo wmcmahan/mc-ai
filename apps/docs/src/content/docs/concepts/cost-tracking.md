@@ -1,6 +1,6 @@
 ---
 title: Cost & Budget Tracking
-description: How MC-AI tracks token usage, calculates costs, and enforces budgets.
+description: How cycgraph tracks token usage, calculates costs, and enforces budgets.
 ---
 
 Every workflow run tracks token consumption and estimated cost in USD. Budgets can be set at the workflow or agent level — the runner enforces them automatically and fails the workflow if limits are exceeded.
@@ -15,7 +15,7 @@ Each time an agent node completes an LLM call, the action metadata includes a `t
 Cost is calculated per-model using `calculateCost()`:
 
 ```typescript
-import { calculateCost, MODEL_PRICING } from '@mcai/orchestrator';
+import { calculateCost, MODEL_PRICING } from '@cycgraph/orchestrator';
 
 const cost = calculateCost('claude-sonnet-4-20250514', inputTokens, outputTokens);
 // Uses: ($3.00 / 1M input) + ($15.00 / 1M output)
@@ -133,7 +133,7 @@ interface UsageRecord {
 }
 ```
 
-The `@mcai/orchestrator-postgres` package provides `DrizzleUsageRecorder` for durable storage.
+The `@cycgraph/orchestrator-postgres` package provides `DrizzleUsageRecorder` for durable storage.
 
 ## Next steps
 

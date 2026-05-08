@@ -1,6 +1,6 @@
 # Utils — Technical Reference
 
-> **Scope**: This document covers the utility modules in `@mcai/orchestrator`: structured logging, distributed tracing, and taint tracking.
+> **Scope**: This document covers the utility modules in `@cycgraph/orchestrator`: structured logging, distributed tracing, and taint tracking.
 
 ---
 
@@ -23,7 +23,7 @@ Production-grade structured logging. All output is JSON, written to `stdout` (in
 Factory function that creates a namespaced logger instance.
 
 ```typescript
-import { createLogger } from '@mcai/orchestrator';
+import { createLogger } from '@cycgraph/orchestrator';
 
 const log = createLogger('runner.graph');
 log.info('workflow_started', { workflow_id: 'abc', run_id: '123' });
@@ -85,7 +85,7 @@ OpenTelemetry distributed tracing with OTLP HTTP export. **Opt-in** — when `OT
 Must be called once at application startup, before any traced code runs. Dynamically imports OTel packages only when tracing is enabled.
 
 ```typescript
-import { initTracing } from '@mcai/orchestrator';
+import { initTracing } from '@cycgraph/orchestrator';
 
 await initTracing('orchestrator');
 // Traces sent to: ${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces

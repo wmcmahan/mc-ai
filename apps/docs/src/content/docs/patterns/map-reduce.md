@@ -47,7 +47,7 @@ See the [full runnable code](https://github.com/wmcmahan/mc-ai/tree/main/package
 First, define the agent that will process individual items, and the agent that will merge the results. Notice the specific variables injected into their prompts and read keys.
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
@@ -87,7 +87,7 @@ const SYNTHESIZER_ID = registry.register({
 Next, configure the graph combining the `map` and `synthesizer` node types. 
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Fan-Out Map-Reduce',

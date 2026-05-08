@@ -1,10 +1,10 @@
-# Contributing to MC-AI
+# Contributing to cycgraph
 
-Thank you for your interest in contributing to MC-AI! This guide will help you get started.
+Thank you for your interest in contributing to cycgraph! This guide will help you get started.
 
 ## Licensing
 
-MC-AI is licensed under the [Apache License, Version 2.0](LICENSE).
+cycgraph is licensed under the [Apache License, Version 2.0](LICENSE).
 
 By submitting a contribution, you agree that your work will be licensed under the same terms. You retain copyright of your contributions.
 
@@ -74,15 +74,15 @@ All packages use `"type": "module"`. Use `.js` extensions in relative imports.
 
 ### Workspace Imports
 
-Use package names (`@mcai/orchestrator-postgres`, `@mcai/orchestrator`) for cross-workspace imports. Never use relative paths across package boundaries.
+Use package names (`@cycgraph/orchestrator-postgres`, `@cycgraph/orchestrator`) for cross-workspace imports. Never use relative paths across package boundaries.
 
 For the full coding standards, see [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
 
 ## Project Structure
 
 ```
-packages/orchestrator/            Core graph execution engine (@mcai/orchestrator)
-packages/orchestrator-postgres/   Database layer with Drizzle ORM (@mcai/orchestrator-postgres)
+packages/orchestrator/            Core graph execution engine (@cycgraph/orchestrator)
+packages/orchestrator-postgres/   Database layer with Drizzle ORM (@cycgraph/orchestrator-postgres)
 ```
 
 ## What to Work On
@@ -114,6 +114,34 @@ failing entire workflows.
 - Use imperative mood ("Add", "Fix", "Update" not "Added", "Fixed", "Updated")
 - First line under 72 characters
 - Add detail in the body when the "why" isn't obvious
+
+## Releasing changes
+
+cycgraph uses [Changesets](https://github.com/changesets/changesets) to manage versions and publishes to npm.
+
+### When you write a PR
+
+If your change affects a published package (`@cycgraph/orchestrator`, `@cycgraph/orchestrator-postgres`, `@cycgraph/memory`, `@cycgraph/context-engine`), add a changeset:
+
+```bash
+npx changeset
+```
+
+The CLI prompts you for:
+
+1. **Which packages** are changed.
+2. **What kind of bump** each one gets (`major`, `minor`, `patch`).
+3. **A summary** that will become the CHANGELOG entry — write it as a release note: imperative voice, user-facing.
+
+Commit the generated `.changeset/*.md` file with the rest of your PR. PRs that change public API without a changeset will be flagged in review.
+
+For test-only, refactor-only, docs, CI, or tooling changes, no changeset is needed. To record that explicitly: `npx changeset --empty`.
+
+### When your PR is merged
+
+The release workflow opens or updates a **"Version Packages"** PR that bumps versions and writes CHANGELOG entries based on the pending changesets. A maintainer merges that PR to publish the new versions to npm.
+
+`@cycgraph/evals` is private and never published.
 
 ## Reporting Bugs
 

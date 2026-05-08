@@ -9,7 +9,7 @@ import { describe, test, expect } from 'vitest';
 import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
 import { DrizzleMemoryStore } from '../src/drizzle-memory-store.js';
 import { randomUUID } from 'node:crypto';
-import type { Entity, Relationship, Episode, SemanticFact, Theme, Provenance } from '@mcai/memory';
+import type { Entity, Relationship, Episode, SemanticFact, Theme, Provenance } from '@cycgraph/memory';
 
 function makeProv(overrides: Partial<Provenance> = {}): Provenance {
   return {

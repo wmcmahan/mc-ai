@@ -8,7 +8,7 @@
  * @module evals/supervisor-routing
  */
 
-import { createGraph, type EvalSuite } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@cycgraph/orchestrator';
 
 const supervisorGraph = createGraph({
   name: 'Supervisor Routing Eval',

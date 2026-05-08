@@ -1,6 +1,6 @@
 # Context Engine + Memory
 
-A 2-node linear workflow that integrates persistent memory (`@mcai/memory`) and context compression (`@mcai/context-engine`) with the orchestrator. Demonstrates the full memory lifecycle: seed prior knowledge, run a workflow with memory-augmented prompts, ingest output back into memory, consolidate duplicates, and detect conflicts.
+A 2-node linear workflow that integrates persistent memory (`@cycgraph/memory`) and context compression (`@cycgraph/context-engine`) with the orchestrator. Demonstrates the full memory lifecycle: seed prior knowledge, run a workflow with memory-augmented prompts, ingest output back into memory, consolidate duplicates, and detect conflicts.
 
 ## Graph
 
@@ -52,7 +52,7 @@ sequenceDiagram
 
 ## What it demonstrates
 
-### Memory system (`@mcai/memory`)
+### Memory system (`@cycgraph/memory`)
 
 | Feature | Where |
 |---------|-------|
@@ -63,7 +63,7 @@ sequenceDiagram
 | `MemoryConsolidator` | Deduplicates near-identical facts, decays old facts, cascades to themes |
 | `ConflictDetector` | Detects negation, supersession, and semantic contradiction between facts |
 
-### Context engine (`@mcai/context-engine`)
+### Context engine (`@cycgraph/context-engine`)
 
 | Feature | Where |
 |---------|-------|

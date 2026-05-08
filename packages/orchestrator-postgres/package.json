@@ -1,7 +1,7 @@
 {
-  "name": "@mcai/orchestrator-postgres",
+  "name": "@cycgraph/orchestrator-postgres",
   "version": "1.0.0",
-  "description": "PostgreSQL persistence adapter for @mcai/orchestrator with Drizzle ORM, pgvector, and event sourcing.",
+  "description": "PostgreSQL persistence adapter for @cycgraph/orchestrator with Drizzle ORM, pgvector, and event sourcing.",
   "keywords": [
     "orchestrator",
     "postgres",
@@ -43,6 +43,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
@@ -53,8 +56,8 @@
     "studio": "drizzle-kit studio"
   },
   "peerDependencies": {
-    "@mcai/orchestrator": "*",
-    "@mcai/memory": ">=1.0.0"
+    "@cycgraph/orchestrator": "*",
+    "@cycgraph/memory": ">=1.0.0"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
@@ -63,8 +66,8 @@
     "dotenv": "^17.3.1"
   },
   "devDependencies": {
-    "@mcai/orchestrator": "*",
-    "@mcai/memory": "*",
+    "@cycgraph/orchestrator": "*",
+    "@cycgraph/memory": "*",
     "@types/pg": "^8.18.0",
     "drizzle-kit": "^0.31.9",
     "tsx": "^4.21.0",

@@ -8,8 +8,8 @@
 import { describe, test, expect } from 'vitest';
 import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
 import { DrizzlePersistenceProvider } from '../src/drizzle-persistence.js';
-import { createWorkflowState, createGraph } from '@mcai/orchestrator';
-import type { WorkflowState } from '@mcai/orchestrator';
+import { createWorkflowState, createGraph } from '@cycgraph/orchestrator';
+import type { WorkflowState } from '@cycgraph/orchestrator';
 
 describe.skipIf(!isDatabaseAvailable())('DrizzlePersistenceProvider', () => {
   setupDatabaseTests();

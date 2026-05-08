@@ -10,8 +10,8 @@ Middleware provides hooks into the `GraphRunner` execution loop. Use middleware 
 Pass middleware instances to the `GraphRunner` via the `middleware` option. Hooks run in registration order:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import type { GraphRunnerMiddleware } from '@mcai/orchestrator';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import type { GraphRunnerMiddleware } from '@cycgraph/orchestrator';
 
 const runner = new GraphRunner(graph, state, {
   middleware: [loggingMiddleware, cachingMiddleware],
@@ -29,8 +29,8 @@ Called before a node runs. Return `{ shortCircuit: action }` to skip execution e
 The example below uses a process-local `Map` so you can copy and run it; in production, swap in Redis or your existing cache backend. Caching keys should include both `node.id` and a hash of the relevant input — caching by node ID alone is unsafe whenever the inputs change between runs.
 
 ```typescript
-import type { GraphRunnerMiddleware } from '@mcai/orchestrator';
-import type { Action } from '@mcai/orchestrator';
+import type { GraphRunnerMiddleware } from '@cycgraph/orchestrator';
+import type { Action } from '@cycgraph/orchestrator';
 
 const cache = new Map<string, Action>();
 

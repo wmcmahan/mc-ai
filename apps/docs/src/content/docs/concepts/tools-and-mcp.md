@@ -3,7 +3,7 @@ title: Tools & MCP
 description: How agents interact with external systems via tool sources and the Model Context Protocol.
 ---
 
-Agents need tools to interact with the world. MC-AI uses structured **tool sources** and the **Model Context Protocol (MCP)** for secure, standardized tool integration. This decouples the agent definition from the underlying transport configuration and connection secrets.
+Agents need tools to interact with the world. cycgraph uses structured **tool sources** and the **Model Context Protocol (MCP)** for secure, standardized tool integration. This decouples the agent definition from the underlying transport configuration and connection secrets.
 
 ## Tool source types
 
@@ -13,7 +13,7 @@ Agents declare their tools using a `ToolSource[]` array with two possible types:
 2. **MCP tools**: Provided by a registered MCP server. References the server by ID.
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const agentRegistry = new InMemoryAgentRegistry();
 
@@ -83,7 +83,7 @@ The **trusted MCP Server Registry** holds transport configurations and connectio
 ### Registering servers
 
 ```typescript
-import { InMemoryMCPServerRegistry } from '@mcai/orchestrator';
+import { InMemoryMCPServerRegistry } from '@cycgraph/orchestrator';
 
 const mcpRegistry = new InMemoryMCPServerRegistry();
 
@@ -125,7 +125,7 @@ mcpRegistry.register({
 });
 ```
 
-*(Note: For production environments, use `DrizzleMCPServerRegistry` from `@mcai/orchestrator-postgres` to store server configurations durably in the database.)*
+*(Note: For production environments, use `DrizzleMCPServerRegistry` from `@cycgraph/orchestrator-postgres` to store server configurations durably in the database.)*
 
 ### Transport types
 
@@ -221,14 +221,14 @@ See [Taint Tracking](/concepts/taint-tracking/) for the full taint propagation m
 
 ## Default MCP servers
 
-MC-AI includes pre-configured entries for two common MCP reference servers. Use `registerDefaultMCPServers()` for one-line setup:
+cycgraph includes pre-configured entries for two common MCP reference servers. Use `registerDefaultMCPServers()` for one-line setup:
 
 ```typescript
 import {
   InMemoryMCPServerRegistry,
   registerDefaultMCPServers,
   MCPConnectionManager,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const mcpRegistry = new InMemoryMCPServerRegistry();
 await registerDefaultMCPServers(mcpRegistry);

@@ -8,7 +8,7 @@
  *   - {@link InMemoryEventLogWriter}: In-memory store for unit tests
  *
  * For production PostgreSQL, use `DrizzleEventLogWriter` from
- * `@mcai/orchestrator-postgres`.
+ * `@cycgraph/orchestrator-postgres`.
  *
  * The GraphRunner accepts an optional `EventLogWriter`. If none is
  * provided, event sourcing is disabled (backward compatible).

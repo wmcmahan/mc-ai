@@ -17,7 +17,7 @@ import {
   RuleBasedExtractor,
   ConsolidatingThemeClusterer,
   retrieveMemory,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 
 const store = new InMemoryMemoryStore();
 const index = new InMemoryMemoryIndex();
@@ -64,7 +64,7 @@ const result = await retrieveMemory(store, index, {
 Start with `RuleBasedExtractor` for most use cases. Use `LLMExtractor` when extraction quality directly impacts downstream results:
 
 ```typescript
-import { LLMExtractor } from '@mcai/memory';
+import { LLMExtractor } from '@cycgraph/memory';
 
 const extractor = new LLMExtractor({
   provider: { complete: (prompt) => callYourLLM(prompt) },
@@ -81,8 +81,8 @@ The LLM extractor falls back to `RuleBasedExtractor` automatically on any failur
 Inject a `memoryRetriever` into `GraphRunner` so agents receive relevant memory in their prompts:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import { retrieveMemory } from '@mcai/memory';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import { retrieveMemory } from '@cycgraph/memory';
 
 const memoryRetriever = async (query, options) => {
   const result = await retrieveMemory(store, index, {
@@ -106,9 +106,9 @@ const runner = new GraphRunner(graph, state, { memoryRetriever });
 For the full pipeline — retrieve memory, then compress before injection:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
-import { retrieveMemory } from '@mcai/memory';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import { createOptimizedPipeline, serialize } from '@cycgraph/context-engine';
+import { retrieveMemory } from '@cycgraph/memory';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -130,7 +130,7 @@ const runner = new GraphRunner(graph, state, { memoryRetriever, contextCompresso
 Run consolidation periodically to keep memory within budget and remove duplicates:
 
 ```typescript
-import { MemoryConsolidator } from '@mcai/memory';
+import { MemoryConsolidator } from '@cycgraph/memory';
 
 const consolidator = new MemoryConsolidator(store, index, {
   maxFacts: 1000,
@@ -152,7 +152,7 @@ console.log(`Themes cleaned: ${report.themesCleanedUp}, removed: ${report.themes
 Detect and resolve contradictory facts:
 
 ```typescript
-import { ConflictDetector } from '@mcai/memory';
+import { ConflictDetector } from '@cycgraph/memory';
 
 const detector = new ConflictDetector(store, index, {
   policy: 'negation-invalidates-positive',
@@ -175,10 +175,10 @@ for (const detail of resolution.details.filter(d => d.action === 'skipped')) {
 
 ### Postgres backend
 
-For production, use the Drizzle-backed implementations from `@mcai/orchestrator-postgres`:
+For production, use the Drizzle-backed implementations from `@cycgraph/orchestrator-postgres`:
 
 ```typescript
-import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@mcai/orchestrator-postgres';
+import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@cycgraph/orchestrator-postgres';
 
 const store = new DrizzleMemoryStore();   // uses pgvector for embeddings
 const index = new DrizzleMemoryIndex();   // HNSW indexes for fast similarity search

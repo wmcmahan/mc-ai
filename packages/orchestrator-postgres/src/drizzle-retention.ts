@@ -7,7 +7,7 @@
 import { db } from './connection.js';
 import { workflow_runs, workflow_states } from './schema.js';
 import { and, lt, inArray, isNull, count } from 'drizzle-orm';
-import type { RetentionService } from '@mcai/orchestrator';
+import type { RetentionService } from '@cycgraph/orchestrator';
 
 export class DrizzleRetentionService implements RetentionService {
   async archiveCompletedWorkflows(): Promise<number> {

@@ -2,15 +2,15 @@
  * Drizzle Event Log Writer
  *
  * Production event log writer backed by PostgreSQL.
- * Implements EventLogWriter from @mcai/orchestrator.
+ * Implements EventLogWriter from @cycgraph/orchestrator.
  */
 
 import { db } from './connection.js';
 import { workflow_events, workflow_checkpoints } from './schema.js';
 import type { WorkflowStateJson } from './schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import type { EventLogWriter } from '@mcai/orchestrator';
-import type { NewWorkflowEvent, WorkflowEvent, Action, WorkflowState } from '@mcai/orchestrator';
+import type { EventLogWriter } from '@cycgraph/orchestrator';
+import type { NewWorkflowEvent, WorkflowEvent, Action, WorkflowState } from '@cycgraph/orchestrator';
 
 /**
  * Production event log writer backed by the `workflow_events` PostgreSQL table.

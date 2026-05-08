@@ -63,7 +63,7 @@ The pattern requires you to pair a "candidate" generator agent with an "evaluato
 Register the candidate agent that will generate variations, and the evaluator agent that will score their fitness.
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
@@ -102,7 +102,7 @@ const EVALUATOR_ID = registry.register({
 The `evolution` node type requires an `evolution_config` block that dictates the population size, selection strategy, and stopping conditions.
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Poem Evolution',

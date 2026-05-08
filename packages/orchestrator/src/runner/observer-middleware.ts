@@ -13,7 +13,7 @@
  * to fix.
  *
  * ```typescript
- * import { createObserverMiddleware } from '@mcai/orchestrator';
+ * import { createObserverMiddleware } from '@cycgraph/orchestrator';
  *
  * const runner = new GraphRunner(graph, state, {
  *   middleware: [createObserverMiddleware({

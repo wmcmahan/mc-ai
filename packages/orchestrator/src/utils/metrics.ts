@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry Metrics for @mcai/orchestrator
+ * OpenTelemetry Metrics for @cycgraph/orchestrator
  *
  * Opt-in Prometheus metrics via the OTel SDK.
  * Enabled when `METRICS_ENABLED=true`.
@@ -55,7 +55,7 @@ export async function initMetrics(): Promise<void> {
   prometheusExporter = new PrometheusExporter({ preventServerStart: true });
   meterProvider = new MeterProvider({ readers: [prometheusExporter] });
 
-  const meter = meterProvider.getMeter('mc-ai', '1.0.0');
+  const meter = meterProvider.getMeter('@cycgraph/orchestrator', '1.0.0');
 
   workflowsStarted = meter.createCounter('mcai_workflows_started_total', {
     description: 'Total number of workflows started',

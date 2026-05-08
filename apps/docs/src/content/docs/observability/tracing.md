@@ -3,7 +3,7 @@ title: Tracing
 description: Opt-in OpenTelemetry distributed tracing for workflow execution.
 ---
 
-MC-AI includes **opt-in OpenTelemetry tracing** that gives you full visibility into workflow execution — node timings, LLM calls, supervisor decisions, and tool invocations. When tracing is disabled (the default), all tracing code is a no-op with zero overhead.
+cycgraph includes **opt-in OpenTelemetry tracing** that gives you full visibility into workflow execution — node timings, LLM calls, supervisor decisions, and tool invocations. When tracing is disabled (the default), all tracing code is a no-op with zero overhead.
 
 ## Quick start
 
@@ -12,7 +12,7 @@ MC-AI includes **opt-in OpenTelemetry tracing** that gives you full visibility i
 Call `initTracing()` once before any traced code runs:
 
 ```typescript
-import { initTracing } from '@mcai/orchestrator';
+import { initTracing } from '@cycgraph/orchestrator';
 
 await initTracing('my-app');
 ```
@@ -29,7 +29,7 @@ When the variable is unset, `initTracing()` returns immediately — OpenTelemetr
 
 ### 3. View traces
 
-MC-AI ships with a Jaeger service in Docker Compose:
+cycgraph ships with a Jaeger service in Docker Compose:
 
 ```bash
 docker compose up jaeger
@@ -112,7 +112,7 @@ When using `runner.stream()`, node-level spans are skipped to avoid interfering 
 If you build custom node executors or utilities, you can create spans using the exported helpers:
 
 ```typescript
-import { getTracer, withSpan } from '@mcai/orchestrator';
+import { getTracer, withSpan } from '@cycgraph/orchestrator';
 
 const tracer = getTracer('my-custom-module');
 

@@ -8,7 +8,7 @@ The `GraphRunner` supports two execution modes: `run()` (returns the final state
 ## Basic usage
 
 ```typescript
-import { GraphRunner, isTerminalEvent } from '@mcai/orchestrator';
+import { GraphRunner, isTerminalEvent } from '@cycgraph/orchestrator';
 
 const runner = new GraphRunner(graph, initialState, options);
 
@@ -64,7 +64,7 @@ Terminal events carry the full `WorkflowState` in their `state` field. Use the `
 | `workflow:waiting` | `state`, `waiting_for` | Workflow paused for human input (HITL). |
 
 ```typescript
-import { isTerminalEvent } from '@mcai/orchestrator';
+import { isTerminalEvent } from '@cycgraph/orchestrator';
 
 if (isTerminalEvent(event)) {
   // TypeScript knows event.state exists here
@@ -119,7 +119,7 @@ for await (const event of runner.stream()) {
 }
 ```
 
-The `MemoryDiff` type is exported from `@mcai/orchestrator`:
+The `MemoryDiff` type is exported from `@cycgraph/orchestrator`:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -136,7 +136,7 @@ When no memory keys changed (e.g., `goto_node` or `set_status` actions), `memory
 
 ```typescript
 import express from 'express';
-import { GraphRunner, isTerminalEvent } from '@mcai/orchestrator';
+import { GraphRunner, isTerminalEvent } from '@cycgraph/orchestrator';
 
 const app = express();
 

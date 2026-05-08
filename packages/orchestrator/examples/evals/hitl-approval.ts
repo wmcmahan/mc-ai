@@ -8,7 +8,7 @@
  * @module evals/hitl-approval
  */
 
-import { createGraph, type EvalSuite } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@cycgraph/orchestrator';
 
 const hitlGraph = createGraph({
   name: 'HITL Approval Eval',

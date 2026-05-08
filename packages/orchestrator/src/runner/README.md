@@ -1,6 +1,6 @@
 # Runner System — Technical Reference
 
-> **Scope**: This document covers the internal architecture of the graph execution engine in `@mcai/orchestrator`. It is intended for contributors modifying workflow execution, node dispatch, resilience patterns, or state management logic.
+> **Scope**: This document covers the internal architecture of the graph execution engine in `@cycgraph/orchestrator`. It is intended for contributors modifying workflow execution, node dispatch, resilience patterns, or state management logic.
 
 ---
 
@@ -744,7 +744,7 @@ All events include a `timestamp: number` (milliseconds since epoch).
 ### Type Guard
 
 ```typescript
-import { isTerminalEvent } from '@mcai/orchestrator';
+import { isTerminalEvent } from '@cycgraph/orchestrator';
 
 for await (const event of runner.stream()) {
   if (isTerminalEvent(event)) {

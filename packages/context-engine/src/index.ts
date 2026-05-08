@@ -1,10 +1,10 @@
 /**
- * @mcai/context-engine
+ * @cycgraph/context-engine
  *
  * Framework-agnostic context optimization engine. Composable compression
  * pipeline that makes every token count — especially for small and local models.
  *
- * @module @mcai/context-engine
+ * @module @cycgraph/context-engine
  */
 
 // --- Provider Interfaces & Defaults ---

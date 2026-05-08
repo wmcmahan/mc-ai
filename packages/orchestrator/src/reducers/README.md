@@ -1,6 +1,6 @@
 # Reducers — Technical Reference
 
-> **Scope**: This document covers the state mutation system in `@mcai/orchestrator`. It is intended for contributors modifying state transitions, adding new action types, or working with the permission validation system.
+> **Scope**: This document covers the state mutation system in `@cycgraph/orchestrator`. It is intended for contributors modifying state transitions, adding new action types, or working with the permission validation system.
 
 ---
 

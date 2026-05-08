@@ -3,9 +3,9 @@ title: Context Engine
 description: Composable compression pipeline that optimizes every token before it reaches the LLM.
 ---
 
-The **Context Engine** (`@mcai/context-engine`) is a framework-agnostic compression pipeline that reduces prompt token usage by 30-60% while preserving information quality. It operates as an optional layer between your data and the LLM, compressing memory payloads, deduplicating content, and pruning low-value tokens.
+The **Context Engine** (`@cycgraph/context-engine`) is a framework-agnostic compression pipeline that reduces prompt token usage by 30-60% while preserving information quality. It operates as an optional layer between your data and the LLM, compressing memory payloads, deduplicating content, and pruning low-value tokens.
 
-The engine is a standalone package with zero orchestrator dependencies. It works with any LLM framework or as the compression layer inside `@mcai/orchestrator` via the `contextCompressor` option.
+The engine is a standalone package with zero orchestrator dependencies. It works with any LLM framework or as the compression layer inside `@cycgraph/orchestrator` via the `contextCompressor` option.
 
 ## How it works
 
@@ -50,7 +50,7 @@ The optimizer provides three presets that compose the right stages automatically
 | `maximum` | Balanced + hierarchy/graph formatters + format selector | 50-200ms | 40-60% |
 
 ```typescript
-import { createOptimizedPipeline } from '@mcai/context-engine';
+import { createOptimizedPipeline } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -72,7 +72,7 @@ console.log(`${result.metrics.reductionPercent.toFixed(1)}% reduction`);
 For multi-turn workflows, the incremental pipeline caches compressed output for unchanged segments between turns. Only segments whose content hash has changed are re-compressed.
 
 ```typescript
-import { createIncrementalPipeline, createFormatStage } from '@mcai/context-engine';
+import { createIncrementalPipeline, createFormatStage } from '@cycgraph/context-engine';
 
 const pipeline = createIncrementalPipeline({
   stages: [createFormatStage()],
@@ -102,7 +102,7 @@ The engine provides multiple token importance scorers, from statistical to ML-ba
 Estimates self-information via character trigram frequency. Rare tokens in the corpus score higher. No external provider needed.
 
 ```typescript
-import { createNGramScorer } from '@mcai/context-engine';
+import { createNGramScorer } from '@cycgraph/context-engine';
 
 const scorer = createNGramScorer({ n: 3, granularity: 'sentence' });
 ```
@@ -112,7 +112,7 @@ const scorer = createNGramScorer({ n: 3, granularity: 'sentence' });
 Seven weighted dimensions: stop-word penalty, filler-phrase detection, position boost, frequency penalty, entity boost, structural markers, and query relevance.
 
 ```typescript
-import { createHeuristicPruningStage } from '@mcai/context-engine';
+import { createHeuristicPruningStage } from '@cycgraph/context-engine';
 
 const stage = createHeuristicPruningStage({
   queryWeight: 0.20, // boost tokens relevant to the user's query
@@ -126,8 +126,8 @@ When a `query` string is provided in the scorer context, tokens near query terms
 For maximum compression quality, implement `CompressionProvider` against an inference server that returns per-token log-probabilities:
 
 ```typescript
-import type { CompressionProvider } from '@mcai/context-engine';
-import { precomputeImportanceScores } from '@mcai/context-engine';
+import type { CompressionProvider } from '@cycgraph/context-engine';
+import { precomputeImportanceScores } from '@cycgraph/context-engine';
 
 // Implement against your inference server (Ollama, vLLM, TGI, etc.)
 const provider: CompressionProvider = {
@@ -154,7 +154,7 @@ Without a `CompressionProvider`, the self-information stage falls back to the n-
 The adaptive memory stage intelligently prioritizes memory content based on hierarchy signals:
 
 ```typescript
-import { createAdaptiveMemoryStage } from '@mcai/context-engine';
+import { createAdaptiveMemoryStage } from '@cycgraph/context-engine';
 
 const stage = createAdaptiveMemoryStage({
   recencyBoostDays: 7,     // facts within 7 days get 2x priority
@@ -172,7 +172,7 @@ This stage operates on segments with `role: 'memory'` containing JSON memory pay
 The budget allocator distributes tokens across segments by priority weight. Locked segments get their exact token count; remaining budget is split proportionally among mutable segments.
 
 ```typescript
-import { allocateBudget, DefaultTokenCounter } from '@mcai/context-engine';
+import { allocateBudget, DefaultTokenCounter } from '@cycgraph/context-engine';
 
 const counter = new DefaultTokenCounter();
 const allocations = allocateBudget(segments, { maxTokens: 4096, outputReserve: 1024 }, counter);
@@ -183,7 +183,7 @@ const allocations = allocateBudget(segments, { maxTokens: 4096, outputReserve: 1
 Detect when prefix caching is being invalidated by dynamic segment content:
 
 ```typescript
-import { diagnoseCacheStability, computeSegmentHashMap } from '@mcai/context-engine';
+import { diagnoseCacheStability, computeSegmentHashMap } from '@cycgraph/context-engine';
 
 const previousHashes = computeSegmentHashMap(lastTurnSegments);
 const diagnostics = diagnoseCacheStability(currentSegments, previousHashes);
@@ -195,7 +195,7 @@ const diagnostics = diagnoseCacheStability(currentSegments, previousHashes);
 Wraps any stage and dynamically bypasses it when latency cost exceeds token savings:
 
 ```typescript
-import { createCircuitBreaker, createLatencyTracker } from '@mcai/context-engine';
+import { createCircuitBreaker, createLatencyTracker } from '@cycgraph/context-engine';
 
 const tracker = createLatencyTracker();
 const guarded = createCircuitBreaker(expensiveStage, tracker, {
@@ -252,8 +252,8 @@ For inputs ≤ 200, the original O(n²) path is used (LSH overhead isn't worthwh
 Inject the context engine into `GraphRunner` via the `contextCompressor` option:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import { createOptimizedPipeline, serialize } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 

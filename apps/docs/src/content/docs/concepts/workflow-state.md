@@ -8,7 +8,7 @@ The **WorkflowState** is the single source of truth for a running workflow. Ever
 ## Creating state
 
 ```typescript
-import { createWorkflowState } from '@mcai/orchestrator';
+import { createWorkflowState } from '@cycgraph/orchestrator';
 
 const state = createWorkflowState({
   workflow_id: graph.id,

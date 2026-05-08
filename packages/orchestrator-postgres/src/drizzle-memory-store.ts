@@ -1,10 +1,10 @@
 /**
  * Drizzle Memory Store
  *
- * Implements the MemoryStore interface from @mcai/memory using
+ * Implements the MemoryStore interface from @cycgraph/memory using
  * Drizzle ORM + PostgreSQL with pgvector for embedding storage.
  *
- * @module @mcai/orchestrator-postgres/drizzle-memory-store
+ * @module @cycgraph/orchestrator-postgres/drizzle-memory-store
  */
 
 import { getDb } from './connection.js';
@@ -24,7 +24,7 @@ import type {
   FactFilter,
   RelationshipFilter,
   PaginationOptions,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 import type {
   Entity,
   Relationship,
@@ -32,7 +32,7 @@ import type {
   SemanticFact,
   Theme,
   Provenance,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 
 // ─── Type Conversion Helpers ─────────────────────────────────────────
 

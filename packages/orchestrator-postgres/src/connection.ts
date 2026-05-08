@@ -5,7 +5,7 @@
  * instance. No connections are opened at import time — call {@link getDb}
  * once during application startup to warm the pool.
  *
- * @module @mcai/orchestrator-postgres
+ * @module @cycgraph/orchestrator-postgres
  */
 
 import { drizzle } from 'drizzle-orm/node-postgres';

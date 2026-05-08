@@ -32,8 +32,8 @@ import {
   createGraph,
   createWorkflowState,
   createLogger,
-} from '@mcai/orchestrator';
-import type { ToolSource } from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
+import type { ToolSource } from '@cycgraph/orchestrator';
 
 // ─── 0. Fail fast if no API keys ────────────────────────────────────────
 

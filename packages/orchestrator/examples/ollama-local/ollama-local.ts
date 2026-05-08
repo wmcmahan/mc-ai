@@ -40,7 +40,7 @@ import {
   createLogger,
   createGraph,
   createWorkflowState,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 import { createOpenAI } from '@ai-sdk/openai';
 

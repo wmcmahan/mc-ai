@@ -7,7 +7,7 @@
  * @module evals/linear-completion
  */
 
-import { createGraph, type EvalSuite } from '@mcai/orchestrator';
+import { createGraph, type EvalSuite } from '@cycgraph/orchestrator';
 
 const linearGraph = createGraph({
   name: 'Linear Completion Eval',

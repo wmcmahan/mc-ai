@@ -1,24 +1,24 @@
 ---
 title: Quick Start
-description: Install MC-AI and run your first workflow in under 5 minutes.
+description: Install cycgraph and run your first workflow in under 5 minutes.
 ---
 
-Install MC-AI, set up an LLM provider, and run a complete workflow with persistence.
+Install cycgraph, set up an LLM provider, and run a complete workflow with persistence.
 
 ## 1. Installation
 
-MC-AI requires **Node.js 22+** (ES Modules).
+cycgraph requires **Node.js 22+** (ES Modules).
 
 Install the core orchestrator package, and optionally the Postgres persistence package if you want durable database storage:
 
 ```bash
-npm install @mcai/orchestrator
+npm install @cycgraph/orchestrator
 
 # Optional PostgreSQL persistence adapter
-npm install @mcai/orchestrator-postgres
+npm install @cycgraph/orchestrator-postgres
 ```
 
-MC-AI uses the Vercel AI SDK under the hood, so install the provider you intend to use (e.g. `@ai-sdk/anthropic` or `@ai-sdk/openai`).
+cycgraph uses the Vercel AI SDK under the hood, so install the provider you intend to use (e.g. `@ai-sdk/anthropic` or `@ai-sdk/openai`).
 
 ## 2. API keys
 
@@ -44,7 +44,7 @@ import {
   configureProviderRegistry,
   createGraph,
   createWorkflowState,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 async function main() {
   // 1. Configure LLM providers
@@ -120,7 +120,7 @@ import {
   DrizzlePersistenceProvider,
   DrizzleEventLogWriter,
   getDb,
-} from '@mcai/orchestrator-postgres';
+} from '@cycgraph/orchestrator-postgres';
 
 // Ensure the connection pool is initialized (reads DATABASE_URL by default)
 await getDb();

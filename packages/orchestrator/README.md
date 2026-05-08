@@ -1,4 +1,4 @@
-# @mcai/orchestrator
+# @cycgraph/orchestrator
 
 A graph engine for orchestrating AI agent workflows. Define agents, tools, supervisors, and routing logic as configuration — the engine handles execution, state, retries, and recovery.
 
@@ -9,7 +9,7 @@ Define Graph (nodes + edges) → GraphRunner.run() → Execute Nodes → Reduce 
 ## Install
 
 ```bash
-npm install @mcai/orchestrator
+npm install @cycgraph/orchestrator
 ```
 
 **Peer dependencies**: `ai` (v6+), `zod`, and at least one provider adapter (`@ai-sdk/anthropic`, `@ai-sdk/openai`, or any Vercel AI SDK-compatible provider).
@@ -44,7 +44,7 @@ import {
   configureProviderRegistry,
   type Graph,
   type WorkflowState,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 // 1. Register an agent (agents are config, not classes — ID is auto-generated)
 const registry = new InMemoryAgentRegistry();
@@ -76,7 +76,7 @@ const graph: Graph = {
 };
 
 // 4. Run (use createWorkflowState — only workflow_id and goal are required)
-import { createWorkflowState } from '@mcai/orchestrator';
+import { createWorkflowState } from '@cycgraph/orchestrator';
 
 const state = createWorkflowState({
   workflow_id: graph.id,
@@ -101,7 +101,7 @@ Agents can then use `provider: 'groq'` or `provider: 'ollama'` in their config. 
 For local models via Ollama, use the built-in `registerOllamaProvider()` helper which handles factory injection and model registration:
 
 ```typescript
-import { registerOllamaProvider } from '@mcai/orchestrator';
+import { registerOllamaProvider } from '@cycgraph/orchestrator';
 registerOllamaProvider(providers); // uses OLLAMA_BASE_URL or defaults to http://localhost:11434
 ```
 
@@ -110,8 +110,8 @@ registerOllamaProvider(providers); // uses OLLAMA_BASE_URL or defaults to http:/
 Use `stream()` for real-time event consumption, including token-by-token LLM output:
 
 ```typescript
-import { GraphRunner, isTerminalEvent } from '@mcai/orchestrator';
-import type { StreamEvent } from '@mcai/orchestrator';
+import { GraphRunner, isTerminalEvent } from '@cycgraph/orchestrator';
+import type { StreamEvent } from '@cycgraph/orchestrator';
 
 const runner = new GraphRunner(graph, state, opts);
 
@@ -146,7 +146,7 @@ See [examples/](./examples/) for complete, runnable versions.
 | **MCP Tools** | Tool manifest caching (5-min TTL), per-tool execution timeouts, connection retry with backoff, auto-reconnect |
 | **Observability** | 17 lifecycle events, OpenTelemetry tracing (opt-in), Prometheus metrics, token and tool call streaming |
 | **Cost Control** | Token budgets, per-run cost tracking, budget-aware model resolution (all node types), workflow and node-level timeouts |
-| **Context Compression** | Optional `@mcai/context-engine` integration — format compression, dedup, CoT distillation, heuristic pruning with `context:compressed` stream events |
+| **Context Compression** | Optional `@cycgraph/context-engine` integration — format compression, dedup, CoT distillation, heuristic pruning with `context:compressed` stream events |
 | **Distributed Execution** | `WorkflowWorker` with per-workflow assignment, `WorkflowQueue` interface, visibility-timeout crash recovery, HITL pause (`paused` status — not re-claimable), dead-lettering, configurable concurrency |
 | **Persistence** | Mandatory atomic snapshots, differential state persistence (delta tracking), event log auto-compaction |
 
@@ -155,9 +155,9 @@ See [examples/](./examples/) for complete, runnable versions.
 Reduce token costs by 40-70% on agent memory payloads. Pass a `contextCompressor` to `GraphRunnerOptions` — the orchestrator uses it to compress memory before injecting into agent and supervisor prompts.
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import type { ContextCompressor } from '@mcai/orchestrator';
-import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import type { ContextCompressor } from '@cycgraph/orchestrator';
+import { createOptimizedPipeline, serialize } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -173,7 +173,7 @@ const contextCompressor: ContextCompressor = (sanitizedMemory, options) => {
 const runner = new GraphRunner(graph, state, { contextCompressor });
 ```
 
-Without `@mcai/context-engine` installed, the orchestrator works exactly as before — memory is serialized as `JSON.stringify(data, null, 2)` with a 50KB byte cap.
+Without `@cycgraph/context-engine` installed, the orchestrator works exactly as before — memory is serialized as `JSON.stringify(data, null, 2)` with a 50KB byte cap.
 
 Compression metrics are emitted as `context:compressed` stream events and can be consumed via `runner.on('context:compressed', ...)` for observability.
 

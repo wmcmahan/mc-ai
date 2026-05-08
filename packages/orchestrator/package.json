@@ -1,5 +1,5 @@
 {
-  "name": "@mcai/orchestrator",
+  "name": "@cycgraph/orchestrator",
   "version": "1.0.0",
   "description": "Graph-based workflow orchestrator with durable execution, multi-agent coordination, and human-in-the-loop approval gates.",
   "keywords": [
@@ -34,6 +34,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
@@ -61,10 +64,10 @@
     "@opentelemetry/sdk-node": "^0.213.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "ai": "^6.0.116",
-    "@mcai/context-engine": ">=0.1.0"
+    "@cycgraph/context-engine": ">=0.1.0"
   },
   "peerDependenciesMeta": {
-    "@mcai/context-engine": {
+    "@cycgraph/context-engine": {
       "optional": true
     },
     "@ai-sdk/anthropic": {

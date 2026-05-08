@@ -1,14 +1,14 @@
-# @mcai/orchestrator-postgres
+# @cycgraph/orchestrator-postgres
 
-PostgreSQL persistence adapter for `@mcai/orchestrator`. Provides durable state, event sourcing, agent registry, usage tracking, and retention management backed by Postgres via Drizzle ORM.
+PostgreSQL persistence adapter for `@cycgraph/orchestrator`. Provides durable state, event sourcing, agent registry, usage tracking, and retention management backed by Postgres via Drizzle ORM.
 
 ## Install
 
 ```bash
-npm install @mcai/orchestrator-postgres
+npm install @cycgraph/orchestrator-postgres
 ```
 
-**Peer dependencies**: `@mcai/orchestrator`, `drizzle-orm`, `postgres`.
+**Peer dependencies**: `@cycgraph/orchestrator`, `drizzle-orm`, `postgres`.
 
 ## Setup
 
@@ -32,8 +32,8 @@ import {
   DrizzleAgentRegistry,
   DrizzleUsageRecorder,
   DrizzleRetentionService,
-} from '@mcai/orchestrator-postgres';
-import { GraphRunner } from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator-postgres';
+import { GraphRunner } from '@cycgraph/orchestrator';
 
 const persistence = new DrizzlePersistenceProvider();
 const eventLog = new DrizzleEventLogWriter();
@@ -105,7 +105,7 @@ npx drizzle-kit push --config=packages/orchestrator-postgres/drizzle.config.ts
 
 ## Memory Tables (Optional)
 
-Six tables for the `@mcai/memory` knowledge graph backed by pgvector HNSW:
+Six tables for the `@cycgraph/memory` knowledge graph backed by pgvector HNSW:
 
 | Table | Purpose |
 |-------|---------|
@@ -119,13 +119,13 @@ Six tables for the `@mcai/memory` knowledge graph backed by pgvector HNSW:
 ### Usage
 
 ```typescript
-import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@mcai/orchestrator-postgres';
-import type { MemoryStore, MemoryIndex } from '@mcai/memory';
+import { DrizzleMemoryStore, DrizzleMemoryIndex } from '@cycgraph/orchestrator-postgres';
+import type { MemoryStore, MemoryIndex } from '@cycgraph/memory';
 
 const store: MemoryStore = new DrizzleMemoryStore();
 const index: MemoryIndex = new DrizzleMemoryIndex();
 
-// Use with @mcai/memory APIs
+// Use with @cycgraph/memory APIs
 await store.putEntity(entity);
 const results = await index.searchFacts(embedding, { limit: 10, min_similarity: 0.7 });
 ```
@@ -137,7 +137,7 @@ To use a different dimension, update the `EMBEDDING_DIMENSIONS` constant in the 
 and generate a new migration.
 
 ```typescript
-import { EMBEDDING_DIMENSIONS } from '@mcai/orchestrator-postgres';
+import { EMBEDDING_DIMENSIONS } from '@cycgraph/orchestrator-postgres';
 // Default: 1536
 ```
 

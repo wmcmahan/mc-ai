@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { createPipeline } from '@mcai/context-engine';
-import type { BudgetConfig } from '@mcai/context-engine';
+import { createPipeline } from '@cycgraph/context-engine';
+import type { BudgetConfig } from '@cycgraph/context-engine';
 import {
   InMemoryMemoryStore,
   InMemoryMemoryIndex,
   MemoryConsolidator,
   ConflictDetector,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 
 const defaultBudget: BudgetConfig = {
   maxTokens: 4096,

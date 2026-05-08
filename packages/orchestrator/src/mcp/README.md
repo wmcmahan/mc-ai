@@ -1,6 +1,6 @@
 # MCP Tool Integration — Technical Reference
 
-> **Scope**: This document covers the MCP (Model Context Protocol) tool integration layer in `@mcai/orchestrator`. It is intended for contributors modifying tool resolution, MCP connections, or schema conversion logic.
+> **Scope**: This document covers the MCP (Model Context Protocol) tool integration layer in `@cycgraph/orchestrator`. It is intended for contributors modifying tool resolution, MCP connections, or schema conversion logic.
 
 ---
 

@@ -10,8 +10,8 @@ This guide covers the practical steps for adding context compression to a workfl
 The fastest way to compress context in a workflow:
 
 ```typescript
-import { GraphRunner } from '@mcai/orchestrator';
-import { createOptimizedPipeline, serialize } from '@mcai/context-engine';
+import { GraphRunner } from '@cycgraph/orchestrator';
+import { createOptimizedPipeline, serialize } from '@cycgraph/context-engine';
 
 const { pipeline } = createOptimizedPipeline({ preset: 'balanced' });
 
@@ -49,7 +49,7 @@ runner.on('context:compressed', (event) => {
 For workflows with multiple turns, use the incremental pipeline to avoid re-compressing unchanged context:
 
 ```typescript
-import { createIncrementalPipeline, createFormatStage, createExactDedupStage } from '@mcai/context-engine';
+import { createIncrementalPipeline, createFormatStage, createExactDedupStage } from '@cycgraph/context-engine';
 
 const pipeline = createIncrementalPipeline({
   stages: [createFormatStage(), createExactDedupStage()],
@@ -101,7 +101,7 @@ const pipeline = createPipeline({
 When the user's query is known, configure the heuristic scorer to weight tokens that match the query, so query-relevant content survives pruning at the expense of unrelated text:
 
 ```typescript
-import { createPipeline, createHeuristicPruningStage, createAllocatorStage } from '@mcai/context-engine';
+import { createPipeline, createHeuristicPruningStage, createAllocatorStage } from '@cycgraph/context-engine';
 
 const pipeline = createPipeline({
   stages: [
@@ -123,7 +123,7 @@ Mark the query segment as `locked: true` so it is never pruned — the heuristic
 
 ## Working with memory payloads
 
-When compressing memory from `@mcai/memory`, use the adaptive memory stage to prioritize recent and high-relevance facts:
+When compressing memory from `@cycgraph/memory`, use the adaptive memory stage to prioritize recent and high-relevance facts:
 
 ```typescript
 import {
@@ -132,7 +132,7 @@ import {
   createFormatStage,
   createAllocatorStage,
   serialize,
-} from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
 
 const pipeline = createPipeline({
   stages: [
@@ -177,7 +177,7 @@ for (const stage of metrics.stages) {
 Detect when API prompt caching is being invalidated by dynamic content:
 
 ```typescript
-import { diagnoseCacheStability, computeSegmentHashMap } from '@mcai/context-engine';
+import { diagnoseCacheStability, computeSegmentHashMap } from '@cycgraph/context-engine';
 
 // Track hashes between turns
 const hashes = computeSegmentHashMap(segments);
@@ -193,7 +193,7 @@ if (diagnostics.hitRate < 0.8) {
 Wrap expensive stages to auto-bypass when they aren't paying for themselves:
 
 ```typescript
-import { createCircuitBreaker, createLatencyTracker } from '@mcai/context-engine';
+import { createCircuitBreaker, createLatencyTracker } from '@cycgraph/context-engine';
 
 const tracker = createLatencyTracker();
 const guarded = createCircuitBreaker(semanticDedupStage, tracker, {

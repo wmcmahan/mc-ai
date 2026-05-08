@@ -1,9 +1,9 @@
 /**
- * @mcai/orchestrator — Public API
+ * @cycgraph/orchestrator — Public API
  *
  * This is the package entry point. All public types, classes, and
  * functions are re-exported here. Consumers should import from
- * `@mcai/orchestrator` and never reach into internal paths.
+ * `@cycgraph/orchestrator` and never reach into internal paths.
  *
  * @packageDocumentation
  */

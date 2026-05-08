@@ -1,11 +1,11 @@
 ---
 title: Agents
-description: How agents are defined, configured, and executed in MC-AI.
+description: How agents are defined, configured, and executed in cycgraph.
 ---
 
 ## Agents
 
-MC-AI treats agents as **configuration, not code**. There are no base classes to extend, no framework to inherit from. An agent is a JSON object that the engine feeds into the runtime.
+cycgraph treats agents as **configuration, not code**. There are no base classes to extend, no framework to inherit from. An agent is a JSON object that the engine feeds into the runtime.
 
 ### Agent configuration
 
@@ -26,10 +26,10 @@ MC-AI treats agents as **configuration, not code**. There are no base classes to
 
 ## Agent registry
 
-The `AgentRegistry` is a lookup interface to load these configurations into the runtime. You can implement your own (e.g. reading from a database), but the framework provides `InMemoryAgentRegistry` (in `@mcai/orchestrator`) and `DrizzleAgentRegistry` (in `@mcai/orchestrator-postgres`).
+The `AgentRegistry` is a lookup interface to load these configurations into the runtime. You can implement your own (e.g. reading from a database), but the framework provides `InMemoryAgentRegistry` (in `@cycgraph/orchestrator`) and `DrizzleAgentRegistry` (in `@cycgraph/orchestrator-postgres`).
 
 ```typescript
-import { InMemoryAgentRegistry } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 

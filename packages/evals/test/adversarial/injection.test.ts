@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   createPipeline,
   detectShape,
-} from '@mcai/context-engine';
-import type { PromptSegment, BudgetConfig } from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
+import type { PromptSegment, BudgetConfig } from '@cycgraph/context-engine';
 import {
   InMemoryMemoryStore,
   RuleBasedExtractor,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 

@@ -16,7 +16,7 @@ export default defineConfig({
           attrs: { defer: true, src: '/_vercel/insights/script.js' },
         },
       ],
-      title: 'MC-AI',
+      title: 'Flattop',
       description:
         'Agentic orchestration built on a Cyclic State Graph architecture.',
       social: [
@@ -37,7 +37,7 @@ export default defineConfig({
         {
           label: 'Core Concepts',
           items: [
-            { label: 'How MC-AI Works', slug: 'concepts/overview' },
+            { label: 'How cycgraph works', slug: 'concepts/overview' },
             { label: 'Graphs', slug: 'concepts/graphs' },
             { label: 'Nodes', slug: 'concepts/nodes' },
             { label: 'Agents', slug: 'concepts/agents' },

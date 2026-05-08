@@ -15,9 +15,9 @@ import type {
   WorkflowRunRow,
   WorkflowEventRow as IWorkflowEventRow,
   WorkflowStateJson as IWorkflowStateJson,
-} from '@mcai/orchestrator';
-import type { Graph } from '@mcai/orchestrator';
-import type { WorkflowState } from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
+import type { Graph } from '@cycgraph/orchestrator';
+import type { WorkflowState } from '@cycgraph/orchestrator';
 
 type WorkflowStatus = 'pending' | 'scheduled' | 'running' | 'waiting' | 'retrying' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 

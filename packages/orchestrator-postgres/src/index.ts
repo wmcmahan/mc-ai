@@ -1,13 +1,13 @@
 /**
- * @mcai/orchestrator-postgres
+ * @cycgraph/orchestrator-postgres
  *
- * Official PostgreSQL adapter for @mcai/orchestrator.
+ * Official PostgreSQL adapter for @cycgraph/orchestrator.
  * Provides Drizzle ORM implementations of all persistence interfaces.
  *
  * @example
  * ```ts
- * import { getDb, closeDb, DrizzlePersistenceProvider, DrizzleAgentRegistry } from '@mcai/orchestrator-postgres';
- * import { configureAgentFactory, GraphRunner } from '@mcai/orchestrator';
+ * import { getDb, closeDb, DrizzlePersistenceProvider, DrizzleAgentRegistry } from '@cycgraph/orchestrator-postgres';
+ * import { configureAgentFactory, GraphRunner } from '@cycgraph/orchestrator';
  *
  * await getDb();
  * configureAgentFactory(new DrizzleAgentRegistry());

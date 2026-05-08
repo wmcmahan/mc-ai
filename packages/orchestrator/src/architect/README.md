@@ -1,6 +1,6 @@
 # Architect System — Technical Reference
 
-> **Scope**: This document covers the internal architecture of the architect subsystem in `@mcai/orchestrator`. It is intended for contributors modifying workflow generation, architect tools, schema definitions, or the self-correction loop.
+> **Scope**: This document covers the internal architecture of the architect subsystem in `@cycgraph/orchestrator`. It is intended for contributors modifying workflow generation, architect tools, schema definitions, or the self-correction loop.
 
 ---
 
@@ -40,7 +40,7 @@ The architect subsystem translates **natural language prompts** into **executabl
 graph TD
     API["API / Agent Tools"] --> GW["generateWorkflow()"]
     GW --> AF["AgentFactory"]
-    AF --> DB["@mcai/orchestrator-postgres"]
+    AF --> DB["@cycgraph/orchestrator-postgres"]
     AF --> SDK["AI SDK Providers"]
     GW --> GT["generateText() + Output.object()"]
     GW --> VG["validateGraph()"]

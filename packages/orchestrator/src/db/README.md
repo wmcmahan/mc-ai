@@ -1,6 +1,6 @@
 # DB Persistence Layer — Technical Reference
 
-> **Scope**: This document covers the internal architecture of the persistence layer in `@mcai/orchestrator`. It is intended for contributors modifying state persistence, crash recovery, type conversion, or failure handling logic.
+> **Scope**: This document covers the internal architecture of the persistence layer in `@cycgraph/orchestrator`. It is intended for contributors modifying state persistence, crash recovery, type conversion, or failure handling logic.
 
 ---
 
@@ -22,7 +22,7 @@
 
 ## 1. System Overview
 
-The DB persistence layer is the bridge between the orchestrator's in-memory `WorkflowState` / `Graph` types and the `@mcai/orchestrator-postgres` package (which owns the actual database schema and queries). This layer has three responsibilities:
+The DB persistence layer is the bridge between the orchestrator's in-memory `WorkflowState` / `Graph` types and the `@cycgraph/orchestrator-postgres` package (which owns the actual database schema and queries). This layer has three responsibilities:
 
 1. **Type conversion** — Maps between orchestrator domain types and DB-safe JSON types
 2. **Failure resilience** — Tracks consecutive persistence failures and degrades gracefully
@@ -51,7 +51,7 @@ graph TD
     AT["Architect Tools"] --> SG["saveGraph() / loadGraph()"]
     PW --> SWR["saveWorkflowRun()"]
     PW --> SWS["saveWorkflowState()"]
-    SWR --> WS["@mcai/orchestrator-postgres workflowService"]
+    SWR --> WS["@cycgraph/orchestrator-postgres workflowService"]
     SWS --> WS
     SG --> WS
     SWS --> CONV["toWorkflowStateJson()"]
@@ -78,7 +78,7 @@ Six functions providing atomic save/load operations:
 
 ### Type Converters — "How do types cross the boundary?"
 
-Three conversion functions that map between orchestrator domain types and `@mcai/orchestrator-postgres` JSON types:
+Three conversion functions that map between orchestrator domain types and `@cycgraph/orchestrator-postgres` JSON types:
 - `toGraphDefinitionJson()` — `Graph` → `GraphDefinitionJson`
 - `fromGraphDefinitionJson()` — `GraphDefinitionJson` → `Graph`
 - `toWorkflowStateJson()` — `WorkflowState` → `WorkflowStateJson`
@@ -94,7 +94,7 @@ sequenceDiagram
     participant SWR as saveWorkflowRun()
     participant SWS as saveWorkflowState()
     participant CONV as toWorkflowStateJson()
-    participant DB as @mcai/orchestrator-postgres workflowService
+    participant DB as @cycgraph/orchestrator-postgres workflowService
 
     GR->>PW: persistWorkflow(state)
 
@@ -176,7 +176,7 @@ The combined persistence function used by the `GraphRunner`. Saves both the run 
 
 ### File: [persistence.ts](persistence.ts) (CRUD section)
 
-All operations delegate to `@mcai/orchestrator-postgres`'s `workflowService` after type conversion.
+All operations delegate to `@cycgraph/orchestrator-postgres`'s `workflowService` after type conversion.
 
 ### Graph Operations
 
@@ -217,7 +217,7 @@ Creates or updates a workflow run record (lightweight metadata).
 
 #### `loadWorkflowRun(run_id: string): Promise<DbWorkflowRun | null>`
 
-Loads a workflow run record by ID. Returns the `@mcai/orchestrator-postgres` `WorkflowRun` type directly.
+Loads a workflow run record by ID. Returns the `@cycgraph/orchestrator-postgres` `WorkflowRun` type directly.
 
 ### State Snapshot Operations
 
@@ -339,9 +339,9 @@ interface PersistenceHealth {
 
 | Type | Source | Purpose |
 |------|--------|---------|
-| `GraphDefinitionJson` | `@mcai/orchestrator-postgres` | DB-safe graph representation (`unknown[]` for nodes/edges) |
-| `WorkflowStateJson` | `@mcai/orchestrator-postgres` | DB-safe state representation (index-signature type) |
-| `WorkflowRun` (as `DbWorkflowRun`) | `@mcai/orchestrator-postgres` | Workflow run metadata record |
+| `GraphDefinitionJson` | `@cycgraph/orchestrator-postgres` | DB-safe graph representation (`unknown[]` for nodes/edges) |
+| `WorkflowStateJson` | `@cycgraph/orchestrator-postgres` | DB-safe state representation (index-signature type) |
+| `WorkflowRun` (as `DbWorkflowRun`) | `@cycgraph/orchestrator-postgres` | Workflow run metadata record |
 
 ### Conversion Direction
 
@@ -365,7 +365,7 @@ The `EventLogWriter` interface abstracts the event store with three implementati
 
 | Implementation | Use Case | Storage |
 |---------------|----------|---------|
-| `DrizzleEventLogWriter` | Production | PostgreSQL via `@mcai/orchestrator-postgres` |
+| `DrizzleEventLogWriter` | Production | PostgreSQL via `@cycgraph/orchestrator-postgres` |
 | `InMemoryEventLogWriter` | Unit tests | In-memory `Map` |
 | `NoopEventLogWriter` | Default | Discards all writes |
 

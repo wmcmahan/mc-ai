@@ -2,10 +2,10 @@
  * Memory Hierarchy Input Types
  *
  * Lightweight interfaces for formatting pre-built memory payloads.
- * These mirror `@mcai/memory` shapes but contain only the fields
+ * These mirror `@cycgraph/memory` shapes but contain only the fields
  * needed for formatting — no embedding, provenance, or store logic.
  *
- * Context-engine does NOT import @mcai/memory. Users map from
+ * Context-engine does NOT import @cycgraph/memory. Users map from
  * memory's types to these when passing data to formatters.
  *
  * @module memory/hierarchy/types

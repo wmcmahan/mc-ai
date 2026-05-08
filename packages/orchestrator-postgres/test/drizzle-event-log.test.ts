@@ -8,8 +8,8 @@
 import { describe, test, expect } from 'vitest';
 import { setupDatabaseTests, isDatabaseAvailable } from './setup.js';
 import { DrizzleEventLogWriter } from '../src/drizzle-event-log.js';
-import { createWorkflowState } from '@mcai/orchestrator';
-import type { WorkflowState } from '@mcai/orchestrator';
+import { createWorkflowState } from '@cycgraph/orchestrator';
+import type { WorkflowState } from '@cycgraph/orchestrator';
 
 describe.skipIf(!isDatabaseAvailable())('DrizzleEventLogWriter', () => {
   setupDatabaseTests();

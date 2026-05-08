@@ -3,7 +3,7 @@ title: Custom LLM Providers
 description: Register Groq, Ollama, or any Vercel AI SDK-compatible provider.
 ---
 
-MC-AI ships with **OpenAI** and **Anthropic** pre-registered. To use a different LLM provider (Groq, Ollama, Google, Mistral, etc.), register it at startup. Any provider with a [Vercel AI SDK](https://sdk.vercel.ai/providers/ai-sdk-providers) adapter works.
+cycgraph ships with **OpenAI** and **Anthropic** pre-registered. To use a different LLM provider (Groq, Ollama, Google, Mistral, etc.), register it at startup. Any provider with a [Vercel AI SDK](https://sdk.vercel.ai/providers/ai-sdk-providers) adapter works.
 
 ## Quick start
 
@@ -13,7 +13,7 @@ Two steps: create a provider registry and wire it into the engine. The built-in 
 import {
   createProviderRegistry,
   configureProviderRegistry,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const providers = createProviderRegistry(); // includes openai + anthropic
 configureProviderRegistry(providers);
@@ -42,7 +42,7 @@ providers.register('groq', (modelId) => groq(modelId), {
 The simplest way to add Ollama support is the built-in helper:
 
 ```typescript
-import { registerOllamaProvider } from '@mcai/orchestrator';
+import { registerOllamaProvider } from '@cycgraph/orchestrator';
 
 registerOllamaProvider(providers, {
   models: ['llama3.2', 'mistral', 'codellama'],

@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve MC-AI
+about: Report a bug to help us improve cycgraph
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -24,7 +24,7 @@ What actually happened. Include error messages or stack traces if available.
 **Environment**
 - Node.js version:
 - OS:
-- MC-AI version/commit:
+- cycgraph version/commit:
 - Docker version (if relevant):
 
 **Relevant logs**

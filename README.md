@@ -1,18 +1,18 @@
-# MC-AI
+# cycgraph
 
 **Agentic orchestration built on a Cyclic State Graph architecture.**
 
-MC-AI is a production-ready workflow engine for building complex, multi-step AI agent systems. It provides robust patterns for Supervisors, Map-Reduce, Evolution (DGM), Human-in-the-Loop, and Swarms — all driven by configuration, not hardcoded chains.
+cycgraph is a production-ready workflow engine for building complex, multi-step AI agent systems. It provides robust patterns for Supervisors, Map-Reduce, Evolution (DGM), Human-in-the-Loop, and Swarms — all driven by configuration, not hardcoded chains.
 
 [📚 **Read the full documentation here** →](https://mc-ai-docs.vercel.app)
 
 ---
 
-## Why MC-AI?
+## Why cycgraph?
 
 Most AI orchestration frameworks model workflows as linear chains or strict Directed Acyclic Graphs (DAGs). This works for simple pipelines, but falls apart when you need an agent to loop back and self-correct, a supervisor to dynamically route work, or a workflow to pause for human approval.
 
-MC-AI uses a **Cyclic State Graph**. Nodes can loop, revisit previous steps, and make runtime decisions based on a shared state blackboard. Agents never communicate directly — they emit actions that are applied via pure reducer functions, eliminating race conditions and making every state transition fully auditable.
+cycgraph uses a **Cyclic State Graph**. Nodes can loop, revisit previous steps, and make runtime decisions based on a shared state blackboard. Agents never communicate directly — they emit actions that are applied via pure reducer functions, eliminating race conditions and making every state transition fully auditable.
 
 ## Key Features
 
@@ -28,7 +28,7 @@ MC-AI uses a **Cyclic State Graph**. Nodes can loop, revisit previous steps, and
 ### 1. Install
 
 ```bash
-npm install @mcai/orchestrator
+npm install @cycgraph/orchestrator
 ```
 
 ### 2. Run a built-in example
@@ -54,8 +54,8 @@ ANTHROPIC_API_KEY=sk-ant-... npx tsx packages/orchestrator/examples/map-reduce/m
 
 This monorepo contains the following packages:
 
-- `packages/orchestrator`: The core graph engine (`@mcai/orchestrator`) with zero infrastructure dependencies.
-- `packages/orchestrator-postgres`: An optional persistence adapter (`@mcai/orchestrator-postgres`) for durable state, event sourcing, and vector search.
+- `packages/orchestrator`: The core graph engine (`@cycgraph/orchestrator`) with zero infrastructure dependencies.
+- `packages/orchestrator-postgres`: An optional persistence adapter (`@cycgraph/orchestrator-postgres`) for durable state, event sourcing, and vector search.
 - `apps/docs`: The official Starlight documentation site.
 - `apps/api`: The Fastify gateway and server runtime.
 

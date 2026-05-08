@@ -224,7 +224,7 @@ export interface GraphRunnerOptions {
    * Context compression function for memory in prompts.
    *
    * When provided, replaces the default `JSON.stringify` + byte-cap
-   * serialization with intelligent compression via `@mcai/context-engine`.
+   * serialization with intelligent compression via `@cycgraph/context-engine`.
    * Without it, memory serialization works exactly as before.
    */
   contextCompressor?: ContextCompressor;

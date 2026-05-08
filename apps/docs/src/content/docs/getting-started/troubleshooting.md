@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Common first-run errors when setting up MC-AI, with concrete fixes.
+description: Common first-run errors when setting up cycgraph, with concrete fixes.
 ---
 
 This page covers the errors most people hit on their first runs. Each entry shows the symptom, what it means, and the fix.
@@ -32,7 +32,7 @@ Verify the agent's `provider` field matches the key you exported. The Vercel AI 
 **Fix:** call `configureAgentFactory()` once at startup, after registering all agents:
 
 ```typescript
-import { InMemoryAgentRegistry, configureAgentFactory } from '@mcai/orchestrator';
+import { InMemoryAgentRegistry, configureAgentFactory } from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 const writerId = registry.register({ /* ... */ });
@@ -53,7 +53,7 @@ npm install @ai-sdk/anthropic   # or @ai-sdk/openai
 ```
 
 ```typescript
-import { createProviderRegistry, configureProviderRegistry } from '@mcai/orchestrator';
+import { createProviderRegistry, configureProviderRegistry } from '@cycgraph/orchestrator';
 
 const providers = createProviderRegistry();
 configureProviderRegistry(providers); // ← required before any runner.run()
@@ -95,7 +95,7 @@ import {
   registerDefaultMCPServers,
   MCPConnectionManager,
   GraphRunner,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const mcpRegistry = new InMemoryMCPServerRegistry();
 await registerDefaultMCPServers(mcpRegistry); // registers `web-search` and `fetch`

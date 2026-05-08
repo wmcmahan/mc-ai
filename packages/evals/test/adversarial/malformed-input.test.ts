@@ -4,15 +4,15 @@ import {
   detectShape,
   dedup,
   DefaultTokenCounter,
-} from '@mcai/context-engine';
-import type { PromptSegment, BudgetConfig } from '@mcai/context-engine';
+} from '@cycgraph/context-engine';
+import type { PromptSegment, BudgetConfig } from '@cycgraph/context-engine';
 import {
   InMemoryMemoryStore,
   InMemoryMemoryIndex,
   SimpleEpisodeSegmenter,
   EntitySchema,
   SemanticFactSchema,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 

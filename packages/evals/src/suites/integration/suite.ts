@@ -19,13 +19,13 @@ import {
   MemoryConsolidator,
   ConflictDetector,
   filterValid,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 import type {
   Entity,
   Relationship,
   SemanticFact,
   Message,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 import {
   createPipeline,
   createFormatStage,
@@ -34,9 +34,9 @@ import {
   serialize,
   DefaultTokenCounter,
   allocateBudget,
-} from '@mcai/context-engine';
-import type { PromptSegment } from '@mcai/context-engine';
-import type { MemoryRetriever, MemoryRetrievalResult } from '@mcai/orchestrator';
+} from '@cycgraph/context-engine';
+import type { PromptSegment } from '@cycgraph/context-engine';
+import type { MemoryRetriever, MemoryRetrievalResult } from '@cycgraph/orchestrator';
 import {
   assertGreaterThanOrEqual,
   assertLessThanOrEqual,

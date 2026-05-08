@@ -1,6 +1,6 @@
 # Types — Technical Reference
 
-> **Scope**: This document covers the Zod schema definitions and TypeScript types that form the type system of `@mcai/orchestrator`. All schemas enforce runtime validation at system boundaries.
+> **Scope**: This document covers the Zod schema definitions and TypeScript types that form the type system of `@cycgraph/orchestrator`. All schemas enforce runtime validation at system boundaries.
 
 ---
 

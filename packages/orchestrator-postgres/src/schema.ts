@@ -4,11 +4,11 @@
  * Drizzle ORM table definitions for the orchestration engine.
  * Platform-specific tables (e.g. api_keys) live in the consuming application.
  *
- * @module @mcai/orchestrator-postgres/schema
+ * @module @cycgraph/orchestrator-postgres/schema
  */
 
 import { sql } from 'drizzle-orm';
-import type { ToolSource, MCPTransportConfig } from '@mcai/orchestrator';
+import type { ToolSource, MCPTransportConfig } from '@cycgraph/orchestrator';
 import {
   pgTable,
   uuid,
@@ -174,7 +174,7 @@ export const agents = pgTable('agents', {
     write_keys: string[];
     budget_usd?: number;
   }>(),
-  provider_options: jsonb('provider_options').$type<Record<string, Record<string, import('@mcai/orchestrator').JsonValue>>>(),
+  provider_options: jsonb('provider_options').$type<Record<string, Record<string, import('@cycgraph/orchestrator').JsonValue>>>(),
   model_preference: text('model_preference'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

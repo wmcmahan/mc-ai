@@ -1,10 +1,10 @@
 /**
  * Drizzle Memory Index
  *
- * Implements the MemoryIndex interface from @mcai/memory using
+ * Implements the MemoryIndex interface from @cycgraph/memory using
  * pgvector HNSW cosine similarity search.
  *
- * @module @mcai/orchestrator-postgres/drizzle-memory-index
+ * @module @cycgraph/orchestrator-postgres/drizzle-memory-index
  */
 
 import { sql } from 'drizzle-orm';
@@ -25,7 +25,7 @@ import type {
   Theme,
   Episode,
   Provenance,
-} from '@mcai/memory';
+} from '@cycgraph/memory';
 import type { MemoryProvenanceJson } from './schema.js';
 
 // ─── Type Conversion ─────────────────────────────────────────────────

@@ -1,15 +1,15 @@
 ---
-title: How MC-AI Works
+title: How cycgraph Works
 description: A high-level overview of the Cyclic State Graph architecture and its core concepts.
 ---
 
-MC-AI is a **workflow engine** built around four primary concepts: Graphs, Nodes, Agents, and State. The sections below explain what each one is and how they fit together.
+cycgraph is a **workflow engine** built around four primary concepts: Graphs, Nodes, Agents, and State. The sections below explain what each one is and how they fit together.
 
 ## The core concepts
 
 ### 1. Graphs
 
-A Graph is the declarative definition of a workflow — a set of nodes connected by conditional routing edges. Unlike linear pipelines, MC-AI graphs can be **cyclic**: nodes can loop back to previous nodes. This enables powerful autonomous patterns like self-correction, iterative refinement, and dynamic routing.
+A Graph is the declarative definition of a workflow — a set of nodes connected by conditional routing edges. Unlike linear pipelines, cycgraph graphs can be **cyclic**: nodes can loop back to previous nodes. This enables powerful autonomous patterns like self-correction, iterative refinement, and dynamic routing.
 
 Graphs are defined in TypeScript (or generated organically by the [Architect](/guides/architect/)) and can be versioned, composed into nested subgraphs, and updated without redeploying your core infrastructure.
 
@@ -17,7 +17,7 @@ Graphs are defined in TypeScript (or generated organically by the [Architect](/g
 
 A Node is a discrete unit of work within a Graph. When a workflow is executed, the orchestrator traverses the graph and executes the logic defined inside each active node. 
 
-There are 10 core node types in MC-AI, ranging from simple conditionals and fan-out maps (`router`, `map`), to human-in-the-loop pauses (`approval`), to complex population-based breeding algorithms (`evolution`). 
+There are 10 core node types in cycgraph, ranging from simple conditionals and fan-out maps (`router`, `map`), to human-in-the-loop pauses (`approval`), to complex population-based breeding algorithms (`evolution`). 
 
 *(See the full [Nodes reference](/concepts/nodes/) for all available types.)*
 
@@ -29,7 +29,7 @@ Agents are decoupled from Nodes. You register your Agents in an `AgentRegistry`,
 
 ### 4. Workflow State
 
-Instead of passing output directly between nodes in a fragile chain, all nodes in MC-AI read from and write to a **shared state object** — the `WorkflowState`.
+Instead of passing output directly between nodes in a fragile chain, all nodes in cycgraph read from and write to a **shared state object** — the `WorkflowState`.
 
 ```typescript
 {
@@ -60,7 +60,7 @@ When you execute a workflow, the `GraphRunner` orchestrates the process safely:
 
 ## Persistence and resumability
 
-Because State is cleanly separated from the execution logic, it can be persisted (in-memory by default, or durably to Postgres via `@mcai/orchestrator-postgres`) after every single node execution. This enables:
+Because State is cleanly separated from the execution logic, it can be persisted (in-memory by default, or durably to Postgres via `@cycgraph/orchestrator-postgres`) after every single node execution. This enables:
 
 - **Time-travel debugging** — inspect state at any point in the workflow's history.
 - **Resumability** — restart from the exact last checkpoint if an API crashes.

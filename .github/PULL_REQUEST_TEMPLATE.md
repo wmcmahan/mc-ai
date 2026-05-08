@@ -20,7 +20,7 @@ Brief description of what this PR does and why.
 - [ ] Zod schemas added for new input/output boundaries
 - [ ] No direct state mutation (reducers only)
 - [ ] ES module imports use `.js` extensions
-- [ ] Cross-workspace imports use `@mcai/orchestrator-postgres` or `@mcai/orchestrator`
+- [ ] Cross-workspace imports use `@cycgraph/orchestrator-postgres` or `@cycgraph/orchestrator`
 - [ ] No secrets or API keys in code
 
 ## Related issues

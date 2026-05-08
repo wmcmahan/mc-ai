@@ -1,5 +1,5 @@
 {
-  "name": "@mcai/context-engine",
+  "name": "@cycgraph/context-engine",
   "version": "0.1.0",
   "description": "Framework-agnostic context optimization engine — composable compression pipeline that makes every token count.",
   "keywords": [
@@ -32,6 +32,9 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist"

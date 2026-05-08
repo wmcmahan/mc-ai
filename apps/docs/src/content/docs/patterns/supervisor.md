@@ -60,7 +60,7 @@ const SUPERVISOR_ID = registry.register({
 The `supervisor` node type requires a `supervisor_config` block defining which node IDs it is permitted to route work to.
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Supervisor Routing',

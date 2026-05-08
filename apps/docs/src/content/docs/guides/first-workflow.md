@@ -15,7 +15,7 @@ import {
   configureAgentFactory,
   createProviderRegistry,
   configureProviderRegistry,
-} from '@mcai/orchestrator';
+} from '@cycgraph/orchestrator';
 
 const registry = new InMemoryAgentRegistry();
 
@@ -54,7 +54,7 @@ configureProviderRegistry(providers);
 Use the `createGraph` helper to build a validated `Graph` definition. We construct two nodes, plugging in the agent IDs we just generated. 
 
 ```typescript
-import { createGraph } from '@mcai/orchestrator';
+import { createGraph } from '@cycgraph/orchestrator';
 
 const graph = createGraph({
   name: 'Research & Write',
@@ -97,7 +97,7 @@ const graph = createGraph({
 Use the `createWorkflowState` helper to automatically generate the `run_id`, timestamps, and required structural defaults.
 
 ```typescript
-import { createWorkflowState } from '@mcai/orchestrator';
+import { createWorkflowState } from '@cycgraph/orchestrator';
 
 const initialState = createWorkflowState({
   workflow_id: graph.id,
@@ -110,7 +110,7 @@ const initialState = createWorkflowState({
 ## Step 4: Run
 
 ```typescript
-import { GraphRunner, InMemoryPersistenceProvider } from '@mcai/orchestrator';
+import { GraphRunner, InMemoryPersistenceProvider } from '@cycgraph/orchestrator';
 
 const persistence = new InMemoryPersistenceProvider();
 const runner = new GraphRunner(graph, initialState, {

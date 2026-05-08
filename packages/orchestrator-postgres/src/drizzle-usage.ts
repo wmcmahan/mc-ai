@@ -6,7 +6,7 @@
 
 import { db } from './connection.js';
 import { usage_records } from './schema.js';
-import type { UsageRecorder, UsageRecord } from '@mcai/orchestrator';
+import type { UsageRecorder, UsageRecord } from '@cycgraph/orchestrator';
 
 export class DrizzleUsageRecorder implements UsageRecorder {
   async saveUsageRecord(record: UsageRecord): Promise<void> {
