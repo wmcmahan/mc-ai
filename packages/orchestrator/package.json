@@ -64,7 +64,7 @@
     "@opentelemetry/sdk-node": "^0.213.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "ai": "^6.0.116",
-    "@cycgraph/context-engine": ">=0.1.0"
+    "@cycgraph/context-engine": "*"
   },
   "peerDependenciesMeta": {
     "@cycgraph/context-engine": {

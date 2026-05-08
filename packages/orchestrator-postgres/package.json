@@ -57,7 +57,7 @@
   },
   "peerDependencies": {
     "@cycgraph/orchestrator": "*",
-    "@cycgraph/memory": ">=1.0.0"
+    "@cycgraph/memory": "*"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
