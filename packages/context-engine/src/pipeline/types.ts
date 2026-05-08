@@ -48,8 +48,24 @@ export const BudgetConfigSchema = z.object({
 // --- Inferred Types ---
 
 export type SegmentRole = z.infer<typeof SegmentRoleSchema>;
-export type PromptSegment = z.infer<typeof PromptSegmentSchema>;
-export type BudgetConfig = z.infer<typeof BudgetConfigSchema>;
+/**
+ * User-facing prompt segment shape.
+ *
+ * Uses `z.input` so fields with Zod defaults (`priority`, `locked`) are
+ * optional at the call site. The pipeline parses through the schema
+ * internally, where defaults are filled in.
+ */
+export type PromptSegment = z.input<typeof PromptSegmentSchema>;
+/** Fully-parsed segment with all defaults applied. */
+export type ParsedPromptSegment = z.infer<typeof PromptSegmentSchema>;
+/**
+ * User-facing budget config.
+ *
+ * Uses `z.input` so `outputReserve` (which has a Zod default) is optional.
+ */
+export type BudgetConfig = z.input<typeof BudgetConfigSchema>;
+/** Fully-parsed budget with all defaults applied. */
+export type ParsedBudgetConfig = z.infer<typeof BudgetConfigSchema>;
 
 // --- Logger ---
 

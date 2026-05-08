@@ -56,12 +56,12 @@ export class DrizzleAgentRegistry implements AgentRegistry {
       .insert(agents)
       .values({
         name: input.name,
-        description: input.description,
+        description: input.description ?? null,
         model: input.model,
         provider: input.provider,
         system_prompt: input.system_prompt,
-        temperature: input.temperature,
-        max_steps: input.max_steps,
+        temperature: input.temperature ?? 0.7,
+        max_steps: input.max_steps ?? 10,
         tools: input.tools,
         permissions: {
           sandbox: input.permissions?.sandbox ?? false,

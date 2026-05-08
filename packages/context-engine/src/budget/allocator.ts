@@ -41,7 +41,7 @@ export function allocateBudget(
   model?: string,
 ): AllocationResult {
   const counts = countSegmentTokens(segments, counter, model);
-  const availableBudget = budget.maxTokens - budget.outputReserve;
+  const availableBudget = budget.maxTokens - (budget.outputReserve ?? 0);
   const allocations = new Map<string, number>();
 
   // 1. Locked segments: exact allocation
@@ -65,7 +65,7 @@ export function allocateBudget(
   // 2. Mutable segments: distribute remaining by priority
   const mutableBudget = Math.max(0, availableBudget - lockedTotal);
   const mutableSegments = segments.filter(s => !s.locked);
-  const totalPriority = mutableSegments.reduce((sum, s) => sum + s.priority, 0);
+  const totalPriority = mutableSegments.reduce((sum, s) => sum + (s.priority ?? 1), 0);
 
   if (totalPriority === 0 || mutableSegments.length === 0) {
     // No mutable segments or zero priority — nothing to allocate
@@ -78,7 +78,7 @@ export function allocateBudget(
     const entries: { id: string; floor: number; remainder: number; cap: number }[] = [];
     let distributed = 0;
     for (const seg of mutableSegments) {
-      const share = (seg.priority / totalPriority) * mutableBudget;
+      const share = ((seg.priority ?? 1) / totalPriority) * mutableBudget;
       const actual = counts.get(seg.id) ?? 0;
       const floor = Math.min(Math.floor(share), actual);
       entries.push({ id: seg.id, floor, remainder: share - Math.floor(share), cap: actual });

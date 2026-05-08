@@ -259,7 +259,13 @@ export class InMemoryAgentRegistry implements AgentRegistry {
    */
   register(entry: AgentRegistryInput | AgentRegistryEntry): string {
     const id = 'id' in entry && entry.id ? entry.id : crypto.randomUUID();
-    const full: AgentRegistryEntry = { ...entry, id };
+    const full: AgentRegistryEntry = {
+      description: null,
+      temperature: 0.7,
+      max_steps: 10,
+      ...entry,
+      id,
+    };
     this.agents.set(id, full);
     return id;
   }

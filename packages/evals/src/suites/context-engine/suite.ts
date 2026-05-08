@@ -229,8 +229,8 @@ function runBudgetComplianceTest(): TestCaseResults {
       assertLessThanOrEqual(
         'budget_compliance',
         totalAllocated,
-        budget.maxTokens - budget.outputReserve,
-        `Total allocation (${totalAllocated}) should not exceed available budget (${budget.maxTokens - budget.outputReserve})`,
+        budget.maxTokens - (budget.outputReserve ?? 0),
+        `Total allocation (${totalAllocated}) should not exceed available budget (${budget.maxTokens - (budget.outputReserve ?? 0)})`,
       ),
     ],
   };

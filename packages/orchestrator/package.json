@@ -1,6 +1,6 @@
 {
   "name": "@cycgraph/orchestrator",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Graph-based workflow orchestrator with durable execution, multi-agent coordination, and human-in-the-loop approval gates.",
   "keywords": [
     "orchestrator",
@@ -47,74 +47,33 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/mcp": "^1.0.25",
+    "@ai-sdk/openai": "^3.0.41",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-prometheus": "^0.213.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
+    "@opentelemetry/resources": "^2.6.0",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
+    "ai": "^6.0.116",
     "filtrex": "^3.1.0",
     "jsonpath-plus": "^10.4.0",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
-    "@ai-sdk/mcp": "^1.0.25",
-    "@ai-sdk/openai": "^3.0.41",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-prometheus": "^0.213.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-metrics": "^2.6.0",
-    "@opentelemetry/sdk-node": "^0.213.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
-    "ai": "^6.0.116",
     "@cycgraph/context-engine": "*"
   },
   "peerDependenciesMeta": {
     "@cycgraph/context-engine": {
       "optional": true
-    },
-    "@ai-sdk/anthropic": {
-      "optional": true
-    },
-    "@ai-sdk/mcp": {
-      "optional": true
-    },
-    "@ai-sdk/openai": {
-      "optional": true
-    },
-    "@opentelemetry/api": {
-      "optional": true
-    },
-    "@opentelemetry/exporter-prometheus": {
-      "optional": true
-    },
-    "@opentelemetry/exporter-trace-otlp-http": {
-      "optional": true
-    },
-    "@opentelemetry/resources": {
-      "optional": true
-    },
-    "@opentelemetry/sdk-metrics": {
-      "optional": true
-    },
-    "@opentelemetry/sdk-node": {
-      "optional": true
-    },
-    "@opentelemetry/semantic-conventions": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
-    "@ai-sdk/mcp": "^1.0.25",
-    "@ai-sdk/openai": "^3.0.41",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-prometheus": "^0.213.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-metrics": "^2.6.0",
-    "@opentelemetry/sdk-node": "^0.213.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
     "@types/node": "^25.3.5",
     "@types/uuid": "^11.0.0",
-    "ai": "^6.0.116",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
