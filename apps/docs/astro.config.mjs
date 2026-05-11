@@ -84,6 +84,13 @@ export default defineConfig({
             { label: 'Evaluations', slug: 'observability/evals' },
           ],
         },
+        {
+          label: 'Operations',
+          items: [
+            { label: 'Deployment Guide', slug: 'operations/deployment' },
+            { label: 'Configuration Reference', slug: 'operations/configuration' },
+          ],
+        },
         { label: 'Security', slug: 'security' },
       ],
     }),

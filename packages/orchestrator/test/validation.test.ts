@@ -378,27 +378,60 @@ describe('Graph Validation', () => {
   });
 
   describe('condition expression syntax validation', () => {
-    test('should warn on syntactically invalid condition expression', () => {
+    test('should reject syntactically invalid condition expression as an error', () => {
       const graph = createValidGraph();
       graph.edges[0].condition = { type: 'conditional', condition: '(((' };
 
       const result = validateGraph(graph);
 
-      expect(result.valid).toBe(true); // warning, not error
-      expect(result.warnings.some(w =>
-        w.includes('edge-1') && w.includes('syntax error')
+      // Promoted from warning -> error: a broken filtrex expression would
+      // silently evaluate to `false` at runtime and misroute execution. The
+      // graph must fail to load so the author sees the syntax error.
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e =>
+        e.includes('edge-1') && e.includes('syntax error')
       )).toBe(true);
     });
 
-    test('should not warn on valid condition expression', () => {
+    test('should accept a valid condition expression with no errors or warnings about syntax', () => {
       const graph = createValidGraph();
       graph.edges[0].condition = { type: 'conditional', condition: 'memory.approved == 1' };
 
       const result = validateGraph(graph);
 
-      // No syntax error warnings for this edge
+      expect(result.errors.some(e =>
+        e.includes('edge-1') && e.includes('syntax error')
+      )).toBe(false);
       expect(result.warnings.some(w =>
         w.includes('edge-1') && w.includes('syntax error')
+      )).toBe(false);
+    });
+
+    test('should accept expressions that use runtime extra functions', () => {
+      const graph = createValidGraph();
+      graph.edges[0].condition = {
+        type: 'conditional',
+        condition: 'length(memory.items) > 0 and lower(memory.status) == "ready"',
+      };
+
+      const result = validateGraph(graph);
+
+      // The validator must share the runtime's extraFunctions config so that
+      // expressions using length/lower/etc compile successfully here.
+      expect(result.errors.some(e => e.includes('edge-1'))).toBe(false);
+    });
+
+    test('should accept single-quoted string literals via shared normalization', () => {
+      const graph = createValidGraph();
+      graph.edges[0].condition = {
+        type: 'conditional',
+        condition: "memory.status == 'ready'",
+      };
+
+      const result = validateGraph(graph);
+
+      expect(result.errors.some(e =>
+        e.includes('edge-1') && e.includes('syntax error')
       )).toBe(false);
     });
 

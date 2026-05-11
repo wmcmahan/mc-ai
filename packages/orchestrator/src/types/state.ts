@@ -155,6 +155,22 @@ export const WorkflowStateSchema = z.object({
     iteration: z.number(),
     timestamp: z.date(),
   })).default([]),
+
+  // ── Memory drop audit log ──
+  /**
+   * Ring buffer of memory updates that were rejected by reducers
+   * (oversized JSON or non-serializable). Bounded to the most recent
+   * entries; see `MAX_MEMORY_DROPS` in `reducers/index.ts`. The GraphRunner
+   * emits a `memory:dropped` stream event for each new entry — this field
+   * is the durable, queryable trail after the run completes.
+   */
+  memory_drops: z.array(z.object({
+    key: z.string(),
+    reason: z.enum(['oversized', 'non_serializable']),
+    bytes: z.number().optional(),
+    node_id: z.string().optional(),
+    timestamp: z.date(),
+  })).default([]),
 });
 
 export type WorkflowState = z.infer<typeof WorkflowStateSchema>;

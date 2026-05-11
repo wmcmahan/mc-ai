@@ -15,6 +15,7 @@
     "build": "npm run build --workspace=packages/orchestrator && npm run build --workspace=packages/memory && npm run build --workspace=packages/context-engine && npm run build --workspace=packages/orchestrator-postgres && npm run build --workspace=packages/evals",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
+    "smoke": "tsx scripts/integration-smoke.ts",
     "changeset": "changeset",
     "version": "changeset version && npm install --package-lock-only",
     "release": "npm run build && changeset publish --tag beta"

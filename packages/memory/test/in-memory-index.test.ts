@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InMemoryMemoryStore, InMemoryMemoryIndex } from '../src/index.js';
+import { InMemoryMemoryStore, InMemoryMemoryIndex, EmbeddingDimensionMismatchError } from '../src/index.js';
 import type { Entity, SemanticFact, Theme, Provenance } from '../src/index.js';
 
 const now = new Date();
@@ -117,5 +117,70 @@ describe('InMemoryMemoryIndex', () => {
 
     const results = await index.searchEntities([1, 0, 0], { min_similarity: 0 });
     expect(results).toHaveLength(0);
+  });
+
+  describe('expectedDimensions validation', () => {
+    it('accepts queries that match the configured dimension', async () => {
+      const dimIndex = new InMemoryMemoryIndex({ expectedDimensions: 3 });
+      const dimStore = new InMemoryMemoryStore();
+      await dimStore.putEntity(makeEntity([1, 0, 0]));
+      await dimIndex.rebuild(dimStore);
+
+      // Same dim — should not throw
+      await expect(dimIndex.searchEntities([0, 1, 0])).resolves.toBeDefined();
+    });
+
+    it('throws EmbeddingDimensionMismatchError on a wrong-dim query', async () => {
+      const dimIndex = new InMemoryMemoryIndex({ expectedDimensions: 1536 });
+      const dimStore = new InMemoryMemoryStore();
+      await dimIndex.rebuild(dimStore);
+
+      // Query with 512 dims instead of 1536
+      const badQuery = new Array(512).fill(0.1);
+      await expect(dimIndex.searchEntities(badQuery)).rejects.toBeInstanceOf(EmbeddingDimensionMismatchError);
+      await expect(dimIndex.searchFacts(badQuery)).rejects.toBeInstanceOf(EmbeddingDimensionMismatchError);
+      await expect(dimIndex.searchThemes(badQuery)).rejects.toBeInstanceOf(EmbeddingDimensionMismatchError);
+      await expect(dimIndex.searchEpisodes(badQuery)).rejects.toBeInstanceOf(EmbeddingDimensionMismatchError);
+    });
+
+    it('throws when rebuild encounters a stored embedding with mismatched dim', async () => {
+      // 1536-dim configured, but underlying store has a 3-dim entity left over
+      // from before a provider swap. This simulates schema drift.
+      const dimIndex = new InMemoryMemoryIndex({ expectedDimensions: 1536 });
+      const dimStore = new InMemoryMemoryStore();
+      await dimStore.putEntity(makeEntity([1, 0, 0])); // wrong dim
+
+      await expect(dimIndex.rebuild(dimStore)).rejects.toBeInstanceOf(EmbeddingDimensionMismatchError);
+    });
+
+    it('exposes expected/actual on the thrown error for debugging', async () => {
+      const dimIndex = new InMemoryMemoryIndex({ expectedDimensions: 1536 });
+      const dimStore = new InMemoryMemoryStore();
+      await dimIndex.rebuild(dimStore);
+
+      try {
+        await dimIndex.searchEntities([1, 2, 3]);
+        throw new Error('expected throw');
+      } catch (err) {
+        expect(err).toBeInstanceOf(EmbeddingDimensionMismatchError);
+        const mismatch = err as EmbeddingDimensionMismatchError;
+        expect(mismatch.expected).toBe(1536);
+        expect(mismatch.actual).toBe(3);
+        expect(mismatch.context).toBe('searchEntities');
+      }
+    });
+
+    it('does no validation when expectedDimensions is unset (backwards compatible)', async () => {
+      // Default-constructed index — no expectedDimensions, no validation.
+      const plainIndex = new InMemoryMemoryIndex();
+      const plainStore = new InMemoryMemoryStore();
+      await plainStore.putEntity(makeEntity([1, 0, 0]));
+      await plainIndex.rebuild(plainStore);
+
+      // 512-dim query against 3-dim store still resolves (returns 0 matches
+      // via cosine-similarity short-circuit) — no throw.
+      const badQuery = new Array(512).fill(0.1);
+      await expect(plainIndex.searchEntities(badQuery)).resolves.toBeDefined();
+    });
   });
 });

@@ -9,6 +9,7 @@ import { db } from './connection.js';
 import { graphs, workflow_runs, workflow_states, workflow_events } from './schema.js';
 import type { GraphDefinitionJson, WorkflowStateJson } from './schema.js';
 import { eq, desc, sql, and } from 'drizzle-orm';
+import { retryOnTransient } from './retry.js';
 import type {
   PersistenceProvider,
   GraphRow,
@@ -180,23 +181,31 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
   async saveWorkflowState(state: WorkflowState): Promise<void> {
     const stateJson = toWorkflowStateJson(state);
 
-    await db.transaction(async (tx) => {
-      const maxVersionResult = await tx
-        .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
-        .from(workflow_states)
-        .where(eq(workflow_states.run_id, state.run_id));
-      const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
+    // The MAX(version) + 1 increment races against concurrent writers — all
+    // see the same MAX and try to insert the same nextVersion. The unique
+    // constraint `uq_workflow_states_run_version` rejects all-but-one. We
+    // retry the entire transaction with backoff so the race is invisible to
+    // callers. `fn` is idempotent: re-reading MAX inside a fresh transaction
+    // produces the next correct version.
+    await retryOnTransient(() =>
+      db.transaction(async (tx) => {
+        const maxVersionResult = await tx
+          .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
+          .from(workflow_states)
+          .where(eq(workflow_states.run_id, state.run_id));
+        const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
 
-      await tx.insert(workflow_states).values({
-        run_id: state.run_id,
-        version: nextVersion,
-        state: stateJson,
-        current_node: state.current_node,
-        status: state.status as WorkflowStatus,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-    });
+        await tx.insert(workflow_states).values({
+          run_id: state.run_id,
+          version: nextVersion,
+          state: stateJson,
+          current_node: state.current_node,
+          status: state.status as WorkflowStatus,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }),
+    );
   }
 
   async loadLatestWorkflowState(run_id: string): Promise<WorkflowState | null> {
@@ -251,43 +260,48 @@ export class DrizzlePersistenceProvider implements PersistenceProvider {
   // ── Atomic Snapshot ──
 
   async saveWorkflowSnapshot(state: WorkflowState): Promise<void> {
-    await db.transaction(async (tx) => {
-      // Save workflow run
-      const isTerminal = TERMINAL_STATUSES.includes(state.status);
-      const status = state.status as WorkflowStatus;
+    // Same version-increment race as `saveWorkflowState` — retry on transient
+    // unique-violation conflicts. The run update is idempotent
+    // (`onConflictDoUpdate`); the state insert is what races.
+    await retryOnTransient(() =>
+      db.transaction(async (tx) => {
+        // Save workflow run
+        const isTerminal = TERMINAL_STATUSES.includes(state.status);
+        const status = state.status as WorkflowStatus;
 
-      await tx.insert(workflow_runs).values({
-        id: state.run_id,
-        graph_id: state.workflow_id,
-        status,
-        created_at: state.created_at ?? new Date(),
-        completed_at: isTerminal ? new Date() : null,
-      }).onConflictDoUpdate({
-        target: workflow_runs.id,
-        set: {
+        await tx.insert(workflow_runs).values({
+          id: state.run_id,
+          graph_id: state.workflow_id,
           status,
+          created_at: state.created_at ?? new Date(),
           completed_at: isTerminal ? new Date() : null,
-        },
-      });
+        }).onConflictDoUpdate({
+          target: workflow_runs.id,
+          set: {
+            status,
+            completed_at: isTerminal ? new Date() : null,
+          },
+        });
 
-      // Save workflow state
-      const stateJson = toWorkflowStateJson(state);
-      const maxVersionResult = await tx
-        .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
-        .from(workflow_states)
-        .where(eq(workflow_states.run_id, state.run_id));
-      const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
+        // Save workflow state
+        const stateJson = toWorkflowStateJson(state);
+        const maxVersionResult = await tx
+          .select({ maxVersion: sql<number>`COALESCE(MAX(${workflow_states.version}), 0)` })
+          .from(workflow_states)
+          .where(eq(workflow_states.run_id, state.run_id));
+        const nextVersion = (maxVersionResult[0]?.maxVersion ?? 0) + 1;
 
-      await tx.insert(workflow_states).values({
-        run_id: state.run_id,
-        version: nextVersion,
-        state: stateJson,
-        current_node: state.current_node,
-        status: state.status as WorkflowStatus,
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
-    });
+        await tx.insert(workflow_states).values({
+          run_id: state.run_id,
+          version: nextVersion,
+          state: stateJson,
+          current_node: state.current_node,
+          status: state.status as WorkflowStatus,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }),
+    );
   }
 
   // ── Event Queries ──

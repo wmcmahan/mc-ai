@@ -31,7 +31,10 @@ describe('Reducers', () => {
     compensation_stack: [],
     max_execution_time_ms: 3600000,
     total_tokens_used: 0,
+    total_cost_usd: 0,
+    _cost_alert_thresholds_fired: [],
     supervisor_history: [],
+    memory_drops: [],
   });
 
   describe('updateMemoryReducer', () => {
@@ -538,11 +541,10 @@ describe('Reducers', () => {
   });
 
   describe('Memory value size validation', () => {
-    test('drops oversized memory values in updateMemoryReducer', () => {
+    test('drops oversized memory values in updateMemoryReducer and records them in state.memory_drops', () => {
       const state = createBaseState();
       // Create a value larger than MAX_MEMORY_VALUE_BYTES (1MB)
       const oversizedValue = 'x'.repeat(1024 * 1024 + 1);
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const action: Action = {
         id: uuidv4(),
@@ -560,17 +562,18 @@ describe('Reducers', () => {
       const newState = updateMemoryReducer(state, action);
       expect(newState.memory.normal_key).toBe('normal_value');
       expect(newState.memory.oversized_key).toBeUndefined();
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Dropping oversized memory key "oversized_key"'),
-      );
-
-      consoleSpy.mockRestore();
+      expect(newState.memory_drops).toHaveLength(1);
+      expect(newState.memory_drops[0]).toMatchObject({
+        key: 'oversized_key',
+        reason: 'oversized',
+        node_id: 'test',
+      });
+      expect(newState.memory_drops[0].bytes).toBeGreaterThan(1024 * 1024);
     });
 
-    test('drops oversized values in mergeParallelResultsReducer', () => {
+    test('drops oversized values in mergeParallelResultsReducer and records them in state.memory_drops', () => {
       const state = createBaseState();
       const oversizedValue = 'y'.repeat(1024 * 1024 + 1);
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const action: Action = {
         id: uuidv4(),
@@ -589,8 +592,50 @@ describe('Reducers', () => {
       const newState = rootReducer(state, action);
       expect(newState.memory.good).toBe('ok');
       expect(newState.memory.big).toBeUndefined();
+      expect(newState.memory_drops).toHaveLength(1);
+      expect(newState.memory_drops[0]).toMatchObject({ key: 'big', reason: 'oversized' });
+    });
 
-      consoleSpy.mockRestore();
+    test('records non-serializable values as memory drops', () => {
+      const state = createBaseState();
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+
+      const action: Action = {
+        id: uuidv4(),
+        idempotency_key: uuidv4(),
+        type: 'update_memory',
+        payload: { updates: { circular } },
+        metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+      };
+
+      const newState = updateMemoryReducer(state, action);
+      expect(newState.memory.circular).toBeUndefined();
+      expect(newState.memory_drops).toHaveLength(1);
+      expect(newState.memory_drops[0]).toMatchObject({ key: 'circular', reason: 'non_serializable' });
+      expect(newState.memory_drops[0].bytes).toBeUndefined();
+    });
+
+    test('memory_drops ring buffer is bounded to MAX_MEMORY_DROPS', () => {
+      let state = createBaseState();
+      const oversizedValue = 'x'.repeat(1024 * 1024 + 1);
+
+      // Push 55 drops; only the last MAX_MEMORY_DROPS (50) should remain
+      for (let i = 0; i < 55; i++) {
+        const action: Action = {
+          id: uuidv4(),
+          idempotency_key: uuidv4(),
+          type: 'update_memory',
+          payload: { updates: { [`drop_${i}`]: oversizedValue } },
+          metadata: { node_id: 'test', timestamp: new Date(), attempt: 1 },
+        };
+        state = updateMemoryReducer(state, action);
+      }
+
+      expect(state.memory_drops).toHaveLength(50);
+      // The earliest 5 drops should have been evicted; first remaining is drop_5
+      expect(state.memory_drops[0].key).toBe('drop_5');
+      expect(state.memory_drops[49].key).toBe('drop_54');
     });
 
     test('allows values within the size limit', () => {

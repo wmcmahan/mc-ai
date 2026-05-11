@@ -117,9 +117,16 @@ export type { SupervisorDecision } from './agent/supervisor-executor/executor.js
 
 export { jsonSchemaToZod } from './mcp/json-schema-converter.js';
 export type { JSONSchema } from './mcp/json-schema-converter.js';
-export { MCPServerNotFoundError, MCPAccessDeniedError } from './mcp/errors.js';
+export { MCPServerNotFoundError, MCPAccessDeniedError, ToolCircuitBreakerOpenError } from './mcp/errors.js';
 export { MCPConnectionManager } from './mcp/connection-manager.js';
 export type { ToolResolver, TaintedToolResult as MCPTaintedToolResult, MCPConnectionManagerOptions } from './mcp/connection-manager.js';
+export { ToolCircuitBreakerManager } from './mcp/tool-circuit-breaker.js';
+export type {
+  ToolCircuitBreakerOptions,
+  ToolCircuitBreakerStatus,
+  ToolCircuitBreakerState,
+  ToolCircuitBreakerMetrics,
+} from './mcp/tool-circuit-breaker.js';
 export {
   registerDefaultMCPServers,
   DEFAULT_MCP_SERVERS,

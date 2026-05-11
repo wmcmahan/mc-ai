@@ -100,6 +100,7 @@ export async function executeSubgraphNode(
     max_iterations: config.max_iterations,
     compensation_stack: [],
     supervisor_history: [],
+    memory_drops: [],
     _cost_alert_thresholds_fired: [],
   };
 

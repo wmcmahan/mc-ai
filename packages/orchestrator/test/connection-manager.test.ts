@@ -426,4 +426,92 @@ describe('MCPConnectionManager', () => {
       expect(tools).not.toHaveProperty('nonexistent_tool');
     });
   });
+
+  // ── Per-Tool Circuit Breaker Integration ──
+
+  describe('per-tool circuit breaker', () => {
+    it('records success and failure metrics through the wrapped execute', async () => {
+      await registry.register(httpServer);
+      const mgr = new MCPConnectionManager(registry, {
+        tool_circuit_breaker: { failure_threshold: 100 },
+      });
+      const tools = await mgr.resolveTools([{ type: 'mcp', server_id: 'server1' }]);
+      const search = tools.search as { execute: (args: unknown) => Promise<unknown> };
+
+      await search.execute({ q: 'hello' });
+      await search.execute({ q: 'world' });
+
+      const metrics = mgr.getToolCircuitMetrics();
+      const searchMetrics = metrics.find(m => m.tool_name === 'search');
+      expect(searchMetrics?.total_calls).toBe(2);
+      expect(searchMetrics?.total_successes).toBe(2);
+      expect(searchMetrics?.total_failures).toBe(0);
+      expect(searchMetrics?.status).toBe('closed');
+    });
+
+    it('opens the breaker after failure_threshold consecutive failures', async () => {
+      // Swap the mock BEFORE the manager resolves tools so the wrapper closes
+      // over a failing execute reference.
+      const original = mockTools.search.execute;
+      mockTools.search.execute = async () => { throw new Error('upstream failure'); };
+      try {
+        await registry.register(httpServer);
+        const mgr = new MCPConnectionManager(registry, {
+          tool_circuit_breaker: { failure_threshold: 3, cooldown_ms: 60_000 },
+        });
+        const tools = await mgr.resolveTools([{ type: 'mcp', server_id: 'server1' }]);
+        const search = tools.search as { execute: (args: unknown) => Promise<unknown> };
+
+        await expect(search.execute({})).rejects.toThrow('upstream failure');
+        await expect(search.execute({})).rejects.toThrow('upstream failure');
+        await expect(search.execute({})).rejects.toThrow('upstream failure');
+
+        // 4th call should be refused by the breaker, not by the upstream
+        await expect(search.execute({})).rejects.toThrow(/Circuit breaker open/);
+
+        const metrics = mgr.getToolCircuitMetrics();
+        const searchMetrics = metrics.find(m => m.tool_name === 'search');
+        expect(searchMetrics?.status).toBe('open');
+        expect(searchMetrics?.total_failures).toBe(3);
+      } finally {
+        mockTools.search.execute = original;
+      }
+    });
+
+    it('does not record or check when tool_circuit_breaker is null', async () => {
+      await registry.register(httpServer);
+      const mgr = new MCPConnectionManager(registry, { tool_circuit_breaker: null });
+      const tools = await mgr.resolveTools([{ type: 'mcp', server_id: 'server1' }]);
+      const search = tools.search as { execute: (args: unknown) => Promise<unknown> };
+
+      await search.execute({ q: 'hello' });
+      expect(mgr.getToolCircuitMetrics()).toEqual([]);
+    });
+
+    it('isolates breaker state per (server, tool) pair', async () => {
+      await registry.register(httpServer);
+      await registry.register(stdioServer);
+      const mgr = new MCPConnectionManager(registry, {
+        tool_circuit_breaker: { failure_threshold: 100 },
+      });
+      const tools = await mgr.resolveTools([
+        { type: 'mcp', server_id: 'server1' },
+        { type: 'mcp', server_id: 'server2' },
+      ]);
+
+      // server1 and server2 both have a 'search' tool → collision → namespaced
+      const s1Search = tools['server1__search'] as { execute: (args: unknown) => Promise<unknown> };
+      const s2Search = tools['server2__search'] as { execute: (args: unknown) => Promise<unknown> };
+
+      await s1Search.execute({});
+      await s1Search.execute({});
+      await s2Search.execute({});
+
+      const metrics = mgr.getToolCircuitMetrics();
+      const s1 = metrics.find(m => m.server_id === 'server1' && m.tool_name === 'search');
+      const s2 = metrics.find(m => m.server_id === 'server2' && m.tool_name === 'search');
+      expect(s1?.total_calls).toBe(2);
+      expect(s2?.total_calls).toBe(1);
+    });
+  });
 });

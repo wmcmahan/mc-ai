@@ -143,5 +143,32 @@ jobs:
 
       - run: npm ci
 
-      - name: Audit production dependencies
-        run: npm audit --omit=dev || true
+      # Fail on high+critical vulnerabilities in production dependencies.
+      # Dev-only advisories are reported but don't block the build (they don't
+      # ship to users). This replaces the previous `|| true` swallow which
+      # silenced even critical issues.
+      - name: Audit production dependencies (fail on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit dev dependencies (report only)
+        run: npm audit --include=dev || true
+
+  integration-smoke:
+    name: Cross-Package Integration Smoke
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      # Exercise the public API across packages so a breaking change to one
+      # package's barrel export is caught here rather than at consumer install.
+      - name: Run cross-package integration smoke
+        run: npx tsx scripts/integration-smoke.ts

@@ -175,10 +175,93 @@ const state = createWorkflowState({
 });
 ```
 
+## `memory:dropped` stream event fires every run
+
+**Symptom:** the runner emits `memory:dropped` events and `state.memory_drops` accumulates entries with `reason: 'oversized'` or `reason: 'non_serializable'`.
+
+**Cause:** an agent is writing a memory value that exceeds `MAX_MEMORY_VALUE_BYTES` (default 1 MB), or it's pushing a value that can't round-trip through `JSON.stringify` (typically a circular reference). The reducer rejects the update and records the drop instead of letting bad state spread.
+
+**Fix:** inspect the dropped key:
+
+```typescript
+for (const drop of state.memory_drops) {
+  console.log(drop); // { key, reason, bytes?, node_id, timestamp }
+}
+```
+
+For oversized values, either trim the agent's output (most common: a long tool result the agent returned verbatim) or raise `MAX_MEMORY_VALUE_BYTES`. For non-serializable values, fix the agent — circular references usually mean an object was wrapped without being unwrapped.
+
+## `ToolCircuitBreakerOpenError`: tool is refusing execution
+
+**Symptom:** an MCP tool throws `ToolCircuitBreakerOpenError` repeatedly. The error message includes a `retryAfterMs`.
+
+**Cause:** the per-tool circuit breaker has tripped — the tool has failed `failure_threshold` (default 5) consecutive times. The breaker stays `open` for `cooldown_ms` (default 30s), then transitions to `half_open` for a single probe.
+
+**Fix:** treat this as a signal that the underlying tool is genuinely unhealthy. Inspect the MCP server's logs. The breaker will auto-close once a probe succeeds. To inspect breaker state across all tools:
+
+```typescript
+const metrics = mcpManager.getToolCircuitMetrics();
+// [{ server_id, tool_name, status, consecutive_failures, ... }]
+```
+
+If you need to bypass the breaker for one tool (e.g. you've verified it's healthy), reset it:
+
+```typescript
+mcpManager['toolBreakers']?.reset(serverId, toolName); // internal API
+```
+
+For deeper details see the [Deployment Guide → Circuit Breakers](/operations/deployment/#circuit-breakers).
+
+## `EmbeddingDimensionMismatchError`: vector size mismatch
+
+**Symptom:** the memory index throws `EmbeddingDimensionMismatchError` with `expected` and `actual` fields when a query is run or the index is rebuilt.
+
+**Cause:** the embeddings stored in the index don't match the dimensionality the index was configured for. This is almost always a misconfiguration after swapping `EmbeddingProvider` (e.g. moving from text-embedding-3-small at 1536 dims to text-embedding-3-small at 512 dims) without re-embedding existing vectors.
+
+**Fix:** either rebuild the embeddings with the new provider, or revert to the previous dimensionality. If you intentionally need to mix dimensions (you probably don't), construct the index without `expectedDimensions` — but you'll silently get incorrect cosine scores.
+
+```typescript
+const index = new InMemoryMemoryIndex({
+  expectedDimensions: embeddingProvider.dimensions, // ← wire from the provider
+});
+```
+
+## `Graph validation failed: condition expression has syntax error`
+
+**Symptom:** `validateGraph()` returns `valid: false` with an error like `Edge 'edge-1': condition expression '(((' has syntax error: ...`.
+
+**Cause:** an edge `condition` is a malformed filtrex expression. Previously this was a warning and the broken expression silently evaluated to `false` at runtime — misrouting your workflow. As of Wave 2, it's a hard error at graph load.
+
+**Fix:** check the expression against the filtrex grammar. Common issues:
+
+- Mismatched parentheses (`(((`).
+- Using `&&` / `||` instead of `and` / `or`.
+- Referencing a function not in the supported set: `length`, `lower`, `upper`, `typeof`, `includes`, `number`.
+
+```typescript
+// ❌ wrong
+'memory.confidence > 0.8 && length(memory.results) > 0'
+
+// ✅ right
+'memory.confidence > 0.8 and length(memory.results) > 0'
+```
+
+Single-quoted string literals are accepted (normalized to double quotes internally).
+
+## Postgres save fails with `unique_violation` on workflow_states
+
+**Symptom:** rarely, a save to `workflow_states` fails with Postgres SQLSTATE `23505` on the `uq_workflow_states_run_version` constraint.
+
+**Cause:** two GraphRunner instances raced on `MAX(version)+1` for the same `run_id`. As of Wave 3, the adapter automatically retries this with full-jitter exponential backoff (up to 5 retries). If you still see this error surfacing to your caller, retry exhaustion means the race is persistent — most likely two workers are racing on the same run.
+
+**Fix:** ensure only one runner is active per `run_id` at a time. If you need fan-out, give each worker its own `run_id`.
+
 ## Where to look next
 
 If your error isn't here, check:
 
 - [Error Handling](/concepts/error-handling/) — full error class reference and recovery patterns.
+- [Configuration Reference](/operations/configuration/) — every tuning knob.
+- [Deployment Guide](/operations/deployment/) — production wiring, retention, observability.
 - [Security](/security/) — what permissions and budgets actually enforce.
 - [Tools & MCP](/concepts/tools-and-mcp/) — MCP transport, registry, and access control.

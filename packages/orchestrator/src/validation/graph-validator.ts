@@ -20,8 +20,9 @@
  * @module validation/graph-validator
  */
 
-import { compileExpression, useDotAccessOperatorAndOptionalChaining } from 'filtrex';
+import { compileExpression } from 'filtrex';
 import type { Graph, GraphNode, GraphEdge } from '../types/graph.js';
+import { FILTREX_COMPILE_OPTIONS, normalizeConditionExpression } from '../runner/conditions.js';
 
 /**
  * Result of a graph validation pass.
@@ -107,15 +108,23 @@ export function validateGraph(graph: Graph): ValidationResult {
       warnings.push(`Edge '${edge.id}': conditional edge is missing a condition expression (will always evaluate to false)`);
     }
 
-    // Try-parse conditional expressions to catch syntax errors early
-    if (edge.condition?.type === 'conditional' && edge.condition.condition) {
+    // Try-parse conditional expressions at load time so syntax errors fail
+    // graph validation rather than silently returning `false` mid-run and
+    // misrouting execution. The validator uses the same compile options as
+    // the runtime evaluator (extra functions, dot-access), so any expression
+    // that passes here will also compile at evaluation time.
+    if (
+      (edge.condition?.type === 'conditional' || edge.condition?.type === 'map') &&
+      edge.condition.condition
+    ) {
       try {
-        compileExpression(edge.condition.condition, {
-          customProp: useDotAccessOperatorAndOptionalChaining,
-        });
+        compileExpression(
+          normalizeConditionExpression(edge.condition.condition),
+          FILTREX_COMPILE_OPTIONS,
+        );
       } catch (e) {
-        warnings.push(
-          `Edge '${edge.id}': condition expression '${edge.condition.condition}' has syntax error: ${e instanceof Error ? e.message : String(e)}`
+        errors.push(
+          `Edge '${edge.id}': condition expression '${edge.condition.condition}' has syntax error: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
     }

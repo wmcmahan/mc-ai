@@ -12,10 +12,37 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import type { EventLogWriter } from '@cycgraph/orchestrator';
 import type { NewWorkflowEvent, WorkflowEvent, Action, WorkflowState } from '@cycgraph/orchestrator';
 
+/** Tuning knobs for the event log writer. */
+export interface DrizzleEventLogWriterOptions {
+  /**
+   * How many checkpoints per run to retain. Older checkpoints are pruned
+   * inside the same transaction as the new write. The minimum useful value
+   * is 1 (always keep at least the latest, which is what `loadCheckpoint`
+   * reads). Set to a higher value if you want a small buffer for forensics
+   * or differential debugging.
+   * @default 3
+   */
+  retain_checkpoints?: number;
+}
+
+const DEFAULT_RETAIN_CHECKPOINTS = 3;
+
 /**
  * Production event log writer backed by the `workflow_events` PostgreSQL table.
  */
 export class DrizzleEventLogWriter implements EventLogWriter {
+  private readonly retainCheckpoints: number;
+
+  constructor(options?: DrizzleEventLogWriterOptions) {
+    const retain = options?.retain_checkpoints ?? DEFAULT_RETAIN_CHECKPOINTS;
+    if (retain < 1) {
+      throw new Error(
+        `DrizzleEventLogWriter: retain_checkpoints must be >= 1 (got ${retain}). ` +
+        `Setting to 0 would orphan the run from any usable replay anchor.`,
+      );
+    }
+    this.retainCheckpoints = retain;
+  }
   async append(event: NewWorkflowEvent): Promise<void> {
     await db.insert(workflow_events).values({
       run_id: event.run_id,
@@ -62,11 +89,42 @@ export class DrizzleEventLogWriter implements EventLogWriter {
   }
 
   async checkpoint(run_id: string, sequenceId: number, state: WorkflowState): Promise<void> {
-    await db.insert(workflow_checkpoints).values({
-      run_id,
-      sequence_id: sequenceId,
-      state: toSerializable(state) as WorkflowStateJson,
-      created_at: new Date(),
+    // Insert the new checkpoint AND prune older ones beyond the retention
+    // window inside a single transaction. Doing this lazily on each write
+    // means the checkpoint table never grows unbounded for a long-running
+    // workflow with frequent checkpoints. Cap is enforced per run_id, so
+    // pruning one run never affects another.
+    await db.transaction(async (tx) => {
+      await tx.insert(workflow_checkpoints).values({
+        run_id,
+        sequence_id: sequenceId,
+        state: toSerializable(state) as WorkflowStateJson,
+        created_at: new Date(),
+      });
+
+      // Identify the IDs to keep (the latest N by sequence_id) and delete
+      // the rest. Using `inArray(...).not()` would be simpler but Drizzle's
+      // notInArray helper isn't ergonomic across versions; a NOT IN subquery
+      // is more portable.
+      const keepIds = await tx
+        .select({ id: workflow_checkpoints.id })
+        .from(workflow_checkpoints)
+        .where(eq(workflow_checkpoints.run_id, run_id))
+        .orderBy(desc(workflow_checkpoints.sequence_id))
+        .limit(this.retainCheckpoints);
+
+      if (keepIds.length === this.retainCheckpoints) {
+        // Only prune when we actually have more than the retention count —
+        // skips the DELETE entirely on the first N writes for a run.
+        await tx
+          .delete(workflow_checkpoints)
+          .where(
+            and(
+              eq(workflow_checkpoints.run_id, run_id),
+              sql`${workflow_checkpoints.id} NOT IN (${sql.join(keepIds.map(k => sql`${k.id}`), sql`, `)})`,
+            ),
+          );
+      }
     });
   }
 

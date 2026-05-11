@@ -937,6 +937,7 @@ export class GraphRunner extends EventEmitter {
 
         // Capture memory before reducer for diff computation
         const memoryBefore = this.state.memory;
+        const memoryDropsLengthBefore = this.state.memory_drops?.length ?? 0;
 
         // Apply action via reducer
         this.state = rootReducer(this.state, action);
@@ -944,6 +945,29 @@ export class GraphRunner extends EventEmitter {
         // Compute memory diff
         const memoryAfter = this.state.memory;
         const memoryDiff = this.computeMemoryDiff(memoryBefore, memoryAfter);
+
+        // Surface any new memory drops as stream events. The reducer records
+        // drops in `state.memory_drops` (durable audit log); the stream event
+        // is the live notification path.
+        const newDrops = (this.state.memory_drops ?? []).slice(memoryDropsLengthBefore);
+        for (const drop of newDrops) {
+          yield {
+            type: 'memory:dropped',
+            run_id: this.state.run_id,
+            node_id: drop.node_id ?? currentNode.id,
+            key: drop.key,
+            reason: drop.reason,
+            ...(drop.bytes !== undefined ? { bytes: drop.bytes } : {}),
+            timestamp: Date.now(),
+          };
+          logger.warn('memory_dropped', {
+            run_id: this.state.run_id,
+            node_id: drop.node_id ?? currentNode.id,
+            key: drop.key,
+            reason: drop.reason,
+            bytes: drop.bytes,
+          });
+        }
 
         // Hook: afterReduce — observational, after reducer
         if (mwCtx) {
@@ -1019,7 +1043,7 @@ export class GraphRunner extends EventEmitter {
             run_id: this.state.run_id,
           });
           yield {
-            type: 'workflow:paused' as any,
+            type: 'workflow:paused',
             workflow_id: this.state.workflow_id,
             run_id: this.state.run_id,
             state: this.state,
@@ -1964,6 +1988,7 @@ export class GraphRunner extends EventEmitter {
         max_execution_time_ms: 3600000,
         compensation_stack: [],
         supervisor_history: [],
+        memory_drops: [],
         created_at: events[0].created_at,
         updated_at: events[0].created_at,
       };

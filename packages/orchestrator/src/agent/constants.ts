@@ -1,29 +1,24 @@
 /**
  * Agent System Constants
  *
- * Centralizes configuration defaults that were previously hardcoded
- * across the agent subsystem. Environment variable overrides are
- * supported for operational tuning without code changes.
+ * Domain constants for the agent subsystem (model identifiers, default prompt
+ * text, etc.) live here. Operational tuning knobs (timeouts, cache sizes, byte
+ * caps) live in `runtime-config.ts` and are re-exported below for backwards
+ * compatibility.
  *
  * @module agent/constants
  */
 
-// ─── Cache ──────────────────────────────────────────────────────────────
+// ─── Operational knobs (re-exported from runtime-config) ────────────────
 
-/** Config cache TTL in milliseconds (default: 5 minutes). */
-export const AGENT_CONFIG_CACHE_TTL_MS =
-  parseInt(process.env.AGENT_CONFIG_CACHE_TTL_MS ?? '', 10) || 5 * 60 * 1000;
-
-/** Max number of agent configs to keep in cache (default: 100). */
-export const MAX_AGENT_CONFIG_CACHE_SIZE =
-  parseInt(process.env.MAX_AGENT_CONFIG_CACHE_SIZE ?? '', 10) || 100;
-
-/**
- * Shorter TTL for fallback configs so DB recovery is detected sooner
- * (default: 30 seconds).
- */
-export const FALLBACK_CONFIG_CACHE_TTL_MS =
-  parseInt(process.env.FALLBACK_CONFIG_CACHE_TTL_MS ?? '', 10) || 30 * 1000;
+export {
+  AGENT_CONFIG_CACHE_TTL_MS,
+  MAX_AGENT_CONFIG_CACHE_SIZE,
+  FALLBACK_CONFIG_CACHE_TTL_MS,
+  DEFAULT_AGENT_TIMEOUT_MS,
+  MAX_MEMORY_PROMPT_BYTES,
+  MAX_MEMORY_VALUE_BYTES,
+} from '../runtime-config.js';
 
 // ─── Default Agent Config ───────────────────────────────────────────────
 
@@ -93,16 +88,3 @@ export const PROVIDERS_MODELS = {
   'ollama': OLLAMA_MODELS,
 } as const;
 
-// ─── Executor ───────────────────────────────────────────────────────────
-
-/** Timeout for a single agent LLM invocation (default: 2 minutes). */
-export const DEFAULT_AGENT_TIMEOUT_MS =
-  parseInt(process.env.AGENT_TIMEOUT_MS ?? '', 10) || 2 * 60 * 1000;
-
-/** Max serialized memory bytes injected into the system prompt (default: 50 KB). */
-export const MAX_MEMORY_PROMPT_BYTES =
-  parseInt(process.env.MAX_MEMORY_PROMPT_BYTES ?? '', 10) || 50 * 1024;
-
-/** Max serialized bytes for a single memory value (default: 1 MB). */
-export const MAX_MEMORY_VALUE_BYTES =
-  parseInt(process.env.MAX_MEMORY_VALUE_BYTES ?? '', 10) || 1024 * 1024;

@@ -19,6 +19,11 @@
 
 import { createLogger } from '../utils/logger.js';
 import { MCPServerNotFoundError, MCPAccessDeniedError } from './errors.js';
+import {
+  ToolCircuitBreakerManager,
+  type ToolCircuitBreakerMetrics,
+  type ToolCircuitBreakerOptions,
+} from './tool-circuit-breaker.js';
 import type { MCPServerRegistry } from '../persistence/interfaces.js';
 import type { ToolSource, MCPServerEntry } from '../types/tools.js';
 import type { TaintMetadata } from '../types/state.js';
@@ -162,6 +167,12 @@ export interface MCPConnectionManagerOptions {
    * Set to 0 to disable (no timeout). @default 30000 (30 seconds)
    */
   default_tool_timeout_ms?: number;
+  /**
+   * Per-tool circuit breaker tuning. Pass `null` to disable per-tool breakers
+   * entirely (the connection-level retry still applies). Omit to use defaults
+   * (5 consecutive failures → 30s cooldown → 2 successes to close).
+   */
+  tool_circuit_breaker?: ToolCircuitBreakerOptions | null;
 }
 
 /** Cached tool manifest entry. */
@@ -183,11 +194,29 @@ export class MCPConnectionManager implements ToolResolver {
   private readonly toolCache = new Map<string, ToolCacheEntry>();
   private readonly cacheTtlMs: number;
   private readonly defaultToolTimeoutMs: number;
+  /**
+   * Per-tool circuit breaker. `null` means the operator explicitly disabled
+   * breakers via `tool_circuit_breaker: null` in the options; tool execution
+   * skips the check/record path entirely in that case.
+   */
+  private readonly toolBreakers: ToolCircuitBreakerManager | null;
 
   constructor(registry: MCPServerRegistry, options?: MCPConnectionManagerOptions) {
     this.registry = registry;
     this.cacheTtlMs = options?.cache_ttl_ms ?? DEFAULT_CACHE_TTL_MS;
     this.defaultToolTimeoutMs = options?.default_tool_timeout_ms ?? 30_000;
+    this.toolBreakers = options?.tool_circuit_breaker === null
+      ? null
+      : new ToolCircuitBreakerManager(options?.tool_circuit_breaker ?? undefined);
+  }
+
+  /**
+   * Snapshot of every per-tool breaker tracked by this manager.
+   * Use for `/metrics` endpoints, dashboards, or asserting in tests.
+   * Returns an empty array if breakers are disabled.
+   */
+  getToolCircuitMetrics(): ToolCircuitBreakerMetrics[] {
+    return this.toolBreakers?.getMetrics() ?? [];
   }
 
   /**
@@ -479,26 +508,37 @@ export class MCPConnectionManager implements ToolResolver {
     return {
       ...tool,
       execute: async (args: unknown): Promise<unknown> => {
-        let result: unknown;
+        // Refuse execution upfront if the per-tool breaker is open.
+        // Throws ToolCircuitBreakerOpenError; the agent executor catches the
+        // tool error and surfaces it to the LLM as a normal tool-call failure.
+        this.toolBreakers?.check(serverId, toolName);
 
-        if (toolTimeoutMs > 0) {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), toolTimeoutMs);
-          try {
-            result = await Promise.race([
-              originalExecute(args),
-              new Promise<never>((_, reject) => {
-                controller.signal.addEventListener('abort', () => {
-                  reject(new Error(`MCP tool "${toolName}" on server "${serverId}" timed out after ${toolTimeoutMs}ms`));
-                }, { once: true });
-              }),
-            ]);
-          } finally {
-            clearTimeout(timeoutId);
+        let result: unknown;
+        try {
+          if (toolTimeoutMs > 0) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), toolTimeoutMs);
+            try {
+              result = await Promise.race([
+                originalExecute(args),
+                new Promise<never>((_, reject) => {
+                  controller.signal.addEventListener('abort', () => {
+                    reject(new Error(`MCP tool "${toolName}" on server "${serverId}" timed out after ${toolTimeoutMs}ms`));
+                  }, { once: true });
+                }),
+              ]);
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          } else {
+            result = await originalExecute(args);
           }
-        } else {
-          result = await originalExecute(args);
+        } catch (err) {
+          this.toolBreakers?.recordFailure(serverId, toolName);
+          throw err;
         }
+
+        this.toolBreakers?.recordSuccess(serverId, toolName);
 
         const taintKey = `${serverId}:${toolName}`;
         this.taintEntries.set(taintKey, {

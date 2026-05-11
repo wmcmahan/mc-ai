@@ -60,8 +60,11 @@ export async function runEvals(config: EvalRunConfig): Promise<EvalResult> {
   // Determine which suites to load
   const suitesToLoad = config.suites ?? ['context-engine', 'memory', 'orchestrator'] as SuiteName[];
 
-  // Run deterministic track (no LLM needed, fast, free)
+  // Run deterministic track (no LLM needed, fast, free).
+  // Track which suites failed to load so we can surface it in the report and
+  // avoid the "empty suite => trivially passing" failure mode.
   const deterministicResults: TestCaseResults[] = [];
+  const suiteLoadErrors: Array<{ suite: string; phase: 'deterministic' | 'semantic'; error: string }> = [];
   for (const suiteName of suitesToLoad) {
     try {
       const mod = await import(`../suites/${suiteName}/suite.js`) as SuiteModule;
@@ -69,13 +72,33 @@ export async function runEvals(config: EvalRunConfig): Promise<EvalResult> {
         const results = await mod.runDeterministic();
         deterministicResults.push(...results);
       }
-    } catch {
-      // Suite has no deterministic track or failed to load — continue
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Distinguish "suite has no deterministic track" (a normal absence) from
+      // "suite module failed to import or threw". The former should be silent;
+      // the latter must be visible.
+      const isMissingModule =
+        message.includes('Cannot find module') ||
+        message.includes('ERR_MODULE_NOT_FOUND') ||
+        message.includes('Failed to load url');
+      if (!isMissingModule) {
+        console.error(`[eval] Deterministic track for suite "${suiteName}" failed: ${message}`);
+        suiteLoadErrors.push({ suite: suiteName, phase: 'deterministic', error: message });
+      }
     }
   }
 
-  // Load semantic suites (may throw for stubs — collect only successful ones)
-  const suites = await loadSuites(provider, config.suites).catch(() => []);
+  // Load semantic suites. A bare `.catch(() => [])` here silently swallows
+  // load failures and causes evals to "pass" with zero tests. Instead, log the
+  // failure, record it, and let downstream gating decide whether to fail.
+  let suites: Awaited<ReturnType<typeof loadSuites>> = [];
+  try {
+    suites = await loadSuites(provider, config.suites);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[eval] Semantic suite loading failed: ${message}`);
+    suiteLoadErrors.push({ suite: (config.suites ?? []).join(',') || '<default>', phase: 'semantic', error: message });
+  }
 
   // Flatten all tests across suites
   const allPrompts = suites.flatMap(s => s.prompts);
@@ -150,7 +173,14 @@ export async function runEvals(config: EvalRunConfig): Promise<EvalResult> {
     console.log(annotation);
   }
 
-  return { drift, raw: allResults };
+  if (suiteLoadErrors.length > 0) {
+    console.error(`[eval] ${suiteLoadErrors.length} suite(s) failed to load:`);
+    for (const err of suiteLoadErrors) {
+      console.error(`  - ${err.suite} (${err.phase}): ${err.error}`);
+    }
+  }
+
+  return { drift, raw: allResults, suiteLoadErrors };
 }
 
 // ─── CLI Entry Point ───────────────────────────────────────────────
@@ -171,7 +201,7 @@ async function main(): Promise<void> {
 
   const result = await runEvals({ mode, suites });
 
-  if (!result.drift.passed) {
+  if (!result.drift.passed || result.suiteLoadErrors.length > 0) {
     process.exitCode = 1;
   }
 }

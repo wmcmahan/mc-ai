@@ -43,3 +43,39 @@ export class MCPAccessDeniedError extends Error {
     this.name = 'MCPAccessDeniedError';
   }
 }
+
+/**
+ * Thrown when a per-tool circuit breaker is open and refusing execution.
+ *
+ * A tool's breaker opens after `failure_threshold` consecutive failures and
+ * stays open for `cooldown_ms`. After the cooldown the next call enters
+ * `half_open` — a single probe is allowed, success closes the breaker,
+ * failure re-opens it.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await tool.execute(args);
+ * } catch (err) {
+ *   if (err instanceof ToolCircuitBreakerOpenError) {
+ *     // Tool is unhealthy — pick a fallback or skip this call
+ *   }
+ * }
+ * ```
+ */
+export class ToolCircuitBreakerOpenError extends Error {
+  constructor(
+    /** The MCP server hosting the tool. */
+    public readonly serverId: string,
+    /** The tool name (un-namespaced — same as in `tools()` output). */
+    public readonly toolName: string,
+    /** Wall-clock ms remaining before the breaker transitions to half-open. */
+    public readonly retryAfterMs: number,
+  ) {
+    super(
+      `Circuit breaker open for MCP tool "${toolName}" on server "${serverId}". ` +
+      `Retry after ${retryAfterMs}ms.`,
+    );
+    this.name = 'ToolCircuitBreakerOpenError';
+  }
+}

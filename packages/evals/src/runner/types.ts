@@ -59,6 +59,13 @@ export interface DriftReport {
 
 // ─── Eval Result ───────────────────────────────────────────────────
 
+/** A suite that failed to load. Surfaced so a CI failure looks like a failure. */
+export interface SuiteLoadError {
+  suite: string;
+  phase: 'deterministic' | 'semantic';
+  error: string;
+}
+
 /**
  * Complete result of an eval run.
  *
@@ -71,4 +78,11 @@ export interface EvalResult {
 
   /** Raw promptfoo evaluation summary. */
   raw: unknown;
+
+  /**
+   * Any suites that failed to load. Non-empty values should be treated as a
+   * gate failure by callers — a missing suite produces zero tests and would
+   * otherwise pass the drift gate trivially.
+   */
+  suiteLoadErrors: SuiteLoadError[];
 }

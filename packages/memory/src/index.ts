@@ -65,7 +65,8 @@ export type { EmbeddingProvider } from './interfaces/embedding-provider.js';
 // Zero-dependency implementations for testing and lightweight use
 
 export { InMemoryMemoryStore } from './store/in-memory-store.js';
-export { InMemoryMemoryIndex } from './search/in-memory-index.js';
+export { InMemoryMemoryIndex, EmbeddingDimensionMismatchError, IN_MEMORY_INDEX_WARN_THRESHOLD } from './search/in-memory-index.js';
+export type { InMemoryMemoryIndexOptions } from './search/in-memory-index.js';
 export { batchGetFallback } from './store/batch-mixin.js';
 
 // ─── Hierarchy (xMemory Pipeline) ─────────────────────────────────

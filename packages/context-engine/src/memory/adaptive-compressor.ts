@@ -8,6 +8,7 @@
  * @module memory/adaptive-compressor
  */
 
+import { z } from 'zod';
 import type { CompressionStage, PromptSegment, StageContext, StageResult } from '../pipeline/types.js';
 
 export interface AdaptiveCompressionOptions {
@@ -19,34 +20,48 @@ export interface AdaptiveCompressionOptions {
   maxFactsPerTheme?: number;
   /** Minimum content length to process (shorter segments pass through). */
   minContentLength?: number;
+  /**
+   * Optional callback fired when a memory segment fails schema validation.
+   * Useful for surfacing shape-mismatch warnings to a structured logger
+   * instead of letting the segment silently pass through unchanged.
+   */
+  onShapeMismatch?: (error: z.ZodError, segmentId?: string) => void;
 }
 
-interface ParsedTheme {
-  id: string;
-  label: string;
-  description: string;
-  fact_ids: string[];
-}
+// ─── Memory Payload Schema ──────────────────────────────────────────
+//
+// The AdaptiveMemoryStage expects segments with `role === 'memory'` to contain
+// a JSON-serialised payload shaped like `MemoryRetrievalResult` from
+// `@cycgraph/memory`. Validating with Zod here means a shape mismatch fails
+// loudly (via `onShapeMismatch`) instead of silently bypassing compression.
 
-interface ParsedFact {
-  id: string;
-  content: string;
-  valid_from: string | Date;
-  [key: string]: unknown;
-}
+const ParsedThemeSchema = z.object({
+  id: z.string(),
+  label: z.string().optional().default(''),
+  description: z.string().optional().default(''),
+  fact_ids: z.array(z.string()).optional().default([]),
+}).passthrough();
 
-interface MemoryStructure {
-  themes?: ParsedTheme[];
-  facts?: ParsedFact[];
-  entities?: unknown[];
-  relationships?: unknown[];
-}
+const ParsedFactSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  // `valid_from` may arrive as an ISO string (post-JSON.parse) or a Date.
+  valid_from: z.union([z.string(), z.date()]),
+}).passthrough();
 
-function isMemoryStructure(data: unknown): data is MemoryStructure {
-  if (typeof data !== 'object' || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return Array.isArray(obj.themes) || Array.isArray(obj.facts);
-}
+const MemoryStructureSchema = z.object({
+  themes: z.array(ParsedThemeSchema).optional(),
+  facts: z.array(ParsedFactSchema).optional(),
+  entities: z.array(z.unknown()).optional(),
+  relationships: z.array(z.unknown()).optional(),
+}).passthrough().refine(
+  (v) => Array.isArray(v.themes) || Array.isArray(v.facts),
+  { message: 'memory payload must contain either themes[] or facts[]' },
+);
+
+type ParsedTheme = z.infer<typeof ParsedThemeSchema>;
+type ParsedFact = z.infer<typeof ParsedFactSchema>;
+type MemoryStructure = z.infer<typeof MemoryStructureSchema>;
 
 /**
  * Creates an adaptive memory compression stage.
@@ -63,6 +78,7 @@ export function createAdaptiveMemoryStage(options?: AdaptiveCompressionOptions):
   const recencyMultiplier = options?.recencyMultiplier ?? 2.0;
   const maxFactsPerTheme = options?.maxFactsPerTheme ?? 10;
   const minContentLength = options?.minContentLength ?? 0;
+  const onShapeMismatch = options?.onShapeMismatch;
 
   return {
     name: 'adaptive-memory',
@@ -79,16 +95,25 @@ export function createAdaptiveMemoryStage(options?: AdaptiveCompressionOptions):
         if (segment.content.length < minContentLength) return segment;
 
         // Try to parse as JSON
-        let data: unknown;
+        let rawData: unknown;
         try {
-          data = JSON.parse(segment.content);
+          rawData = JSON.parse(segment.content);
         } catch {
           // Invalid JSON — pass through unchanged
           return segment;
         }
 
-        // Check for expected structure
-        if (!isMemoryStructure(data)) return segment;
+        // Validate shape against MemoryStructureSchema. A `safeParse` failure
+        // means the segment is `role: 'memory'` but the payload doesn't match
+        // what this stage knows how to compress. Surface it via the
+        // shape-mismatch callback so callers can see the Zod error instead of
+        // having the stage silently no-op.
+        const parsed = MemoryStructureSchema.safeParse(rawData);
+        if (!parsed.success) {
+          onShapeMismatch?.(parsed.error, segment.id);
+          return segment;
+        }
+        const data: MemoryStructure = parsed.data;
 
         const themes = data.themes ?? [];
         const facts = data.facts ?? [];

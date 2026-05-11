@@ -213,6 +213,19 @@ export type TerminalStreamEvent =
   | WorkflowTimeoutEvent
   | WorkflowWaitingEvent;
 
+export interface MemoryDroppedEvent {
+  type: 'memory:dropped';
+  run_id: string;
+  node_id?: string;
+  /** The memory key that was dropped from the update. */
+  key: string;
+  /** Why the value was dropped. */
+  reason: 'oversized' | 'non_serializable';
+  /** Serialized size in bytes (only set when `reason === 'oversized'`). */
+  bytes?: number;
+  timestamp: number;
+}
+
 export type StreamEvent =
   | WorkflowStartEvent
   | WorkflowCompleteEvent
@@ -232,7 +245,8 @@ export type StreamEvent =
   | ToolCallFinishEvent
   | BudgetThresholdReachedEvent
   | ModelResolvedEvent
-  | ContextCompressedEvent;
+  | ContextCompressedEvent
+  | MemoryDroppedEvent;
 
 /**
  * Type guard: narrows to terminal events that carry `state: WorkflowState`.

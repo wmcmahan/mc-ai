@@ -268,6 +268,53 @@ describe('createAdaptiveMemoryStage', () => {
     expect(output).not.toMatch(/  /); // no double spaces (from indent)
   });
 
+  it('invokes onShapeMismatch when memory segment fails MemoryStructureSchema', () => {
+    const mismatches: Array<{ segmentId?: string; issueCount: number }> = [];
+    const stage = createAdaptiveMemoryStage({
+      onShapeMismatch: (error, segmentId) => {
+        mismatches.push({ segmentId, issueCount: error.issues.length });
+      },
+    });
+
+    // Valid JSON but missing both `themes` and `facts` — fails the refine().
+    const content = JSON.stringify({ unrelated: { shape: true } });
+
+    const result = stage.execute([seg('bad-shape', content)], makeContext());
+
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0].segmentId).toBe('bad-shape');
+    expect(mismatches[0].issueCount).toBeGreaterThan(0);
+    // Segment passes through unchanged when shape is wrong
+    expect(result.segments[0].content).toBe(content);
+  });
+
+  it('does not invoke onShapeMismatch when JSON parse fails (separate pass-through path)', () => {
+    const mismatches: Array<unknown> = [];
+    const stage = createAdaptiveMemoryStage({
+      onShapeMismatch: (error) => mismatches.push(error),
+    });
+
+    const result = stage.execute([seg('bad-json', 'not valid json {')], makeContext());
+
+    expect(mismatches).toHaveLength(0);
+    expect(result.segments[0].content).toBe('not valid json {');
+  });
+
+  it('does not invoke onShapeMismatch on valid memory payloads', () => {
+    const mismatches: Array<unknown> = [];
+    const stage = createAdaptiveMemoryStage({
+      onShapeMismatch: (error) => mismatches.push(error),
+    });
+
+    const content = memoryJson({
+      themes: [{ id: 't1', label: 'T', description: 'd', fact_ids: ['f1'] }],
+      facts: [{ id: 'f1', content: 'ok', valid_from: daysAgo(1) }],
+    });
+
+    stage.execute([seg('good', content)], makeContext());
+    expect(mismatches).toHaveLength(0);
+  });
+
   it('all original facts preserved when under maxFactsPerTheme', () => {
     const stage = createAdaptiveMemoryStage({ maxFactsPerTheme: 10, recencyBoostDays: 0 });
     const content = memoryJson({

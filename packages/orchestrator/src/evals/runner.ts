@@ -138,6 +138,7 @@ function buildInitialState(evalCase: EvalCase): WorkflowState {
     max_iterations: 50,
     compensation_stack: [],
     supervisor_history: [],
+    memory_drops: [],
     _cost_alert_thresholds_fired: [],
   };
 }

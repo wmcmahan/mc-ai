@@ -18,8 +18,55 @@ import type { EdgeCondition } from '../types/graph.js';
 import type { WorkflowState } from '../types/state.js';
 import { createLogger } from '../utils/logger.js';
 import { getTaintRegistry } from '../utils/taint.js';
+import { FILTREX_CACHE_SIZE } from '../runtime-config.js';
 
 const logger = createLogger('runner.conditions');
+
+// ─── Filtrex Configuration ──────────────────────────────────────────
+
+/**
+ * Shared filtrex compile options. Used by both the runtime evaluator
+ * and the graph validator so that `validateGraph()` rejects exactly the
+ * set of expressions that `evaluateCondition()` cannot evaluate.
+ */
+export const FILTREX_EXTRA_FUNCTIONS = {
+  length: (val: unknown) =>
+    Array.isArray(val) ? val.length : typeof val === 'string' ? val.length : 0,
+  lower: (val: unknown) =>
+    typeof val === 'string' ? val.toLowerCase() : val,
+  upper: (val: unknown) =>
+    typeof val === 'string' ? val.toUpperCase() : val,
+  typeof: (val: unknown) =>
+    val === null ? 'null' : typeof val,
+  includes: (arr: unknown, val: unknown) =>
+    Array.isArray(arr) ? arr.includes(val) : false,
+  number: (val: unknown) => {
+    const n = Number(val);
+    return Number.isNaN(n) ? 0 : n;
+  },
+} as const;
+
+export const FILTREX_COMPILE_OPTIONS = {
+  customProp: useDotAccessOperatorAndOptionalChaining,
+  extraFunctions: FILTREX_EXTRA_FUNCTIONS,
+} as const;
+
+/**
+ * Normalize a condition expression to the form that `filtrex` accepts.
+ *
+ * Applied identically by the validator (load time) and the runtime evaluator
+ * so that an expression which passes validation will compile at runtime.
+ *
+ * Transformations:
+ *   - Strip a leading `$.` (legacy JSONPath compatibility).
+ *   - Replace single-quoted string literals with double quotes.
+ */
+export function normalizeConditionExpression(expression: string): string {
+  let normalized = expression;
+  if (normalized.startsWith('$.')) normalized = normalized.slice(2);
+  normalized = normalized.replace(/'/g, '"');
+  return normalized;
+}
 
 // ─── Expression Cache ───────────────────────────────────────────────
 
@@ -28,7 +75,6 @@ const logger = createLogger('runner.conditions');
  * Avoids recompiling the same condition string on every edge evaluation.
  */
 const expressionCache = new Map<string, ReturnType<typeof compileExpression>>();
-const MAX_CACHE_SIZE = 256;
 
 /**
  * Compile and cache a filtrex expression.
@@ -40,28 +86,10 @@ function getCompiledExpression(expression: string): ReturnType<typeof compileExp
   const cached = expressionCache.get(expression);
   if (cached) return cached;
 
-  const fn = compileExpression(expression, {
-    customProp: useDotAccessOperatorAndOptionalChaining,
-    extraFunctions: {
-      length: (val: unknown) =>
-        Array.isArray(val) ? val.length : typeof val === 'string' ? val.length : 0,
-      lower: (val: unknown) =>
-        typeof val === 'string' ? val.toLowerCase() : val,
-      upper: (val: unknown) =>
-        typeof val === 'string' ? val.toUpperCase() : val,
-      typeof: (val: unknown) =>
-        val === null ? 'null' : typeof val,
-      includes: (arr: unknown, val: unknown) =>
-        Array.isArray(arr) ? arr.includes(val) : false,
-      number: (val: unknown) => {
-        const n = Number(val);
-        return Number.isNaN(n) ? 0 : n;
-      },
-    },
-  });
+  const fn = compileExpression(expression, FILTREX_COMPILE_OPTIONS);
 
   // Evict oldest entry if cache is full
-  if (expressionCache.size >= MAX_CACHE_SIZE) {
+  if (expressionCache.size >= FILTREX_CACHE_SIZE) {
     const oldest = expressionCache.keys().next().value;
     if (oldest !== undefined) expressionCache.delete(oldest);
   }
@@ -99,12 +127,7 @@ export function evaluateCondition(
       if (!condition.condition) return false;
 
       try {
-        let expression = condition.condition;
-
-        // Legacy compat: strip leading "$." JSONPath prefix
-        if (expression.startsWith('$.')) {
-          expression = expression.slice(2);
-        }
+        const expression = normalizeConditionExpression(condition.condition);
 
         // Check for tainted keys referenced in the condition expression
         const taintRegistry = getTaintRegistry(state.memory);
@@ -128,10 +151,6 @@ export function evaluateCondition(
             });
           }
         }
-
-        // Filtrex uses double quotes for string literals; convert
-        // single-quoted strings for backward compatibility.
-        expression = expression.replace(/'/g, '"');
 
         const fn = getCompiledExpression(expression);
         const result = fn(state);

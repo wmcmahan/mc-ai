@@ -28,7 +28,12 @@ import {
   ResumeFromHumanPayloadSchema,
   MergeParallelResultsPayloadSchema,
 } from '../types/state.js';
-import { MAX_MEMORY_VALUE_BYTES } from '../agent/constants.js';
+import {
+  MAX_MEMORY_VALUE_BYTES,
+  MAX_SUPERVISOR_HISTORY,
+  MAX_VISITED_NODES,
+  MAX_MEMORY_DROPS,
+} from '../runtime-config.js';
 
 /**
  * Reducer function signature.
@@ -38,34 +43,64 @@ import { MAX_MEMORY_VALUE_BYTES } from '../agent/constants.js';
  */
 export type Reducer = (state: WorkflowState, action: Action) => WorkflowState;
 
-export const MAX_SUPERVISOR_HISTORY = 100;
-export const MAX_VISITED_NODES = 1000;
+// Re-export from runtime-config so existing consumers of `reducers/index.ts`
+// don't break. Prefer importing from `runtime-config.js` in new code.
+export { MAX_SUPERVISOR_HISTORY, MAX_VISITED_NODES, MAX_MEMORY_DROPS };
 
 /**
- * Filter out memory values that exceed {@link MAX_MEMORY_VALUE_BYTES}.
- * Returns a new object with only the values that fit within the size limit.
- * Oversized keys are silently dropped with a console warning (not a crash).
+ * Record of a single memory update rejected by {@link filterOversizedValues}.
+ *
+ * Reducers append these to `state.memory_drops` (bounded by {@link MAX_MEMORY_DROPS})
+ * so callers can inspect them post-run. The {@link GraphRunner} also emits a
+ * `memory:dropped` stream event for each new drop — see `stream-events.ts`.
  */
-function filterOversizedValues(updates: Record<string, unknown>): Record<string, unknown> {
+export interface MemoryDropRecord {
+  key: string;
+  reason: 'oversized' | 'non_serializable';
+  bytes?: number;
+  node_id?: string;
+  timestamp: Date;
+}
+
+/**
+ * Filter out memory values that exceed {@link MAX_MEMORY_VALUE_BYTES} or that
+ * cannot be serialised to JSON. Returns the safe subset alongside a structured
+ * record of every drop so the reducer can append it to `state.memory_drops`.
+ *
+ * Reducers stay pure: drops are surfaced via returned data, not side effects.
+ */
+function filterOversizedValues(
+  updates: Record<string, unknown>,
+  nodeId?: string,
+): { filtered: Record<string, unknown>; drops: MemoryDropRecord[] } {
   const filtered: Record<string, unknown> = {};
+  const drops: MemoryDropRecord[] = [];
+  const now = new Date();
   for (const [key, value] of Object.entries(updates)) {
     try {
       const serialized = JSON.stringify(value);
       if (serialized !== undefined && serialized.length > MAX_MEMORY_VALUE_BYTES) {
-        // Warn but don't crash — the workflow should survive a large value
-        // eslint-disable-next-line no-console
-        console.warn(`[reducer] Dropping oversized memory key "${key}": ${serialized.length} bytes exceeds limit of ${MAX_MEMORY_VALUE_BYTES}`);
+        drops.push({ key, reason: 'oversized', bytes: serialized.length, node_id: nodeId, timestamp: now });
         continue;
       }
     } catch {
-      // Non-serializable values are dropped
-      // eslint-disable-next-line no-console
-      console.warn(`[reducer] Dropping non-serializable memory key "${key}"`);
+      drops.push({ key, reason: 'non_serializable', node_id: nodeId, timestamp: now });
       continue;
     }
     filtered[key] = value;
   }
-  return filtered;
+  return { filtered, drops };
+}
+
+/**
+ * Append memory drop records to a state's ring buffer, keeping only the most
+ * recent {@link MAX_MEMORY_DROPS} entries.
+ */
+function appendMemoryDrops(existing: MemoryDropRecord[] | undefined, drops: MemoryDropRecord[]): MemoryDropRecord[] {
+  const base = existing ?? [];
+  if (drops.length === 0) return base;
+  const merged = [...base, ...drops];
+  return merged.length > MAX_MEMORY_DROPS ? merged.slice(-MAX_MEMORY_DROPS) : merged;
 }
 
 /** Append a node ID to visited_nodes, keeping only the last MAX_VISITED_NODES entries. */
@@ -86,14 +121,15 @@ export const updateMemoryReducer: Reducer = (state, action) => {
   if (action.type !== 'update_memory') return state;
 
   const { updates } = UpdateMemoryPayloadSchema.parse(action.payload);
-  const safeUpdates = filterOversizedValues(updates);
+  const { filtered, drops } = filterOversizedValues(updates, action.metadata?.node_id);
 
   return {
     ...state,
     memory: {
       ...state.memory,
-      ...safeUpdates,
+      ...filtered,
     },
+    memory_drops: appendMemoryDrops(state.memory_drops, drops),
     updated_at: new Date(),
   };
 };
@@ -247,15 +283,16 @@ export const mergeParallelResultsReducer: Reducer = (state, action) => {
   if (action.type !== 'merge_parallel_results') return state;
 
   const { updates, total_tokens } = MergeParallelResultsPayloadSchema.parse(action.payload);
-  const safeUpdates = filterOversizedValues(updates);
+  const { filtered, drops } = filterOversizedValues(updates, action.metadata?.node_id);
   const totalTokens = total_tokens || 0;
 
   return {
     ...state,
     memory: {
       ...state.memory,
-      ...safeUpdates,
+      ...filtered,
     },
+    memory_drops: appendMemoryDrops(state.memory_drops, drops),
     total_tokens_used: (state.total_tokens_used || 0) + totalTokens,
     updated_at: new Date(),
   };
