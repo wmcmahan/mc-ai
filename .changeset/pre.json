@@ -1,0 +1,13 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@cycgraph/benchmarks": "0.0.0",
+    "@cycgraph/context-engine": "0.1.0-beta.1",
+    "@cycgraph/evals": "0.1.0",
+    "@cycgraph/memory": "0.1.0-beta.1",
+    "@cycgraph/orchestrator": "0.1.0-beta.1",
+    "@cycgraph/orchestrator-postgres": "0.1.0-beta.1"
+  },
+  "changesets": []
+}
