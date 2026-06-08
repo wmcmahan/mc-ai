@@ -16,7 +16,6 @@ import { assertToolCallStructure, assertTrajectoryStructure } from '../../src/as
 import { parseJudgeResponse, evaluateMetric, ANSWER_RELEVANCY } from '../../src/assertions/semantic-judge.js';
 import { computeDrift } from '../../src/assertions/drift-calculator.js';
 import { formatReport } from '../../src/runner/reporter.js';
-import { buildAssertions } from '../../src/suites/orchestrator/assertions.js';
 import { createOllamaProvider } from '../../src/providers/ollama.js';
 import { createOpenAIProvider } from '../../src/providers/openai.js';
 import type { TestCaseResults } from '../../src/assertions/drift-calculator.js';
@@ -173,32 +172,6 @@ describe('Full Pipeline Integration', () => {
     });
   });
 
-  describe('suite assertions builder', () => {
-    it('builds llm-rubric assertions for trajectories with tool calls', () => {
-      const trajectory = loadGoldenTrajectories('orchestrator')
-        .find(t => t.expectedToolCalls && t.expectedToolCalls.length > 0);
-      expect(trajectory).toBeDefined();
-
-      const assertions = buildAssertions(trajectory!);
-
-      expect(assertions).toBeDefined();
-      expect(assertions!.length).toBeGreaterThan(0);
-      expect(assertions!.every(a => a.type === 'llm-rubric')).toBe(true);
-    });
-
-    it('builds assertion for no-tools trajectory', () => {
-      const trajectory = loadGoldenTrajectories('orchestrator')
-        .find(t => t.expectedToolCalls && t.expectedToolCalls.length === 0);
-      expect(trajectory).toBeDefined();
-
-      const assertions = buildAssertions(trajectory!);
-
-      expect(assertions!.some(a =>
-        a.value?.includes('without making any tool calls'),
-      )).toBe(true);
-    });
-  });
-
   describe('providers', () => {
     it('creates ollama provider with defaults', () => {
       const provider = createOllamaProvider();
@@ -207,7 +180,7 @@ describe('Full Pipeline Integration', () => {
       expect(provider.mode).toBe('local');
       expect(provider.maxConcurrency).toBe(2);
       expect(provider.estimateCost(100).estimatedUsd).toBe(0);
-      expect(provider.getProviderConfig()).toBeDefined();
+      expect(typeof provider.callJudge).toBe('function');
     });
 
     it('creates openai provider with explicit key', () => {

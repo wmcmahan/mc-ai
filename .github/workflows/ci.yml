@@ -109,8 +109,12 @@ jobs:
         run: npx vitest run
         working-directory: packages/context-engine
 
-  test-evals:
-    name: Test Evals (Deterministic)
+  evals-unit-tests:
+    # Tests the eval harness itself — drift calculator, baseline persistence,
+    # SUT dispatcher, multi-sample wrapper, recording planner, etc. Does NOT
+    # invoke the harness against the other packages; that's the deterministic
+    # gate below.
+    name: Evals — Unit Tests
     runs-on: ubuntu-latest
     needs: lint-and-build
     steps:
@@ -129,6 +133,34 @@ jobs:
       - name: Run evals unit tests
         run: npx vitest run
         working-directory: packages/evals
+
+  evals-deterministic-gate:
+    # Runs the harness against the real @cycgraph/memory, @cycgraph/context-engine,
+    # and integration deterministic tracks. No LLM — pure library calls.
+    # Catches regressions in segmentation, dedup, budget enforcement, temporal
+    # filtering, subgraph extraction, conflict detection, and cross-package
+    # integration. Exit code 1 (drift gate fail) hard-fails the job.
+    name: Evals — Deterministic Gate
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Defensive: the golden datasets are small SQLite blobs committed
+          # directly today, but `lfs: true` keeps this job correct if/when
+          # the goldens migrate to LFS storage.
+          lfs: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Run deterministic eval gate
+        run: npm run evals --workspace=packages/evals -- --deterministic-only
 
   security:
     name: Security Audit

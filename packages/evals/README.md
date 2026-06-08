@@ -1,161 +1,278 @@
 # @cycgraph/evals
 
-Automated eval harness and quality-assurance gatekeeper for `@cycgraph/*` packages. Evaluates whether algorithmic changes in one module silently degrade the reasoning or schema-compliance of another.
+Regression-eval harness and quality-assurance gate for the `@cycgraph/*` packages.
 
-Built on [promptfoo](https://www.promptfoo.dev/) for programmatic test orchestration, with Zod structural assertions and LLM-as-judge semantic evaluation.
+Detects when a change in one package silently degrades the reasoning,
+schema-compliance, or observable behavior of another — and tells you
+whether the regression is real or just sample noise.
 
-## How It Works
+> For detailed concepts, recording workflows, and extension recipes, see
+> the [Eval Harness section in the docs site](https://flattop.io/concepts/eval-harness).
+> This README is the quick-start + API at-a-glance.
 
-The harness runs golden trajectory test suites through a two-layer assertion pipeline:
+---
 
-1. **Zod Structural** — Validates tool calls match expected schemas (correct tool name, required params present, types match). Does **not** assert exact string equality on values.
-2. **Semantic Judge** — An LLM evaluates whether the output's meaning matches expectations using three rubric metrics:
-   - **Answer Relevancy** — Does the output address the input query?
-   - **Faithfulness** — Are conclusions factually consistent with the source?
-   - **Logical Coherence** — Is the reasoning chain logically sound?
+## What it gives you
 
-Results are aggregated into a **Semantic Drift %** metric. If drift exceeds 5%, the PR is blocked.
+- **54 golden trajectories** across 3 suites (`orchestrator`, `memory`, `context-engine`) with stable IDs and provenance
+- **Two assertion tracks**:
+  - **Deterministic** — pure library calls (no LLM): segmentation, dedup, budget, subgraph, conflict detection, etc.
+  - **Semantic** — LLM-as-judge with three built-in rubric metrics (`answer_relevancy`, `faithfulness`, `logical_coherence`) plus three reference-free metrics (`instruction_following`, `output_quality`, `safety`)
+- **Multi-sample evaluation** — distinguishes flaky LLM responses from genuine regressions
+- **Baseline persistence** — compares each run against the prior committed state and flags regressions that hide under the absolute drift ceiling
+- **Recording infrastructure** — re-record any trajectory by running the input through the real System-Under-Test; goldens become observable behavior, not hand-authored intent
+- **Tag-routed dispatch** — `branching` / `supervisor` / `retry` / etc. trajectories pick the right SUT graph automatically
 
-### Reference-Free Evaluation
+---
 
-Metrics that evaluate output quality without a reference answer:
+## Quick start
 
-```typescript
-import { INSTRUCTION_FOLLOWING, OUTPUT_QUALITY, SAFETY } from '@cycgraph/evals';
-
-// - INSTRUCTION_FOLLOWING: Does the output follow instructions?
-// - OUTPUT_QUALITY: Is the output complete, clear, and correct?
-// - SAFETY: No harmful content, PII leakage, or prompt injection?
-```
-
-### Judge Calibration
-
-Verify that your LLM judge scores align with ground-truth expectations:
-
-```typescript
-import { calibrateJudge, getCalibrationSet, ANSWER_RELEVANCY } from '@cycgraph/evals';
-
-const calibrationSet = getCalibrationSet('answer_relevancy');
-const result = await calibrateJudge(calibrationSet, ANSWER_RELEVANCY, callJudge);
-// result.deviation — avg absolute deviation from ground truth
-// result.adjustedThreshold — auto-adjusted if deviation > 0.15
-// result.isCalibrated — true if deviation < 0.15
-```
-
-### Deterministic Assertions
-
-Pure assertions that require no LLM:
-
-```typescript
-import { assertGreaterThanOrEqual, assertSetEquals, assertStable } from '@cycgraph/evals';
-
-assertGreaterThanOrEqual('compression_ratio', 0.35, 0.30, 'Minimum 30% reduction');
-assertSetEquals('required_keys', outputKeys, expectedKeys, 'All keys preserved');
-assertStable('format_determinism', [run1, run2, run3], 'Same output across runs');
-```
-
-## Evals-First Design
-
-Suites define behavioral specification contracts for sibling packages *before* those packages are implemented. When a sibling package ships, it must pass its eval suite.
-
-| Suite | Status | Measures |
-|-------|--------|----------|
-| `orchestrator` | Active | Agent trajectory fidelity |
-| `context-engine` | Active | Compression quality vs token reduction |
-| `memory` | Active | Retrieval precision, temporal filtering |
-| `integration` | Active | Cross-package memory->compression->orchestrator flow |
-
-## Usage
-
-### Local Development (No-Cost)
-
-Requires [Ollama](https://ollama.ai/) running locally:
+### Run the deterministic track (no LLM, <1s)
 
 ```bash
-ollama pull llama3:8b-instruct-q4_K_M
-
-npm run evals --workspace=packages/evals
-# Or filter to a single suite:
-npm run evals --workspace=packages/evals -- --suite orchestrator
+npm run evals --workspace=packages/evals -- --deterministic-only
 ```
 
-### CI (Frontier Verification)
+Runs every library-level test across memory + context-engine + integration.
+Suitable for PR-time gating.
+
+### Run the full semantic gate (CI mode)
 
 ```bash
-npm run evals:ci --workspace=packages/evals
+OPENAI_API_KEY=sk-... npm run evals:ci --workspace=packages/evals
 ```
 
-Requires `OPENAI_API_KEY` environment variable. Uses GPT-4o as the judge. Includes cost estimation — warns before execution if estimated API cost exceeds the threshold.
+Uses GPT-4o as the judge with 3 samples per metric and the OpenAI provider.
+Reports per-suite drift, flaky tests, and baseline delta.
 
-### Unit Tests (Harness Internals)
+### Re-record goldens
 
 ```bash
-npm test --workspace=packages/evals
+# Memory + context-engine — no LLM needed
+npx tsx packages/evals/scripts/record-goldens.ts --suite memory
+npx tsx packages/evals/scripts/record-goldens.ts --suite context-engine
+
+# Orchestrator — requires Anthropic key, real LLM calls
+ANTHROPIC_API_KEY=sk-ant-... \
+  npx tsx packages/evals/scripts/record-goldens.ts --suite orchestrator
+
+# Preview routing without running anything
+npx tsx packages/evals/scripts/record-goldens.ts --suite memory --plan-only
+
+# Actually overwrite the SQLite dataset
+npx tsx packages/evals/scripts/record-goldens.ts --suite memory --commit
 ```
 
-Runs vitest on harness utilities only — does **not** invoke LLM judges.
+A dry-run writes `golden/recording-diff-<suite>.json` with old vs new
+for every trajectory. Inspect that before passing `--commit`.
+
+### Compare against a baseline
+
+```bash
+npm run evals --workspace=packages/evals -- --deterministic-only --baseline
+```
+
+The first run with `--baseline` creates `golden/baselines/main-latest.json`.
+Subsequent runs compare against it and exit with code **2** if any suite
+regressed by more than the noise floor (default 5 percentage points), even
+when the absolute drift ceiling hasn't been crossed.
+
+---
+
+## CLI flags
+
+| Flag | Type | Default | Purpose |
+|------|------|---------|---------|
+| `--mode` | `local \| ci` | `local` | Picks provider (Ollama / GPT-4o) + default concurrency |
+| `--suite` | suite name | (all) | Restrict to a single suite |
+| `--samples` | int | 1 local, 3 ci | Number of judge samples per semantic test |
+| `--deterministic-only` | flag | false | Skip the semantic track entirely (library checks only) |
+| `--baseline` | flag | false | Compare against persisted baseline; persist on pass |
+| `--baseline-noise-floor` | float | 5.0 | Min pp delta to count as a regression |
+| `--sut-model` | string | `claude-sonnet-4-20250514` | Model for the orchestrator SUT |
+| `--commit` | string | (auto) | Short git SHA stamped onto a new baseline snapshot |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Drift gate passed, no baseline regression |
+| 1 | Drift gate failed OR a suite failed to load |
+| 2 | Baseline regression detected, drift gate passed |
+
+---
 
 ## Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | CI only | — | GPT-4o API key |
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `OPENAI_API_KEY` | CI only | — | GPT-4o judge API key |
+| `ANTHROPIC_API_KEY` | Recording only | — | Claude API key for orchestrator recording |
 | `OLLAMA_BASE_URL` | Local only | `http://localhost:11434` | Ollama endpoint |
 | `OLLAMA_MODEL` | Local only | `llama3:8b-instruct-q4_K_M` | Local judge model |
 | `EVAL_MAX_CONCURRENCY` | No | `2` / `8` | Parallel evaluations (local / CI) |
 | `EVAL_DRIFT_CEILING` | No | `5.0` | Drift % gate threshold |
 
-## Golden Dataset
+---
 
-Trajectories are stored as compressed SQLite via Git LFS — not raw JSON in Git. The manifest at `golden/manifest.json` tracks datasets, versions, and checksums.
+## API at a glance
+
+### Assertions
+
+```typescript
+import {
+  // Structural — schema-level checks on tool calls
+  assertToolCallStructure, assertTrajectoryStructure,
+  // Deterministic — pure numeric/set/stability checks
+  assertGreaterThanOrEqual, assertLessThanOrEqual,
+  assertContainsAllKeys, assertSetEquals, assertStable, assertEqual,
+  // Semantic — built-in LLM rubric metrics
+  ANSWER_RELEVANCY, FAITHFULNESS, LOGICAL_COHERENCE, BUILT_IN_METRICS,
+  // Reference-free — score without a comparison output
+  INSTRUCTION_FOLLOWING, OUTPUT_QUALITY, SAFETY, REFERENCE_FREE_METRICS,
+} from '@cycgraph/evals';
+```
+
+### Multi-sample semantic evaluation
+
+```typescript
+import { evaluateMetricMultiSample, ANSWER_RELEVANCY } from '@cycgraph/evals';
+
+const result = await evaluateMetricMultiSample(
+  { input, actualOutput, expectedOutput },
+  ANSWER_RELEVANCY,
+  callJudge,
+  { samples: 3, threshold: 0.8 },
+);
+// { median, stdDev, samples, stable, passed, reasoning }
+```
+
+### Baseline persistence
+
+```typescript
+import {
+  snapshotFromDrift, writeBaseline, loadBaseline,
+  compareBaseline, formatBaselineDelta,
+} from '@cycgraph/evals';
+
+const snapshot = snapshotFromDrift({ drift, driftCeiling: 5, commit: 'abc1234' });
+writeBaseline(snapshot);
+const delta = compareBaseline(snapshot, loadBaseline());
+console.log(formatBaselineDelta(delta));
+```
+
+### Recording
+
+```typescript
+import {
+  runOrchestratorSut, runMemorySut, runContextEngineSut,
+  buildSupervisorGraph, buildSingleAgentGraph, buildBranchingGraph,
+  buildRetryGraph, createFlakyFetch, createRateLimitedCall,
+  planForTrajectory,
+} from '@cycgraph/evals';
+```
+
+### Dataset
+
+```typescript
+import {
+  loadGoldenTrajectories, loadManifest, listAvailableSuites,
+  writeGoldenDataset, createSqliteBuffer, applyMigrations,
+} from '@cycgraph/evals';
+```
+
+### Runner
+
+```typescript
+import { runEvals } from '@cycgraph/evals';
+
+const result = await runEvals({
+  mode: 'local',
+  deterministicOnly: true,
+  baseline: true,
+  samples: 3,
+});
+// { drift, raw, suiteLoadErrors, baselineDelta?, flakyTests? }
+```
+
+---
+
+## Golden dataset
+
+Trajectories are stored as compressed SQLite (`.sqlite.gz`) under `golden/data/`,
+indexed by `golden/manifest.json` with sha256 checksums. The manifest is the
+source of truth for what's recorded; SQLite blobs are the data.
+
+```
+golden/
+├── manifest.json               # Versioned index with sha256
+├── data/
+│   ├── orchestrator-v1.sqlite.gz
+│   ├── memory-v1.sqlite.gz
+│   └── context-engine-v1.sqlite.gz
+└── baselines/                  # (gitignored) per-run baseline snapshots
+    └── main-latest.json
+```
+
+**Schema migration** — when a tool signature changes in a sibling package,
+`scripts/migrate-golden.ts` applies ordered transforms (rename / remove /
+add-required) to keep trajectories in sync without manual replay.
+
+---
+
+## Architecture in one diagram
+
+```
+            ┌────────────────────────────┐
+            │     runEvals(config)       │
+            └─────────────┬──────────────┘
+                          │
+       ┌──────────────────┼──────────────────┐
+       ▼                  ▼                  ▼
+  Deterministic    SUT-driven Semantic    Baseline
+   (static         (runSutDispatch →       (load → compare
+    registry)       evaluateMetricMulti)    → write on pass)
+       │                  │                  │
+       └────────┬─────────┘                  │
+                ▼                            │
+         computeDrift()                      │
+                ▼                            │
+         DriftReport ◄───────────────────────┘
+                ▼
+         formatReport() → stdout + GH annotations
+```
+
+Both tracks are commit-coupled — the deterministic track runs library code
+in-process, and the SUT-driven semantic track runs each trajectory through
+`runSutDispatch` against the real packages, then hands the observed output
+to the judge. The semantic track also runs N independent judge samples
+per metric (when `samples > 1`) and flags tests with inconsistent outcomes
+as **flaky** — distinct from genuine drift.
+
+---
+
+## Development
 
 ```bash
-# Seed golden trajectories (54 total, 18 per suite)
-npx tsx scripts/seed-golden-v2.ts
+# Unit tests for the harness itself
+npm test --workspace=packages/evals
 
-# Fetch/verify dataset (build step)
-npm run fetch-golden --workspace=packages/evals
+# Build
+npm run build --workspace=packages/evals
 
-# Migrate after tool schema changes
-npx tsx scripts/migrate-golden.ts
+# Type check
+npm run lint --workspace=packages/evals
 ```
 
-54 golden trajectories across 4 categories:
-- orchestrator: 18 (linear, branching, error/retry, delegation, budget, state)
-- context-engine: 18 (format, dedup, budget, incremental, adaptive, pipeline)
-- memory: 18 (segmentation, extraction, temporal, subgraph, consolidation, conflict)
+304 unit tests covering assertions, dataset I/O, schema migration, SUT
+dispatch, multi-sample evaluation, baseline persistence/comparison, and
+runner integration.
 
-### Schema Migration
+---
 
-When a tool signature changes in a sibling package, the migration system applies ordered transforms (rename, remove, add required params) to golden trajectory assertions automatically. Required parameter additions are flagged for manual review.
+## Related
 
-## Architecture
-
-```
-runner.ts (CLI entry point)
-  ├── providers/ollama.ts or openai.ts
-  ├── suites/loader.ts
-  │     ├── suites/orchestrator/    (trajectory fidelity)
-  │     ├── suites/context-engine/  (compression quality)
-  │     ├── suites/memory/          (retrieval precision)
-  │     └── suites/integration/     (cross-package flow)
-  ├── assertions/
-  │     ├── zod-structural.ts       (forgiving structural validation)
-  │     ├── semantic-judge.ts       (calibrated LLM-as-judge)
-  │     ├── reference-free-judge.ts (no-reference metrics)
-  │     ├── deterministic.ts        (pure assertions)
-  │     ├── calibration-data.ts     (built-in calibration sets)
-  │     └── drift-calculator.ts     (aggregate drift %)
-  └── reporter.ts                   (terminal + CI annotations)
-```
-
-## Implementation Status
-
-- [x] Phase 1 -- Scaffold and infrastructure
-- [x] Phase 2 -- Golden dataset pipeline (loader, writer, migration)
-- [x] Phase 3 -- Assertion engine (structural, semantic, deterministic, reference-free)
-- [x] Phase 4 -- Providers and runner (Ollama, OpenAI, suite loader, reporter)
-- [x] Phase 5 -- Cross-package test suites (all 4 suites active)
-- [x] Phase 6 -- CI integration (test-evals job in ci.yml)
-
-See [IMPLEMENTATION.md](./IMPLEMENTATION.md) for full technical details and [STRATEGY.md](./STRATEGY.md) for architectural rationale.
+- [`@cycgraph/orchestrator`](../orchestrator/) — the system under test
+- [`@cycgraph/memory`](../memory/) — knowledge-graph SUT
+- [`@cycgraph/context-engine`](../context-engine/) — compression SUT
+- Orchestrator's [internal `runEval`](https://flattop.io/observability/evals/) — lightweight per-graph assertion framework (different from this package's regression harness)

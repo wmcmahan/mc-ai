@@ -81,7 +81,19 @@ export default defineConfig({
           label: 'Observability',
           items: [
             { label: 'Tracing', slug: 'observability/tracing' },
-            { label: 'Evaluations', slug: 'observability/evals' },
+            { label: 'Graph Assertions (runEval)', slug: 'observability/evals' },
+          ],
+        },
+        {
+          label: 'Eval Harness',
+          items: [
+            { label: 'Overview', slug: 'concepts/eval-harness' },
+            { label: 'Assertions', slug: 'concepts/eval-assertions' },
+            { label: 'Drift & Baselines', slug: 'concepts/drift-and-baselines' },
+            { label: 'Running Evals', slug: 'guides/running-eval-harness' },
+            { label: 'Recording Goldens', slug: 'guides/recording-goldens' },
+            { label: 'Adding an Eval Suite', slug: 'guides/adding-eval-suite' },
+            { label: 'Adding a SUT Handler', slug: 'guides/adding-sut-handler' },
           ],
         },
         {

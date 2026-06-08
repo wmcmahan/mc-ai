@@ -1,30 +1,52 @@
 /**
  * Eval Runner
  *
- * Top-level entry point for the eval harness. Selects the provider
- * based on execution mode, loads suites, executes via promptfoo,
- * computes drift, and gates on the result.
+ * Top-level entry point for the eval harness. Runs the deterministic
+ * track in-process and the SUT-driven semantic track against the real
+ * `@cycgraph/*` packages at the current commit. Computes drift,
+ * optionally compares against a persisted baseline, and gates on the
+ * result.
  *
  * Usage:
  *   npx tsx src/runner/runner.ts --mode local
  *   npx tsx src/runner/runner.ts --mode ci
- *   npx tsx src/runner/runner.ts --mode local --suite orchestrator
+ *   npx tsx src/runner/runner.ts --mode local --suite memory
+ *   npx tsx src/runner/runner.ts --deterministic-only
+ *   npx tsx src/runner/runner.ts --mode ci --samples 3 --baseline
+ *
+ * Exit codes:
+ *   0 — drift gate passed, no baseline regression
+ *   1 — drift gate failed OR a suite failed to load
+ *   2 — baseline regression detected but drift gate passed
  *
  * @module runner/runner
  */
 
 import { parseArgs } from 'node:util';
-import { evaluate } from 'promptfoo';
+import { fileURLToPath } from 'node:url';
 import { createOllamaProvider } from '../providers/ollama.js';
 import { createOpenAIProvider } from '../providers/openai.js';
-import { loadSuites } from '../suites/loader.js';
-import type { SuiteModule } from '../suites/loader.js';
 import { computeDrift } from '../assertions/drift-calculator.js';
 import { formatReport } from './reporter.js';
+import { runSutSemanticTrack } from './sut-semantic-track.js';
+import type { SutSemanticOutput } from './sut-semantic-track.js';
+import {
+  snapshotFromDrift,
+  writeBaseline,
+  loadBaseline,
+  compareBaseline,
+  formatBaselineDelta,
+} from '../baseline/index.js';
 import type { EvalRunConfig, EvalResult, DriftReport } from './types.js';
 import type { EvalProvider } from '../providers/types.js';
 import type { SuiteName } from '../dataset/types.js';
 import type { TestCaseResults } from '../assertions/drift-calculator.js';
+import type { SutSuiteConfig } from '../suites/sut-contract.js';
+
+/** Shape of a suite module's deterministic entry point. */
+interface DeterministicSuiteModule {
+  runDeterministic?: () => Promise<TestCaseResults[]>;
+}
 
 // ─── Provider Selection ────────────────────────────────────────────
 
@@ -35,142 +57,271 @@ function selectProvider(config: EvalRunConfig): EvalProvider {
   return createOllamaProvider();
 }
 
+/** Default sample count when the caller doesn't override it. */
+function defaultSamples(mode: 'local' | 'ci'): number {
+  return mode === 'ci' ? 3 : 1;
+}
+
 // ─── Main Runner ───────────────────────────────────────────────────
 
 /**
- * Runs the eval harness.
+ * Run the eval harness.
  *
- * 1. Select provider based on mode
- * 2. Load requested suite(s)
- * 3. Check cost estimate and warn if needed
- * 4. Execute via promptfoo.evaluate()
- * 5. Compute aggregate drift
- * 6. Format and output report
- * 7. Exit with code 1 if drift exceeds ceiling
- *
- * @param config - Run configuration.
- * @returns Eval result with drift report.
+ * @param config - Run configuration. See {@link EvalRunConfig}.
+ * @returns Eval result with drift report, optional baseline delta, and
+ *          any suite-load errors.
  */
 export async function runEvals(config: EvalRunConfig): Promise<EvalResult> {
-  const provider = selectProvider(config);
-  const maxConcurrency = config.maxConcurrency ?? provider.maxConcurrency;
   const driftCeiling = config.driftCeiling
     ?? parseFloat(process.env['EVAL_DRIFT_CEILING'] ?? '5.0');
+  const samples = config.samples ?? defaultSamples(config.mode);
+  const suitesToLoad = config.suites
+    ?? (['context-engine', 'memory', 'orchestrator'] as SuiteName[]);
 
-  // Determine which suites to load
-  const suitesToLoad = config.suites ?? ['context-engine', 'memory', 'orchestrator'] as SuiteName[];
+  const suiteLoadErrors: Array<{
+    suite: string;
+    phase: 'deterministic' | 'semantic';
+    error: string;
+  }> = [];
 
-  // Run deterministic track (no LLM needed, fast, free).
-  // Track which suites failed to load so we can surface it in the report and
-  // avoid the "empty suite => trivially passing" failure mode.
-  const deterministicResults: TestCaseResults[] = [];
-  const suiteLoadErrors: Array<{ suite: string; phase: 'deterministic' | 'semantic'; error: string }> = [];
-  for (const suiteName of suitesToLoad) {
-    try {
-      const mod = await import(`../suites/${suiteName}/suite.js`) as SuiteModule;
-      if (mod.runDeterministic) {
-        const results = await mod.runDeterministic();
-        deterministicResults.push(...results);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // Distinguish "suite has no deterministic track" (a normal absence) from
-      // "suite module failed to import or threw". The former should be silent;
-      // the latter must be visible.
-      const isMissingModule =
-        message.includes('Cannot find module') ||
-        message.includes('ERR_MODULE_NOT_FOUND') ||
-        message.includes('Failed to load url');
-      if (!isMissingModule) {
-        console.error(`[eval] Deterministic track for suite "${suiteName}" failed: ${message}`);
-        suiteLoadErrors.push({ suite: suiteName, phase: 'deterministic', error: message });
-      }
-    }
-  }
-
-  // Load semantic suites. A bare `.catch(() => [])` here silently swallows
-  // load failures and causes evals to "pass" with zero tests. Instead, log the
-  // failure, record it, and let downstream gating decide whether to fail.
-  let suites: Awaited<ReturnType<typeof loadSuites>> = [];
-  try {
-    suites = await loadSuites(provider, config.suites);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[eval] Semantic suite loading failed: ${message}`);
-    suiteLoadErrors.push({ suite: (config.suites ?? []).join(',') || '<default>', phase: 'semantic', error: message });
-  }
-
-  // Flatten all tests across suites
-  const allPrompts = suites.flatMap(s => s.prompts);
-  const allTests = suites.flatMap(s =>
-    s.tests.map(t => ({
-      ...t,
-      metadata: { suite: s.name },
-    })),
+  // ─── Deterministic Track ─────────────────────────────────────────
+  // Runs in-process; no LLM. Cheap, fast, free.
+  const deterministicResults = await runDeterministicTrack(
+    suitesToLoad,
+    suiteLoadErrors,
   );
 
-  // Run semantic track via promptfoo (only if there are semantic tests)
-  let testCaseResults: TestCaseResults[] = [];
+  // ─── SUT-Driven Semantic Track ───────────────────────────────────
+  let semanticResults: TestCaseResults[] = [];
+  let flakyTests: EvalResult['flakyTests'] = undefined;
 
-  if (allTests.length > 0) {
-    // Cost estimate
-    const costEstimate = provider.estimateCost(allTests.length);
-    if (costEstimate.warning) {
-      console.warn(`Cost warning: ${costEstimate.warning}`);
-    }
+  if (!config.deterministicOnly) {
+    const provider = selectProvider(config);
+    const sut = await runSemanticTrackForSuites({
+      provider,
+      suiteNames: suitesToLoad,
+      samples,
+      model: config.sutModel ?? 'claude-sonnet-4-20250514',
+    });
+    semanticResults = sut.results;
+    flakyTests = sut.flakyTests;
+  }
 
-    // Execute via promptfoo
-    // Cast to `any` at the promptfoo boundary — our SuiteConfig types are
-    // intentionally decoupled from promptfoo's strict union types.
-    const providerConfig = provider.getProviderConfig();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results = await evaluate(
-      {
-        prompts: allPrompts,
-        providers: [providerConfig],
-        tests: allTests,
-      } as any,
-      {
-        maxConcurrency,
-        showProgressBar: config.mode !== 'ci',
-      },
-    );
+  // ─── Drift Computation ───────────────────────────────────────────
+  const allResults = [...deterministicResults, ...semanticResults];
+  const drift = computeDrift(allResults, driftCeiling);
 
-    // Map promptfoo results to TestCaseResults for drift calculation
-    testCaseResults = results.results.map(r => {
-      const suite = (r.testCase?.metadata as Record<string, unknown>)?.suite as string ?? 'unknown';
-      const allPassed = r.success;
-
-      return {
-        suite,
-        zodResults: [{
-          passed: allPassed,
-          toolName: 'promptfoo_assertion',
-          missingParams: [],
-          typeMismatches: [],
-        }],
-        semanticResults: [{
-          passed: allPassed,
-          score: allPassed ? 1.0 : 0.0,
-          reasoning: allPassed ? 'All assertions passed' : 'One or more assertions failed',
-          metric: 'aggregate',
-        }],
-      };
+  // ─── Baseline (optional) ─────────────────────────────────────────
+  let baselineDelta: EvalResult['baselineDelta'] = undefined;
+  if (config.baseline) {
+    baselineDelta = await runBaselineComparison({
+      drift,
+      driftCeiling,
+      mode: config.mode,
+      commit: config.commit,
+      noiseFloor: config.baselineNoiseFloor,
+      persistOnPass: drift.passed,
     });
   }
 
-  // Merge deterministic + semantic results for unified drift computation
-  const allResults = [...deterministicResults, ...testCaseResults];
+  // ─── Reporting ───────────────────────────────────────────────────
+  printReport(drift, config.mode, baselineDelta, flakyTests, suiteLoadErrors);
 
-  // Compute drift
-  const drift = computeDrift(allResults, driftCeiling);
+  return { drift, raw: allResults, suiteLoadErrors, baselineDelta, flakyTests };
+}
 
-  // Report
-  const report = formatReport(drift, config.mode);
+// ─── Static Suite Dispatchers ──────────────────────────────────────
+
+/**
+ * Static import map for each suite's deterministic entry point.
+ *
+ * Importing suites statically (rather than via `await import(path)`) keeps
+ * the bundler happy, makes load failures into hard compile-time errors
+ * instead of runtime path mistakes, and means vitest can resolve them
+ * without special configuration.
+ */
+async function getDeterministicEntrypoint(
+  suiteName: SuiteName,
+): Promise<DeterministicSuiteModule | null> {
+  switch (suiteName) {
+    case 'memory':
+      return await import('../suites/memory/suite.js') as DeterministicSuiteModule;
+    case 'context-engine':
+      return await import('../suites/context-engine/suite.js') as DeterministicSuiteModule;
+    case 'integration':
+      return await import('../suites/integration/suite.js') as DeterministicSuiteModule;
+    case 'orchestrator':
+      // Orchestrator's deterministic track is recording-driven; nothing to
+      // run in-process. Return null so the loader silently skips.
+      return null;
+  }
+}
+
+/**
+ * Static import map for each suite's SUT-driven semantic config.
+ * All four suites are expected to implement `buildSutSuite()`.
+ */
+async function loadSutSuiteConfig(
+  suiteName: SuiteName,
+): Promise<SutSuiteConfig> {
+  switch (suiteName) {
+    case 'memory': {
+      const mod = await import('../suites/memory/suite.js');
+      return mod.buildSutSuite();
+    }
+    case 'context-engine': {
+      const mod = await import('../suites/context-engine/suite.js');
+      return mod.buildSutSuite();
+    }
+    case 'orchestrator': {
+      const mod = await import('../suites/orchestrator/suite.js');
+      return mod.buildSutSuite();
+    }
+    case 'integration': {
+      const mod = await import('../suites/integration/suite.js');
+      return mod.buildSutSuite();
+    }
+  }
+}
+
+// ─── Track Runners ─────────────────────────────────────────────────
+
+async function runDeterministicTrack(
+  suiteNames: SuiteName[],
+  suiteLoadErrors: Array<{
+    suite: string;
+    phase: 'deterministic' | 'semantic';
+    error: string;
+  }>,
+): Promise<TestCaseResults[]> {
+  const results: TestCaseResults[] = [];
+
+  for (const suiteName of suiteNames) {
+    try {
+      const mod = await getDeterministicEntrypoint(suiteName);
+      if (mod?.runDeterministic) {
+        results.push(...(await mod.runDeterministic()));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[eval] Deterministic track for suite "${suiteName}" failed: ${message}`,
+      );
+      suiteLoadErrors.push({
+        suite: suiteName,
+        phase: 'deterministic',
+        error: message,
+      });
+    }
+  }
+
+  return results;
+}
+
+interface SutSuiteRunOptions {
+  provider: EvalProvider;
+  suiteNames: SuiteName[];
+  samples: number;
+  model: string;
+}
+
+async function runSemanticTrackForSuites(
+  opts: SutSuiteRunOptions,
+): Promise<SutSemanticOutput> {
+  const suiteConfigs: Array<{ suite: SuiteName; config: SutSuiteConfig }> = [];
+
+  for (const suite of opts.suiteNames) {
+    suiteConfigs.push({ suite, config: await loadSutSuiteConfig(suite) });
+  }
+
+  if (suiteConfigs.length === 0) {
+    return { results: [], flakyTests: undefined };
+  }
+
+  return runSutSemanticTrack({
+    provider: opts.provider,
+    suiteConfigs,
+    samples: opts.samples,
+    model: opts.model,
+  });
+}
+
+interface BaselineComparisonOptions {
+  drift: DriftReport;
+  driftCeiling: number;
+  mode: 'local' | 'ci';
+  commit?: string;
+  noiseFloor?: number;
+  persistOnPass: boolean;
+}
+
+async function runBaselineComparison(
+  opts: BaselineComparisonOptions,
+): Promise<EvalResult['baselineDelta']> {
+  const baseline = (() => {
+    try {
+      return loadBaseline();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[eval] Failed to load baseline: ${message}`);
+      return null;
+    }
+  })();
+
+  const current = snapshotFromDrift({
+    drift: opts.drift,
+    driftCeiling: opts.driftCeiling,
+    commit: opts.commit,
+    mode: opts.mode,
+  });
+
+  const delta = compareBaseline(current, baseline, {
+    noiseFloor: opts.noiseFloor,
+  });
+
+  // Persist a new baseline on a passing run so the next run has a current
+  // comparison anchor. Don't persist if the run regressed; otherwise we'd
+  // be moving the goalposts every time the gate fails.
+  if (opts.persistOnPass && !delta.hasRegression) {
+    writeBaseline(current);
+  }
+
+  return delta;
+}
+
+function printReport(
+  drift: DriftReport,
+  mode: 'local' | 'ci',
+  baselineDelta: EvalResult['baselineDelta'],
+  flakyTests: EvalResult['flakyTests'],
+  suiteLoadErrors: Array<{
+    suite: string;
+    phase: 'deterministic' | 'semantic';
+    error: string;
+  }>,
+): void {
+  const report = formatReport(drift, mode);
   console.log(report.text);
 
   for (const annotation of report.annotations) {
     console.log(annotation);
+  }
+
+  if (flakyTests && flakyTests.length > 0) {
+    console.warn(
+      `[eval] ${flakyTests.length} flaky test(s) (inconsistent across samples):`,
+    );
+    for (const f of flakyTests) {
+      console.warn(
+        `  - ${f.suite}: passRate=${(f.passRate * 100).toFixed(0)}% over ${f.samples} samples`,
+      );
+    }
+  }
+
+  if (baselineDelta) {
+    console.log('');
+    console.log('── Baseline ──');
+    console.log(formatBaselineDelta(baselineDelta));
   }
 
   if (suiteLoadErrors.length > 0) {
@@ -179,8 +330,6 @@ export async function runEvals(config: EvalRunConfig): Promise<EvalResult> {
       console.error(`  - ${err.suite} (${err.phase}): ${err.error}`);
     }
   }
-
-  return { drift, raw: allResults, suiteLoadErrors };
 }
 
 // ─── CLI Entry Point ───────────────────────────────────────────────
@@ -190,26 +339,62 @@ async function main(): Promise<void> {
     options: {
       mode: { type: 'string', short: 'm', default: 'local' },
       suite: { type: 'string', short: 's' },
+      samples: { type: 'string' },
+      baseline: { type: 'boolean', default: false },
+      'deterministic-only': { type: 'boolean', default: false },
+      'sut-model': { type: 'string' },
+      'baseline-noise-floor': { type: 'string' },
+      commit: { type: 'string' },
     },
     strict: false,
   });
 
-  const mode = values.mode === 'ci' ? 'ci' : 'local' as const;
-  const suites = values.suite
-    ? [values.suite as SuiteName]
+  const mode = (values.mode === 'ci' ? 'ci' : 'local') as 'ci' | 'local';
+  const suites = values.suite ? [values.suite as SuiteName] : undefined;
+
+  const samples = values.samples
+    ? parseInt(values.samples as string, 10)
+    : undefined;
+  const noiseFloor = values['baseline-noise-floor']
+    ? parseFloat(values['baseline-noise-floor'] as string)
     : undefined;
 
-  const result = await runEvals({ mode, suites });
+  const result = await runEvals({
+    mode,
+    suites,
+    samples,
+    baseline: Boolean(values.baseline),
+    deterministicOnly: Boolean(values['deterministic-only']),
+    sutModel:
+      typeof values['sut-model'] === 'string' ? values['sut-model'] : undefined,
+    baselineNoiseFloor: noiseFloor,
+    commit: typeof values.commit === 'string' ? values.commit : undefined,
+  });
 
+  // Exit code priority:
+  //   1 — drift gate fail OR suite load error
+  //   2 — baseline regression while gate passed
+  //   0 — clean
   if (!result.drift.passed || result.suiteLoadErrors.length > 0) {
     process.exitCode = 1;
+  } else if (result.baselineDelta?.hasRegression) {
+    process.exitCode = 2;
   }
 }
 
-// Run if this is the entry point
-const isMainModule = process.argv[1]?.includes('runner');
+// Run if this is the entry point.
+const isMainModule = (() => {
+  try {
+    return (
+      process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
+    );
+  } catch {
+    return false;
+  }
+})();
+
 if (isMainModule) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Eval runner failed:', error);
     process.exitCode = 1;
   });

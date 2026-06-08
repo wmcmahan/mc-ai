@@ -276,8 +276,8 @@ export function parseJudgeResponse(raw: string): JudgeResponse {
  *
  * This function builds the rubric prompt, sends it to the provider,
  * and parses the result. The actual LLM call is delegated to
- * `callJudge`, which must be provided by the caller (typically
- * the runner, which has access to the promptfoo provider).
+ * `callJudge`, which must be provided by the caller (typically the
+ * runner, which forwards `provider.callJudge`).
  *
  * @param context - The eval context (input, actual output, expected output).
  * @param metric - The rubric metric to evaluate.

@@ -31,8 +31,13 @@ export const ToolCallSchema = z.object({
 /** Supported eval suite names. */
 export const SuiteNameSchema = z.enum(['context-engine', 'memory', 'orchestrator', 'integration']);
 
-/** Provenance of a golden trajectory. */
-export const TrajectorySourceSchema = z.enum(['webarena', 'internal']);
+/**
+ * Provenance of a golden trajectory.
+ * - `internal` — hand-authored by the engineering team
+ * - `webarena` — sourced from the WebArena benchmark (reserved; not yet implemented)
+ * - `recorded` — captured from a real System-Under-Test run at a tagged commit
+ */
+export const TrajectorySourceSchema = z.enum(['webarena', 'internal', 'recorded']);
 
 /**
  * Schema for a single golden trajectory — the atomic unit of evaluation.
@@ -43,6 +48,11 @@ export const TrajectorySourceSchema = z.enum(['webarena', 'internal']);
  * `expectedToolCalls` semantics:
  * - `undefined` — skip tool call assertions entirely
  * - `[]` (empty array) — assert that no tool calls were made
+ *
+ * `recordedAt`/`recordedModel`/`recordedCommit` are populated when `source === 'recorded'`
+ * to make drift attributable: a regression is meaningful only when measured against
+ * output captured at a known model+commit. These fields are optional for backward
+ * compatibility with v1/v2 hand-authored trajectories.
  */
 export const GoldenTrajectorySchema = z.object({
   id: z.string().uuid(),
@@ -54,6 +64,9 @@ export const GoldenTrajectorySchema = z.object({
   tags: z.array(z.string()).optional(),
   source: TrajectorySourceSchema,
   createdAt: z.string().datetime(),
+  recordedAt: z.string().datetime().optional(),
+  recordedModel: z.string().optional(),
+  recordedCommit: z.string().optional(),
 });
 
 // ─── Manifest Schemas ──────────────────────────────────────────────

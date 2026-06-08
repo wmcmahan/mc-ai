@@ -42,10 +42,13 @@ import {
   assertLessThanOrEqual,
   assertEqual,
 } from '../../assertions/deterministic.js';
-import { assertFactPreservation } from './assertions.js';
 import type { TestCaseResults } from '../../assertions/drift-calculator.js';
-import type { EvalProvider } from '../../providers/types.js';
-import type { SuiteConfig } from '../loader.js';
+import type { SutSuiteConfig } from '../sut-contract.js';
+
+/** Asserts that a compressed string preserves all given entity names. */
+function assertFactPreservation(compressed: string, entityNames: string[]): boolean {
+  return entityNames.every(name => compressed.includes(name));
+}
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -686,9 +689,18 @@ async function runEndToEnd(): Promise<TestCaseResults> {
   };
 }
 
-// ─── Semantic Track ──────────────────────────────────────────────
+// ─── SUT-Driven Semantic Track ────────────────────────────────────
 
-export async function buildSuite(_provider: EvalProvider): Promise<SuiteConfig> {
-  // Minimal semantic suite (can be expanded later)
-  return { name: 'integration', prompts: [], tests: [] };
+/**
+ * Build the SUT-driven semantic suite for the integration tests.
+ *
+ * The integration suite intentionally has no golden trajectories — its
+ * value is the cross-package deterministic track which exercises memory
+ * + context-engine + orchestrator together. The SUT-driven contract is
+ * returned empty so the runner registers this suite as "migrated" but
+ * runs zero semantic tests for it. Add trajectories here if you need
+ * a cross-package semantic gate in the future.
+ */
+export async function buildSutSuite(): Promise<SutSuiteConfig> {
+  return { name: 'integration', tests: [] };
 }

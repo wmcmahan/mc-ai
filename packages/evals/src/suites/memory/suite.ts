@@ -33,11 +33,10 @@ import {
   assertSetEquals,
   assertStable,
 } from '../../assertions/deterministic.js';
+import { loadGoldenTrajectories } from '../../dataset/loader.js';
+import { FAITHFULNESS } from '../../assertions/semantic-judge.js';
 import type { TestCaseResults } from '../../assertions/drift-calculator.js';
-import type { EvalProvider } from '../../providers/types.js';
-import type { SuiteConfig } from '../loader.js';
-import { buildAssertions } from './assertions.js';
-import { MEMORY_QA_PROMPT, TEMPORAL_REASONING_PROMPT } from './prompts.js';
+import type { SutSuiteConfig } from '../sut-contract.js';
 
 // ─── Test Fixtures ────────────────────────────────────────────────
 
@@ -357,34 +356,29 @@ async function runThemeFactLinkageTest(): Promise<TestCaseResults> {
   };
 }
 
-// ─── Semantic Track ───────────────────────────────────────────────
+// ─── SUT-Driven Semantic Track ────────────────────────────────────
 
-export async function buildSuite(_provider: EvalProvider): Promise<SuiteConfig> {
-  const tests: SuiteConfig['tests'] = [
-    {
-      description: 'Entity-based memory retrieval helps answer factual question',
-      vars: {
-        memory_context: 'Entities: Alice (person, lead engineer), Acme Corp (organization)\nRelationships: Alice works_at Acme Corp\nFacts: Alice works at Acme Corp as lead engineer. Acme Corp develops the Widget Project.',
-        question: 'Where does Alice work and what is her role?',
-        expected_answer: 'Alice works at Acme Corp as a lead engineer.',
-      },
-      assert: buildAssertions('memory-qa'),
-    },
-    {
-      description: 'Temporal reasoning with validity windows',
-      vars: {
-        temporal_facts: 'Fact: "Bob works at Acme Corp" (valid from 2024-01-01, valid until 2025-06-01)\nFact: "Bob works at NewCo" (valid from 2025-06-01)',
-        as_of_date: '2026-01-01',
-        question: 'Where does Bob currently work?',
-        expected_answer: 'Bob works at NewCo (as of 2026, his Acme position expired in June 2025).',
-      },
-      assert: buildAssertions('temporal-reasoning'),
-    },
-  ];
-
+/**
+ * Build the SUT-driven semantic suite for memory.
+ *
+ * One test per golden trajectory. Each test references the trajectory by
+ * ID and applies a single `FAITHFULNESS` rubric metric — does the
+ * library's observable output stay consistent with the recorded golden?
+ *
+ * Memory trajectories have no tool calls (the library has no MCP),
+ * so structural assertions are disabled. The SUT-driven semantic track
+ * loads the trajectory, runs the deterministic SUT to produce
+ * `actualOutput`, and hands it to the judge.
+ */
+export async function buildSutSuite(): Promise<SutSuiteConfig> {
+  const trajectories = loadGoldenTrajectories('memory');
   return {
     name: 'memory',
-    prompts: [MEMORY_QA_PROMPT, TEMPORAL_REASONING_PROMPT],
-    tests,
+    tests: trajectories.map(t => ({
+      trajectoryId: t.id,
+      description: t.description,
+      metrics: [{ metric: FAITHFULNESS }],
+      structuralAssertions: false,
+    })),
   };
 }

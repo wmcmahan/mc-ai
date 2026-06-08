@@ -43,10 +43,9 @@ import {
 } from '../../assertions/deterministic.js';
 import type { DeterministicResult } from '../../assertions/deterministic.js';
 import type { TestCaseResults } from '../../assertions/drift-calculator.js';
-import type { EvalProvider } from '../../providers/types.js';
-import type { SuiteConfig } from '../loader.js';
-import { buildAssertions } from './assertions.js';
-import { COMPRESSION_EQUIVALENCE_PROMPT, INFORMATION_EXTRACTION_PROMPT } from './prompts.js';
+import type { SutSuiteConfig } from '../sut-contract.js';
+import { loadGoldenTrajectories } from '../../dataset/loader.js';
+import { FAITHFULNESS } from '../../assertions/semantic-judge.js';
 
 // ─── Test Fixtures ────────────────────────────────────────────────
 
@@ -633,45 +632,28 @@ function runOptimizerPresetEval(): TestCaseResults {
   };
 }
 
-// ─── Semantic Track ───────────────────────────────────────────────
+// ─── SUT-Driven Semantic Track ────────────────────────────────────
 
 /**
- * Builds the semantic eval suite for LLM-as-judge quality testing.
- * Tests whether compressed context produces equivalent LLM responses.
+ * Build the SUT-driven semantic suite for context-engine.
+ *
+ * One test per golden trajectory. The library is deterministic — running
+ * each trajectory's input through `runContextEngineSut` produces a JSON
+ * `actualOutput` we can compare against the recorded `expectedOutput`
+ * via the `FAITHFULNESS` metric.
+ *
+ * Context-engine trajectories have no tool calls, so structural
+ * assertions are disabled.
  */
-export async function buildSuite(_provider: EvalProvider): Promise<SuiteConfig> {
-  // Generate compressed versions of test data for the semantic track
-  const tabularJson = JSON.stringify(TABULAR_DATA, null, 2);
-  const tabularCompressed = serialize(TABULAR_DATA);
-  const nestedJson = JSON.stringify(NESTED_DATA, null, 2);
-  const nestedCompressed = serialize(NESTED_DATA);
-
-  const tests: SuiteConfig['tests'] = [
-    {
-      description: 'Tabular data: compressed prompt produces equivalent answer',
-      vars: {
-        compressed_context: tabularCompressed,
-        original_context: tabularJson,
-        question: 'Who has the highest score and what is their role?',
-        expected_answer: 'Carol has the highest score (95) and is a reviewer.',
-      },
-      assert: buildAssertions('compression-equivalence'),
-    },
-    {
-      description: 'Nested data: compressed prompt preserves all information',
-      vars: {
-        compressed_data: nestedCompressed,
-        original_data: nestedJson,
-        question: 'What model is used and what is the research confidence level?',
-        expected_answer: 'The model is claude-sonnet and the research confidence is 0.87.',
-      },
-      assert: buildAssertions('information-extraction'),
-    },
-  ];
-
+export async function buildSutSuite(): Promise<SutSuiteConfig> {
+  const trajectories = loadGoldenTrajectories('context-engine');
   return {
     name: 'context-engine',
-    prompts: [COMPRESSION_EQUIVALENCE_PROMPT, INFORMATION_EXTRACTION_PROMPT],
-    tests,
+    tests: trajectories.map(t => ({
+      trajectoryId: t.id,
+      description: t.description,
+      metrics: [{ metric: FAITHFULNESS }],
+      structuralAssertions: false,
+    })),
   };
 }

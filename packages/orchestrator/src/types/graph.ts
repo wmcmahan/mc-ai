@@ -28,6 +28,7 @@ export const NodeTypeSchema = z.enum([
   'voting',
   'approval',
   'evolution',
+  'verifier',
 ]);
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
@@ -288,6 +289,155 @@ export const EvolutionConfigSchema = z.object({
 
 export type EvolutionConfig = z.infer<typeof EvolutionConfigSchema>;
 
+// ─── Verifier ───────────────────────────────────────────────────────
+
+/**
+ * Common fields shared by every verifier variant.
+ *
+ * `result_key` controls where the verification outcome lands in memory.
+ * `throw_on_fail` opts into `failure_policy`-driven retry when verification
+ * fails; the default is the explicit-edge-routing pattern where the verifier
+ * always succeeds and downstream edges branch on the outcome.
+ */
+const VerifierCommonFields = {
+  /**
+   * Memory key prefix for the verification result. Defaults to
+   * `${node.id}_verification`. The verifier writes:
+   *   - `${result_key}`        → `VerificationResult` object
+   *   - `${result_key}_passed` → boolean (for ergonomic edge conditions)
+   *
+   * Both keys must appear in the node's `write_keys`.
+   */
+  result_key: z.string().optional(),
+  /**
+   * When `true`, the verifier throws on failure to trigger node-level retry
+   * via `failure_policy`. When `false` (default), the verifier always
+   * succeeds and downstream edges should route on the `_passed` memory key.
+   */
+  throw_on_fail: z.boolean().default(false),
+  /** Human-readable description of what this verifier checks. */
+  description: z.string().optional(),
+} as const;
+
+/**
+ * LLM-as-judge verifier: an evaluator agent scores the target memory key
+ * and the verifier passes when the score meets `pass_threshold`.
+ *
+ * Reuses the same `evaluateQualityExecutor` primitive that powers Evolution
+ * fitness scoring and Annealing quality checks.
+ */
+export const VerifierLLMJudgeConfigSchema = z.object({
+  type: z.literal('llm_judge'),
+  /** Memory key whose value will be evaluated. */
+  target_key: z.string(),
+  /** Agent ID for the LLM-as-judge evaluator. */
+  evaluator_agent_id: z.string(),
+  /** Pass if the evaluator's score (0–1) is ≥ this threshold. */
+  pass_threshold: z.number().min(0).max(1).default(0.8),
+  /** Custom instruction passed to the evaluator. */
+  evaluation_criteria: z.string().optional(),
+  ...VerifierCommonFields,
+});
+
+export type VerifierLLMJudgeConfig = z.infer<typeof VerifierLLMJudgeConfigSchema>;
+
+/**
+ * Expression verifier: a filtrex expression evaluated against workflow
+ * memory. Passes when the expression is truthy. Deterministic and free —
+ * no LLM call.
+ *
+ * @example
+ *   { type: 'expression', expression: 'length(memory.draft) > 100' }
+ */
+export const VerifierExpressionConfigSchema = z.object({
+  type: z.literal('expression'),
+  /** Filtrex expression evaluated against `{ memory, goal }`. Passes when truthy. */
+  expression: z.string(),
+  ...VerifierCommonFields,
+});
+
+export type VerifierExpressionConfig = z.infer<typeof VerifierExpressionConfigSchema>;
+
+/**
+ * JSONPath assertion verifier: extracts a value from a memory key via
+ * JSONPath, then evaluates a deterministic assertion against it.
+ * Deterministic and free — no LLM call.
+ *
+ * @example
+ *   {
+ *     type: 'jsonpath',
+ *     target_key: 'extracted_invoice',
+ *     path: '$.line_items[*].amount',
+ *     assertion: { op: 'gt', value: 0 },
+ *   }
+ */
+export const VerifierJsonPathAssertionSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('exists') }),
+  z.object({ op: z.literal('equals'), value: z.unknown() }),
+  z.object({ op: z.literal('matches'), pattern: z.string() }),
+  z.object({ op: z.literal('gt'), value: z.number() }),
+  z.object({ op: z.literal('gte'), value: z.number() }),
+  z.object({ op: z.literal('lt'), value: z.number() }),
+  z.object({ op: z.literal('lte'), value: z.number() }),
+]);
+
+export type VerifierJsonPathAssertion = z.infer<typeof VerifierJsonPathAssertionSchema>;
+
+export const VerifierJsonPathConfigSchema = z.object({
+  type: z.literal('jsonpath'),
+  /** Memory key whose value will be queried. */
+  target_key: z.string(),
+  /** JSONPath expression evaluated against `memory[target_key]`. */
+  path: z.string(),
+  /** Assertion applied to the first extracted value. */
+  assertion: VerifierJsonPathAssertionSchema,
+  ...VerifierCommonFields,
+});
+
+export type VerifierJsonPathConfig = z.infer<typeof VerifierJsonPathConfigSchema>;
+
+/**
+ * Verifier node configuration (discriminated union over verification flavour).
+ *
+ * Compound-systems primitive: every verifier returns a structured outcome
+ * (`{ passed, score?, reasoning, ... }`) written to memory. Downstream
+ * edges route on the `_passed` boolean (option b — explicit edge routing),
+ * or the verifier throws on failure to trigger `failure_policy` retry
+ * (option a — opt in via `throw_on_fail: true`).
+ */
+export const VerifierConfigSchema = z.discriminatedUnion('type', [
+  VerifierLLMJudgeConfigSchema,
+  VerifierExpressionConfigSchema,
+  VerifierJsonPathConfigSchema,
+]);
+
+export type VerifierConfig = z.infer<typeof VerifierConfigSchema>;
+
+/**
+ * Structured verification outcome written to memory at `result_key`.
+ *
+ * Variant-specific fields (`score`, `extracted_value`) are present only
+ * for the variants that produce them.
+ */
+export const VerificationResultSchema = z.object({
+  /** Verifier variant that produced this result. */
+  type: z.enum(['llm_judge', 'expression', 'jsonpath']),
+  /** Whether the verification passed. */
+  passed: z.boolean(),
+  /** Human-readable explanation of the outcome. */
+  reasoning: z.string(),
+  /** LLM judge score (0–1). Present only for `llm_judge`. */
+  score: z.number().optional(),
+  /** Threshold the score was compared against. Present only for `llm_judge`. */
+  threshold: z.number().optional(),
+  /** Value pulled out by the JSONPath query. Present only for `jsonpath`. */
+  extracted_value: z.unknown().optional(),
+  /** ISO timestamp at which the verification ran. */
+  evaluated_at: z.string(),
+});
+
+export type VerificationResult = z.infer<typeof VerificationResultSchema>;
+
 // ─── Subgraph ───────────────────────────────────────────────────────
 
 /**
@@ -349,6 +499,8 @@ export const GraphNodeSchema = z.object({
   swarm_config: SwarmConfigSchema.optional(),
   /** Evolution config (for `evolution` nodes). */
   evolution_config: EvolutionConfigSchema.optional(),
+  /** Verifier config (for `verifier` nodes). */
+  verifier_config: VerifierConfigSchema.optional(),
 
   // ── Security ──
   /** Memory keys this node may read (`['*']` = all). */

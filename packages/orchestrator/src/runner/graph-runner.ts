@@ -68,6 +68,7 @@ import {
   executeSynthesizerNode,
   executeSubgraphNode,
   executeEvolutionNode,
+  executeVerifierNode,
 } from './node-executors/index.js';
 
 const logger = createLogger('runner.graph');
@@ -1264,6 +1265,8 @@ export class GraphRunner extends EventEmitter {
         return await executeSubgraphNode(node, stateView, attempt, ctx);
       case 'evolution':
         return await executeEvolutionNode(node, stateView, attempt, ctx);
+      case 'verifier':
+        return await executeVerifierNode(node, stateView, attempt, ctx);
       default:
         throw new UnsupportedNodeTypeError(node.type);
     }

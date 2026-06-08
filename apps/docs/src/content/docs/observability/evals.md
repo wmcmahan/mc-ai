@@ -1,9 +1,13 @@
 ---
-title: Evaluations
-description: Verify workflow behavior with automated eval suites.
+title: Graph Assertions (runEval)
+description: Verify workflow behavior with the orchestrator's built-in per-graph eval framework.
 ---
 
-Unit tests check *code* — does the function crash? Evals check *behavior* — did the workflow produce the right result? cycgraph includes a built-in eval framework for defining test cases, running workflows, and asserting on the final state.
+Unit tests check *code* — does the function crash? Evals check *behavior* — did the workflow produce the right result? `@cycgraph/orchestrator` includes a built-in lightweight eval framework for defining test cases, running workflows, and asserting on the final state.
+
+:::tip[Looking for the regression harness?]
+This page documents `runEval` from `@cycgraph/orchestrator` — a per-graph assertion framework for unit-testing individual workflows. If you're looking for the cross-package regression harness that detects drift across releases, see the [Eval Harness](/concepts/eval-harness/) section.
+:::
 
 ## Quick start
 

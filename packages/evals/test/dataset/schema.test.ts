@@ -102,6 +102,36 @@ describe('GoldenTrajectorySchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts a trajectory with recording provenance', () => {
+    const result = GoldenTrajectorySchema.safeParse({
+      ...validTrajectory,
+      source: 'recorded',
+      recordedAt: '2026-06-08T12:00:00Z',
+      recordedModel: 'claude-sonnet-4-20250514',
+      recordedCommit: '9dcaa0f',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a recorded trajectory with partial provenance', () => {
+    // All three recording fields are independently optional so older datasets
+    // that record only commit, or only model, still validate.
+    const result = GoldenTrajectorySchema.safeParse({
+      ...validTrajectory,
+      source: 'recorded',
+      recordedCommit: '9dcaa0f',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a non-ISO recordedAt', () => {
+    const result = GoldenTrajectorySchema.safeParse({
+      ...validTrajectory,
+      recordedAt: 'last Tuesday',
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a missing required field', () => {
     const { input: _, ...incomplete } = validTrajectory;
     const result = GoldenTrajectorySchema.safeParse(incomplete);

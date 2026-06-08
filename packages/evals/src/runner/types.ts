@@ -26,6 +26,45 @@ export interface EvalRunConfig {
 
   /** Override the default Semantic Drift ceiling (default: 5.0). */
   driftCeiling?: number;
+
+  /**
+   * Number of independent samples to collect for the semantic track.
+   * When > 1, each test is run that many times and the majority result
+   * is taken. Distinguishes "flaky failure" (mixed samples) from "drift
+   * failure" (stable failure). Defaults to 1 in local mode, 3 in ci.
+   */
+  samples?: number;
+
+  /**
+   * Skip the semantic (LLM) track. Useful for PR-time runs where only
+   * library/deterministic regressions need to be gated.
+   */
+  deterministicOnly?: boolean;
+
+  /**
+   * Model name passed to the orchestrator SUT. Ignored for memory and
+   * context-engine suites (those are deterministic library calls).
+   * Defaults to `claude-sonnet-4-20250514` — the same model the
+   * recording script uses.
+   */
+  sutModel?: string;
+
+  /**
+   * Compare this run's result against the prior baseline in
+   * `golden/baselines/main-latest.json`. When true, the runner
+   * persists a new baseline on a passing run and reports any
+   * baseline regressions in the result.
+   */
+  baseline?: boolean;
+
+  /**
+   * Override the noise floor for baseline comparison (percentage points).
+   * Smaller deltas are ignored. Defaults to 5.0.
+   */
+  baselineNoiseFloor?: number;
+
+  /** Optional short git SHA to record with a new baseline snapshot. */
+  commit?: string;
 }
 
 // ─── Drift Report ──────────────────────────────────────────────────
@@ -66,17 +105,12 @@ export interface SuiteLoadError {
   error: string;
 }
 
-/**
- * Complete result of an eval run.
- *
- * `raw` is typed as `unknown` until promptfoo is added as a dependency
- * in Phase 4. At that point it will be typed as `EvaluateSummary`.
- */
+/** Complete result of an eval run. */
 export interface EvalResult {
   /** Computed drift report with gate pass/fail. */
   drift: DriftReport;
 
-  /** Raw promptfoo evaluation summary. */
+  /** Raw per-test results across both tracks. */
   raw: unknown;
 
   /**
@@ -85,4 +119,18 @@ export interface EvalResult {
    * otherwise pass the drift gate trivially.
    */
   suiteLoadErrors: SuiteLoadError[];
+
+  /**
+   * Baseline comparison result, when the run was configured with
+   * `baseline: true`. `undefined` when baseline comparison was not
+   * requested.
+   */
+  baselineDelta?: import('../baseline/types.js').BaselineDelta;
+
+  /**
+   * Tests that produced inconsistent pass/fail outcomes across samples.
+   * Empty when `samples: 1`. Populated only when `samples > 1` and at
+   * least one test was unstable.
+   */
+  flakyTests?: Array<{ suite: string; passRate: number; samples: number }>;
 }

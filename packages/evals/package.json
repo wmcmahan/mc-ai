@@ -32,8 +32,8 @@
   "dependencies": {
     "@cycgraph/context-engine": "*",
     "@cycgraph/memory": "*",
+    "@cycgraph/orchestrator": "*",
     "better-sqlite3": "^12.8.0",
-    "promptfoo": "^0.121.11",
     "zod": "^4.3.6"
   },
   "devDependencies": {

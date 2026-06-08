@@ -5,7 +5,7 @@ describe('integration deterministic suite', () => {
   it('integration suite module loads successfully', async () => {
     const module = await import('../../src/suites/integration/suite.js');
     expect(module.runDeterministic).toBeDefined();
-    expect(module.buildSuite).toBeDefined();
+    expect(module.buildSutSuite).toBeDefined();
   });
 
   it('runDeterministic() returns results array', async () => {

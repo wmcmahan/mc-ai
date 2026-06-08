@@ -141,6 +141,7 @@ export type { TestCaseResults } from './assertions/drift-calculator.js';
 export type {
   CostEstimate,
   EvalProvider,
+  CallJudgeOptions,
 } from './providers/types.js';
 
 // ─── Providers ─────────────────────────────────────────────────────
@@ -150,13 +151,51 @@ export type { OllamaProviderOptions } from './providers/ollama.js';
 export { createOpenAIProvider } from './providers/openai.js';
 export type { OpenAIProviderOptions } from './providers/openai.js';
 
-// ─── Suite Loader ──────────────────────────────────────────────────
+// ─── SUT-Driven Suite Contract ─────────────────────────────────────
 
-export { loadSuite, loadSuites } from './suites/loader.js';
-export type { SuiteModule, SuiteConfig, SuiteTestCase } from './suites/loader.js';
+export type {
+  MetricSpec,
+  SutSuiteTestCase,
+  SutSuiteConfig,
+  SutSuiteModule,
+} from './suites/sut-contract.js';
 
 // ─── Runner ────────────────────────────────────────────────────────
 
 export { runEvals } from './runner/runner.js';
 export { formatReport } from './runner/reporter.js';
 export type { ReportOutput } from './runner/reporter.js';
+
+// ─── Multi-Sample Semantic ─────────────────────────────────────────
+
+export {
+  evaluateMetricMultiSample,
+  computeMedian,
+  computeStdDev,
+} from './runner/multi-sample.js';
+export type {
+  MultiSampleResult,
+  MultiSampleOptions,
+} from './runner/multi-sample.js';
+
+// ─── Baseline Persistence ──────────────────────────────────────────
+
+export type {
+  BaselineSnapshot,
+  BaselineSuiteEntry,
+  BaselineDelta,
+  SuiteDelta,
+} from './baseline/index.js';
+export {
+  BASELINE_SCHEMA_VERSION,
+  snapshotFromDrift,
+  writeBaseline,
+  loadBaseline,
+  compareBaseline,
+  formatBaselineDelta,
+} from './baseline/index.js';
+export type {
+  SnapshotInput,
+  WriteBaselineResult,
+  CompareBaselineOptions,
+} from './baseline/index.js';
