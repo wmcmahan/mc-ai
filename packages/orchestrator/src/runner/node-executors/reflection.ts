@@ -153,7 +153,10 @@ async function extractRuleBased(
     provenance,
   }));
 
-  const result = await writer(facts);
+  const sanitized = await applySanitizer(facts, node.id, ctx);
+  if (sanitized.length === 0) return [];
+
+  const result = await writer(sanitized);
   return result.fact_ids;
 }
 
@@ -218,8 +221,59 @@ async function extractViaLLM(
     provenance,
   }));
 
-  const result = await writer(facts);
+  const sanitized = await applySanitizer(facts, node.id, ctx);
+  if (sanitized.length === 0) {
+    return { factIds: [], tokensUsed: extraction.tokens_used };
+  }
+
+  const result = await writer(sanitized);
   return { factIds: result.fact_ids, tokensUsed: extraction.tokens_used };
+}
+
+/**
+ * Apply the runner's `factSanitizer` (if configured) to each candidate
+ * fact. Returns the filtered list:
+ *
+ *  - Sanitizer returns a fact → keep it (possibly replaced).
+ *  - Sanitizer returns `null` → drop the fact silently.
+ *  - Sanitizer throws → log and keep the original fact. By contract a
+ *    downed PII service must not block compound learning.
+ */
+async function applySanitizer(
+  facts: MemoryWriterFact[],
+  nodeId: string,
+  ctx: NodeExecutorContext,
+): Promise<MemoryWriterFact[]> {
+  const sanitizer = ctx.factSanitizer;
+  if (!sanitizer) return facts;
+
+  const out: MemoryWriterFact[] = [];
+  let dropped = 0;
+  for (const fact of facts) {
+    try {
+      const result = await sanitizer(fact);
+      if (result === null) {
+        dropped++;
+        continue;
+      }
+      out.push(result);
+    } catch (err) {
+      logger.warn('fact_sanitizer_failed', {
+        node_id: nodeId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      out.push(fact);
+    }
+  }
+
+  if (dropped > 0) {
+    logger.info('reflection_facts_sanitized', {
+      node_id: nodeId,
+      kept: out.length,
+      dropped,
+    });
+  }
+  return out;
 }
 
 // ─── Helpers (shared by both extractors) ────────────────────────────

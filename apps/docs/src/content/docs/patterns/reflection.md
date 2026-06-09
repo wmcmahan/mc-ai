@@ -183,6 +183,56 @@ The `tags` field on `reflection_config` is applied to every fact written by the 
 
 `reflection_config.entity_keys` declares memory keys whose values name entities the produced facts relate to. The reflection executor reads those values and includes them as entity references on each written fact so the lesson stays reachable via entity-driven retrieval (`memory_query: { entity_ids: [...] }`).
 
+### Sanitising facts before persistence
+
+Reflection writes whatever the extractor produces. If your agents handle PII, customer data, or anything sensitive, those values can land in the long-lived memory store. The `factSanitizer` hook on `GraphRunnerOptions` runs once per fact between extraction and the writer call. Returning `null` drops the fact; returning a modified fact substitutes it.
+
+```typescript
+import type { FactSanitizer } from '@cycgraph/orchestrator';
+
+const EMAIL = /\S+@\S+\.\S+/g;
+const PHONE = /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
+
+const factSanitizer: FactSanitizer = (fact) => {
+  let content = fact.content;
+  if (EMAIL.test(content)) content = content.replace(EMAIL, '[email redacted]');
+  if (PHONE.test(content)) content = content.replace(PHONE, '[phone redacted]');
+  return { ...fact, content };
+};
+
+const runner = new GraphRunner(graph, state, {
+  memoryRetriever,
+  memoryWriter,
+  factSanitizer,
+});
+```
+
+Errors thrown by the sanitizer are logged and absorbed — the original fact passes through unchanged. A downed PII service must never block compound learning, only weaken it.
+
+### Capping reflection cost with `budget`
+
+LLM-based reflection (`extractor: { type: 'llm' }`) can run away on long source content. Combine `reflection_config.extractor.max_facts` with a per-node `budget` to cap both output size and spend:
+
+```typescript
+{
+  id: 'reflect',
+  type: 'reflection',
+  read_keys: ['research_notes'],
+  write_keys: ['reflect_reflection'],
+  reflection_config: {
+    source_keys: ['research_notes'],
+    extractor: { type: 'llm', agent_id: REFLECTOR_ID, max_facts: 5 },
+    tags: ['lesson'],
+  },
+  budget: {
+    max_tokens: 20_000,
+    max_cost_usd: 0.05,
+  },
+}
+```
+
+Breaching either cap throws `NodeBudgetExceededError` — the reflection fails fast and downstream code can decide whether to skip persistence or retry with cheaper settings.
+
 ### Cost considerations
 
 - `rule_based` extraction is free (no LLM call). It's the right default for most reflection use cases.

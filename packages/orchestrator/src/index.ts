@@ -29,8 +29,9 @@ export { createStateView } from './runner/state-view.js';
 export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from './runner/middleware.js';
 export { createObserverMiddleware } from './runner/observer-middleware.js';
 export type { ObserverMiddlewareOptions, ObserverFinding, ObserverSeverity, DiagnosticAgentOptions } from './runner/observer-middleware.js';
-export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
+export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError, NodeBudgetExceededError } from './runner/errors.js';
 export { MemoryWriterMissingError } from './runner/node-executors/reflection.js';
+export { VerificationFailedError } from './runner/node-executors/verifier.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
 export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent, ContextCompressedEvent, MemoryDiff } from './runner/stream-events.js';
@@ -109,6 +110,9 @@ export type {
   MemoryWriterFact,
   MemoryWriterResult,
 } from './agent/memory-writer.js';
+
+// ─── Fact Sanitizer (Guardrail) ───────────────────────────────────
+export type { FactSanitizer } from './agent/fact-sanitizer.js';
 
 // ─── Evaluator (LLM-as-Judge) ───────────────────────────────────────
 

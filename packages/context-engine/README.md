@@ -10,7 +10,7 @@ Built as a standalone package with zero orchestrator dependencies. Works with an
 npm install @cycgraph/context-engine
 ```
 
-Requires Node.js 22+. Only runtime dependency is `zod`.
+Requires Node.js 24+. Only runtime dependency is `zod`.
 
 See [STRATEGY.md](./STRATEGY.md) for the research foundation and architectural design decisions behind each compression technique.
 

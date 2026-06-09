@@ -23,6 +23,31 @@ export class BudgetExceededError extends Error {
 }
 
 /**
+ * Thrown when a single node execution exceeds its configured `budget`
+ * (max_tokens or max_cost_usd). Stops the workflow immediately — does
+ * not engage failure_policy retry, since retrying a too-expensive call
+ * would just compound the spend.
+ */
+export class NodeBudgetExceededError extends Error {
+  constructor(
+    /** Node identifier that exceeded its budget. */
+    public readonly nodeId: string,
+    /** Which limit was breached. */
+    public readonly limit: 'max_tokens' | 'max_cost_usd',
+    /** Observed value at the time of breach. */
+    public readonly used: number,
+    /** Configured cap on the node. */
+    public readonly cap: number,
+  ) {
+    const unit = limit === 'max_tokens' ? 'tokens' : 'USD';
+    super(
+      `Node "${nodeId}" exceeded ${limit}: used ${used} ${unit}, cap was ${cap} ${unit}`,
+    );
+    this.name = 'NodeBudgetExceededError';
+  }
+}
+
+/**
  * Thrown when a workflow exceeds its configured execution time.
  */
 export class WorkflowTimeoutError extends Error {

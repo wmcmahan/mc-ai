@@ -10,7 +10,7 @@ Built as a standalone package with zero orchestrator dependencies. Ships with wo
 npm install @cycgraph/memory
 ```
 
-Requires Node.js 22+.
+Requires Node.js 24+.
 
 ## Architecture
 

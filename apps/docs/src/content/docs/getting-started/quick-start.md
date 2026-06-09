@@ -7,7 +7,7 @@ Install cycgraph, set up an LLM provider, and run a complete workflow with persi
 
 ## 1. Installation
 
-cycgraph requires **Node.js 22+** (ES Modules).
+cycgraph requires **Node.js 24+** (ES Modules).
 
 Install the core orchestrator package, and optionally the Postgres persistence package if you want durable database storage:
 

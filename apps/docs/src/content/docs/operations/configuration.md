@@ -47,6 +47,7 @@ Passed to `new GraphRunner(graph, state, options)`. Source: `runner/graph-runner
 | `contextCompressor` | `ContextCompressor` | none | Compress memory before prompt injection |
 | `memoryRetriever` | `MemoryRetriever` | none | Pull facts from the hierarchical memory graph. Only fires for nodes that declare a `memory_query` directive. |
 | `memoryWriter` | `MemoryWriter` | none | Persist facts produced by `reflection` nodes. Required for reflection nodes to function. |
+| `factSanitizer` | `FactSanitizer` | none | Pre-write hook applied to every reflection fact. Return `null` to drop, or a modified fact to substitute. Errors are absorbed and the original fact passes through. |
 | `middleware` | `RunnerMiddleware[]` | `[]` | `beforeNodeExecute` / `afterReduce` hooks |
 
 ## `MCPConnectionManager` options

@@ -23,6 +23,7 @@ import type { ModelResolver } from '../agent/model-resolver.js';
 import type { ContextCompressor } from '../agent/context-compressor.js';
 import type { MemoryRetriever } from '../agent/memory-retriever.js';
 import type { MemoryWriter } from '../agent/memory-writer.js';
+import type { FactSanitizer } from '../agent/fact-sanitizer.js';
 import { createStateView } from './state-view.js';
 import { executeAgent } from '../agent/agent-executor/executor.js';
 import { executeSupervisor } from '../agent/supervisor-executor/executor.js';
@@ -53,6 +54,7 @@ export interface ExecutorContextRunner {
   contextCompressor?: ContextCompressor;
   memoryRetriever?: MemoryRetriever;
   memoryWriter?: MemoryWriter;
+  factSanitizer?: FactSanitizer;
   toolResolver?: ToolResolver;
 
   emit(event: string, payload: unknown): boolean;
@@ -151,6 +153,7 @@ export function buildExecutorContext(runner: ExecutorContextRunner): NodeExecuto
     contextCompressor: runner.contextCompressor,
     memoryRetriever: runner.memoryRetriever,
     memoryWriter: runner.memoryWriter,
+    factSanitizer: runner.factSanitizer,
     remainingBudgetUsd,
     getRemainingBudgetUsd: () => {
       return (runner.state.budget_usd && runner.state.budget_usd > 0)

@@ -24,7 +24,7 @@ cycgraph solves this with a **Cyclic State Graph**: nodes that can loop, revisit
 ## What you get
 
 - **Cyclic graph engine** — loops, retries, conditional routing, nested subgraphs, parallel fan-out.
-- **Six built-in patterns** — [Supervisor](/patterns/supervisor/), [Swarm](/patterns/swarm/), [Evolution](/patterns/evolution/), [Self-Annealing](/patterns/self-annealing/), [Map-Reduce](/patterns/map-reduce/), [Human-in-the-Loop](/patterns/human-in-the-loop/).
+- **Seven built-in patterns** — [Supervisor](/patterns/supervisor/), [Swarm](/patterns/swarm/), [Evolution](/patterns/evolution/), [Reflection](/patterns/reflection/), [Self-Annealing](/patterns/self-annealing/), [Map-Reduce](/patterns/map-reduce/), [Human-in-the-Loop](/patterns/human-in-the-loop/).
 - **Durable execution** — every action persisted; runs survive crashes via event-sourced replay.
 - **Zero-trust security** — per-node `read_keys` / `write_keys`, taint tracking on all external data, MCP server allowlist.
 - **Budget guardrails** — token, cost (USD), iteration, and wall-clock limits, all enforced at the engine.

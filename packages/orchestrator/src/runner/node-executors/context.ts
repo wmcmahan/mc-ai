@@ -19,6 +19,7 @@ import type { ModelResolver, ModelResolutionResult, ModelTier } from '../../agen
 import type { ContextCompressor, ContextCompressionMetrics } from '../../agent/context-compressor.js';
 import type { MemoryRetriever } from '../../agent/memory-retriever.js';
 import type { MemoryWriter } from '../../agent/memory-writer.js';
+import type { FactSanitizer } from '../../agent/fact-sanitizer.js';
 
 /**
  * Raw tool definition — description + parameters without an execute function.
@@ -198,6 +199,8 @@ export interface NodeExecutorContext {
   memoryRetriever?: MemoryRetriever;
   /** Memory writer for persisting facts produced by reflection nodes (from GraphRunnerOptions). */
   memoryWriter?: MemoryWriter;
+  /** Optional pre-write hook applied to reflection facts (from GraphRunnerOptions). */
+  factSanitizer?: FactSanitizer;
   /** Callback fired when context compression runs on a prompt's memory section. */
   onContextCompressed?: (event: { tokensIn: number; tokensOut: number; reductionPercent: number; durationMs: number }, nodeId: string) => void;
   /** Remaining workflow budget in USD, or `undefined` if unlimited (static snapshot — prefer getRemainingBudgetUsd). */

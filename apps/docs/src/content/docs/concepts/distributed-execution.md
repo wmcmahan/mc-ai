@@ -192,7 +192,8 @@ setQueueDepthProvider(async () => {
 | Implementation | Package | Use Case |
 |---------------|---------|----------|
 | `InMemoryWorkflowQueue` | `@cycgraph/orchestrator` | Testing, single-process deployments |
-| `DrizzleWorkflowQueue` | `@cycgraph/orchestrator-postgres` | Production (uses `FOR UPDATE SKIP LOCKED`) — *coming soon* |
+
+For multi-process / multi-host deployments, implement the `WorkflowQueue` interface yourself against your queue of choice — Postgres (`FOR UPDATE SKIP LOCKED`), Redis (RPOPLPUSH or Streams), SQS, etc. The interface is intentionally narrow so backend choice stays a project decision.
 
 ## Next steps
 

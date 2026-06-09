@@ -24,7 +24,7 @@ import { PersistenceCoordinator } from './persistence-coordinator.js';
 import { validateGraph } from '../validation/graph-validator.js';
 import { ActionSchema } from '../types/state.js';
 import { createLogger } from '../utils/logger.js';
-import { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './errors.js';
+import { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError, NodeBudgetExceededError } from './errors.js';
 import {
   incrementWorkflowsStarted,
   incrementWorkflowsCompleted,
@@ -52,6 +52,7 @@ import type { ModelResolver } from '../agent/model-resolver.js';
 import type { ContextCompressor } from '../agent/context-compressor.js';
 import type { MemoryRetriever } from '../agent/memory-retriever.js';
 import type { MemoryWriter } from '../agent/memory-writer.js';
+import type { FactSanitizer } from '../agent/fact-sanitizer.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
 
 // Extracted modules
@@ -196,6 +197,13 @@ export interface GraphRunnerOptions {
    */
   memoryWriter?: MemoryWriter;
   /**
+   * Optional pre-write hook applied to every fact emitted by reflection
+   * nodes before it reaches `memoryWriter`. Use to redact PII, drop
+   * policy-violating content, or substitute wording. Returning `null`
+   * from the sanitizer drops the fact entirely.
+   */
+  factSanitizer?: FactSanitizer;
+  /**
    * Number of events between automatic event log compactions.
    *
    * When set (and an `eventLog` is provided), the runner will
@@ -278,6 +286,9 @@ export class GraphRunner extends EventEmitter {
   // Memory writer for persisting facts from reflection nodes (optional)
   private readonly memoryWriter?: MemoryWriter;
 
+  // Optional pre-write sanitizer applied to reflection facts before persistence
+  private readonly factSanitizer?: FactSanitizer;
+
   // Auto-compaction: compact event log every N events (0 = disabled)
   private readonly compactionInterval: number;
 
@@ -328,6 +339,7 @@ export class GraphRunner extends EventEmitter {
     this.contextCompressor = options?.contextCompressor;
     this.memoryRetriever = options?.memoryRetriever;
     this.memoryWriter = options?.memoryWriter;
+    this.factSanitizer = options?.factSanitizer;
     this.autoRollback = options?.auto_rollback ?? false;
     this.compactionInterval = options?.compaction_interval ?? 0;
     this.persistDeltaFn = options?.persistDeltaFn;
@@ -474,6 +486,7 @@ export class GraphRunner extends EventEmitter {
       get contextCompressor() { return self.contextCompressor; },
       get memoryRetriever() { return self.memoryRetriever; },
       get memoryWriter() { return self.memoryWriter; },
+      get factSanitizer() { return self.factSanitizer; },
       get toolResolver() { return self.toolResolver; },
       emit: (event, payload) => self.emit(event, payload),
       listenerCount: (event) => self.listenerCount(event),
@@ -838,15 +851,68 @@ export class GraphRunner extends EventEmitter {
           this.dispatchInternal('_track_tokens', { tokens: tokenUsage.totalTokens });
         }
 
-        // Track cumulative cost from token usage
+        // Track cumulative cost from token usage. Also compute the
+        // per-action cost so the per-node budget check below has it.
+        let actionCostUsd = 0;
         if (tokenUsage?.inputTokens !== undefined || tokenUsage?.outputTokens !== undefined) {
           const inputTokens = tokenUsage.inputTokens ?? 0;
           const outputTokens = tokenUsage.outputTokens ?? 0;
-          const costUsd = this.budget.calculateActionCost(inputTokens, outputTokens, action);
-          if (costUsd > 0) {
-            this.dispatchInternal('_track_cost', { cost_usd: costUsd });
+          actionCostUsd = this.budget.calculateActionCost(inputTokens, outputTokens, action);
+          if (actionCostUsd > 0) {
+            this.dispatchInternal('_track_cost', { cost_usd: actionCostUsd });
             await this.budget.checkThresholds(this.state);
             yield* this.drainPendingEvents();
+          }
+        }
+
+        // Enforce per-node budget (max_tokens / max_cost_usd). Stops the
+        // workflow immediately on breach — no retry, since a retry would
+        // just compound the spend.
+        if (currentNode.budget) {
+          const nodeTokens = tokenUsage?.totalTokens ?? 0;
+          if (
+            currentNode.budget.max_tokens !== undefined &&
+            nodeTokens > currentNode.budget.max_tokens
+          ) {
+            logger.warn('node_budget_exceeded', {
+              node_id: currentNode.id,
+              limit: 'max_tokens',
+              used: nodeTokens,
+              cap: currentNode.budget.max_tokens,
+            });
+            this.dispatchInternal('_fail', {
+              last_error: `Node "${currentNode.id}" exceeded max_tokens: ${nodeTokens} > ${currentNode.budget.max_tokens}`,
+            });
+            await this.persistState();
+            yield* this.drainPendingEvents();
+            throw new NodeBudgetExceededError(
+              currentNode.id,
+              'max_tokens',
+              nodeTokens,
+              currentNode.budget.max_tokens,
+            );
+          }
+          if (
+            currentNode.budget.max_cost_usd !== undefined &&
+            actionCostUsd > currentNode.budget.max_cost_usd
+          ) {
+            logger.warn('node_budget_exceeded', {
+              node_id: currentNode.id,
+              limit: 'max_cost_usd',
+              used: actionCostUsd,
+              cap: currentNode.budget.max_cost_usd,
+            });
+            this.dispatchInternal('_fail', {
+              last_error: `Node "${currentNode.id}" exceeded max_cost_usd: $${actionCostUsd.toFixed(4)} > $${currentNode.budget.max_cost_usd.toFixed(4)}`,
+            });
+            await this.persistState();
+            yield* this.drainPendingEvents();
+            throw new NodeBudgetExceededError(
+              currentNode.id,
+              'max_cost_usd',
+              actionCostUsd,
+              currentNode.budget.max_cost_usd,
+            );
           }
         }
 

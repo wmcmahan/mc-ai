@@ -29,6 +29,7 @@ A **Node** is a unit of work that is executed by the graph. It can be a single a
 | `read_keys` | `Array<string>` | The keys to read from the state. |
 | `write_keys` | `Array<string>` | The keys to write to the state. |
 | `failure_policy` | `FailurePolicy` | The failure policy for the node. |
+| `budget` | `NodeBudget` | Per-node resource caps (`max_tokens`, `max_cost_usd`). Breaching either throws `NodeBudgetExceededError`. |
 | `requires_compensation` | `boolean` | Whether the node requires compensation. |
 
 ## Node types
@@ -76,6 +77,31 @@ Controls retry behaviour when a node fails. Applied per-node.
 | `max_backoff_ms` | `number` | `60000` | Maximum delay cap (ms). |
 | `timeout_ms` | `number` | — | Per-node execution timeout (ms). |
 | `circuit_breaker` | `object` | — | Trip after repeated failures, auto-recover via half-open probes. |
+
+### Per-node budget
+
+Caps a single node's resource consumption. Useful for guarding against a runaway annealing loop or an oversized LLM reflection extraction eating the whole workflow budget.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_tokens` | `number` | — | Cap on tokens used by this node's execution. |
+| `max_cost_usd` | `number` | — | Cap on USD spent by this node's execution. |
+
+Breaching either cap throws `NodeBudgetExceededError` and stops the workflow immediately — **no retry**, since a retry would just compound the spend. Workflow-level budgets (`WorkflowState.budget_usd`, `max_token_budget`) remain enforced independently.
+
+```typescript
+{
+  id: 'reflect',
+  type: 'reflection',
+  read_keys: ['notes'],
+  write_keys: ['reflect_reflection'],
+  reflection_config: { /* … */ },
+  budget: {
+    max_tokens: 20_000,
+    max_cost_usd: 0.10,
+  },
+}
+```
 
 ### Circuit breaker
 

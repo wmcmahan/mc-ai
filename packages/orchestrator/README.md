@@ -16,7 +16,7 @@ npm install @cycgraph/orchestrator
 
 ## 5-Minute Quick Start
 
-The fastest way to see the engine in action is to run an example. This requires Node.js 22+ and an Anthropic API key.
+The fastest way to see the engine in action is to run an example. This requires Node.js 24+ and an Anthropic API key.
 
 ```bash
 git clone https://github.com/wmcmahan/mc-ai.git

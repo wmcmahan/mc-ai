@@ -108,6 +108,29 @@ export const FailurePolicySchema = z.object({
 
 export type FailurePolicy = z.infer<typeof FailurePolicySchema>;
 
+// ─── Node Budget ────────────────────────────────────────────────────
+
+/**
+ * Per-node resource caps. Enforced after each successful node execution.
+ *
+ * When a cap is exceeded, the runner throws a `NodeBudgetExceededError`
+ * that flows through the node's `failure_policy` like any other failure
+ * — retries kick in if configured, otherwise the workflow fails fast.
+ *
+ * Separate from the workflow-level `budget_usd` / `max_token_budget` on
+ * `WorkflowState`: those guard the run as a whole; this guards a single
+ * node from eating the entire budget (e.g. a runaway annealing loop or
+ * an oversized LLM reflection extraction).
+ */
+export const NodeBudgetSchema = z.object({
+  /** Cap on tokens used by this node's execution (single attempt). */
+  max_tokens: z.number().int().positive().optional(),
+  /** Cap on USD spent by this node's execution (single attempt). */
+  max_cost_usd: z.number().positive().optional(),
+});
+
+export type NodeBudget = z.infer<typeof NodeBudgetSchema>;
+
 // ─── Supervisor ─────────────────────────────────────────────────────
 
 /**
@@ -669,6 +692,12 @@ export const GraphNodeSchema = z.object({
     initial_backoff_ms: 1000,
     max_backoff_ms: 60000,
   }),
+  /**
+   * Per-node resource caps (tokens / cost). Enforced after each successful
+   * node execution — exceeding a cap throws `NodeBudgetExceededError` and
+   * engages `failure_policy` retry like any other failure.
+   */
+  budget: NodeBudgetSchema.optional(),
   /** Whether this node pushes a compensating action for saga rollback. */
   requires_compensation: z.boolean().default(false),
 
