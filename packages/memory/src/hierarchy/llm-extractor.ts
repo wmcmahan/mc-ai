@@ -210,6 +210,7 @@ ${messagesText}`;
           created_at: now,
         },
         valid_from: episode.started_at,
+        tags: [],
       });
     }
 

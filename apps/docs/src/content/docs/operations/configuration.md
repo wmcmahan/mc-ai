@@ -45,7 +45,8 @@ Passed to `new GraphRunner(graph, state, options)`. Source: `runner/graph-runner
 | `usageRecorder` | `UsageRecorder` | noop | Cost / token recorder |
 | `toolResolver` | `ToolResolver` | none | MCP tool resolution (`MCPConnectionManager` recommended) |
 | `contextCompressor` | `ContextCompressor` | none | Compress memory before prompt injection |
-| `memoryRetriever` | `MemoryRetriever` | none | Pull facts from the hierarchical memory graph |
+| `memoryRetriever` | `MemoryRetriever` | none | Pull facts from the hierarchical memory graph. Only fires for nodes that declare a `memory_query` directive. |
+| `memoryWriter` | `MemoryWriter` | none | Persist facts produced by `reflection` nodes. Required for reflection nodes to function. |
 | `middleware` | `RunnerMiddleware[]` | `[]` | `beforeNodeExecute` / `afterReduce` hooks |
 
 ## `MCPConnectionManager` options

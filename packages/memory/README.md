@@ -227,6 +227,24 @@ const result = await retrieveMemory(store, index, {
 // Returns subgraph + related facts, themes, and episodes
 ```
 
+### Tag-Based Retrieval
+
+Every `SemanticFact` carries an optional `tags: string[]` field. Queries supplying `tags` (without `entity_ids` or `embedding`) take a dedicated path: list facts via `store.findFacts`, intersect tags, apply temporal validity, attach related themes and episodes. Useful for "give me all lessons from graph X" style queries that don't need an embedding provider.
+
+```typescript
+const result = await retrieveMemory(store, index, {
+  tags: ['lesson', 'graph:research-v1'],   // match at least one
+  limit: 20,
+  max_hops: 0,
+  min_similarity: 0,
+  include_invalidated: false,
+});
+```
+
+Tags also intersect with the embedding and entity paths — passing `tags` alongside `embedding` or `entity_ids` filters the matching facts to those carrying at least one tag.
+
+When facts are written by the orchestrator's `reflection` node, the configured `reflection_config.tags` are applied automatically — namespace them (e.g. `graph:my-workflow-v1`) so multiple graphs can share a store without polluting each other's retrieval.
+
 ### Temporal Filtering
 
 Filter records by validity windows:

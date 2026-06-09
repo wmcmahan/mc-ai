@@ -17,7 +17,7 @@ Graphs are defined in TypeScript (or generated organically by the [Architect](/g
 
 A Node is a discrete unit of work within a Graph. When a workflow is executed, the orchestrator traverses the graph and executes the logic defined inside each active node. 
 
-There are 10 core node types in cycgraph, ranging from simple conditionals and fan-out maps (`router`, `map`), to human-in-the-loop pauses (`approval`), to complex population-based breeding algorithms (`evolution`). 
+There are 12 core node types in cycgraph, ranging from simple conditionals and fan-out maps (`router`, `map`), to human-in-the-loop pauses (`approval`), to complex population-based breeding algorithms (`evolution`), to compound-learning primitives (`reflection`).
 
 *(See the full [Nodes reference](/concepts/nodes/) for all available types.)*
 

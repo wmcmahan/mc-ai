@@ -38,6 +38,13 @@ export const MemoryQuerySchema = z.object({
   min_similarity: z.number().min(0).max(1).default(0.5),
   /** Include invalidated records in results. */
   include_invalidated: z.boolean().default(false),
+  /**
+   * Restrict matches to facts carrying at least one of the listed tags.
+   * Omit (or leave empty) to skip tag filtering. Reflection nodes write
+   * facts with tags so downstream queries can scope retrieval to lessons
+   * from a specific graph or category.
+   */
+  tags: z.array(z.string()).default([]),
 });
 
 export type MemoryQuery = z.infer<typeof MemoryQuerySchema>;

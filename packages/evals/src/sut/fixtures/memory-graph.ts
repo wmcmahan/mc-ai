@@ -77,6 +77,7 @@ function makeFact(
     valid_from: validFrom,
     valid_until: validUntil,
     invalidated_by: invalidatedBy,
+    tags: [],
   };
 }
 

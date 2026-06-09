@@ -160,6 +160,7 @@ function toDbFact(fact: SemanticFact) {
     invalidated_by: fact.invalidated_by ?? null,
     access_count: fact.access_count ?? 0,
     last_accessed_at: fact.last_accessed_at ?? null,
+    tags: fact.tags,
   };
 }
 
@@ -177,6 +178,7 @@ function fromDbFact(row: typeof memory_facts.$inferSelect): SemanticFact {
     invalidated_by: row.invalidated_by ?? undefined,
     access_count: row.access_count ?? 0,
     last_accessed_at: row.last_accessed_at ?? undefined,
+    tags: (row.tags ?? []) as string[],
   };
 }
 

@@ -71,6 +71,7 @@ function fromDbFact(row: typeof memory_facts.$inferSelect): SemanticFact {
     invalidated_by: row.invalidated_by ?? undefined,
     access_count: row.access_count ?? 0,
     last_accessed_at: row.last_accessed_at ?? undefined,
+    tags: (row.tags ?? []) as string[],
   };
 }
 

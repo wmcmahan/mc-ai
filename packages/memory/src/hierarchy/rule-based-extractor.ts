@@ -137,6 +137,7 @@ export class RuleBasedExtractor implements SemanticExtractor {
             created_at: now,
           },
           valid_from: episode.started_at,
+          tags: [],
         });
 
         // Extract relationships between detected entities in this sentence

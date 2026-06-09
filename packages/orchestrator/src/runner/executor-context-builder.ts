@@ -22,10 +22,12 @@ import type { ToolResolver } from '../mcp/connection-manager.js';
 import type { ModelResolver } from '../agent/model-resolver.js';
 import type { ContextCompressor } from '../agent/context-compressor.js';
 import type { MemoryRetriever } from '../agent/memory-retriever.js';
+import type { MemoryWriter } from '../agent/memory-writer.js';
 import { createStateView } from './state-view.js';
 import { executeAgent } from '../agent/agent-executor/executor.js';
 import { executeSupervisor } from '../agent/supervisor-executor/executor.js';
 import { evaluateQualityExecutor } from '../agent/evaluator-executor/executor.js';
+import { extractFactsExecutor } from '../agent/extractor-executor/executor.js';
 import { agentFactory } from '../agent/agent-factory/index.js';
 import { getTaintRegistry } from '../utils/taint.js';
 import { resolveBuiltinsOnly } from './fallback-tool-resolver.js';
@@ -50,6 +52,7 @@ export interface ExecutorContextRunner {
   modelResolver?: ModelResolver;
   contextCompressor?: ContextCompressor;
   memoryRetriever?: MemoryRetriever;
+  memoryWriter?: MemoryWriter;
   toolResolver?: ToolResolver;
 
   emit(event: string, payload: unknown): boolean;
@@ -147,6 +150,7 @@ export function buildExecutorContext(runner: ExecutorContextRunner): NodeExecuto
     modelResolver: runner.modelResolver,
     contextCompressor: runner.contextCompressor,
     memoryRetriever: runner.memoryRetriever,
+    memoryWriter: runner.memoryWriter,
     remainingBudgetUsd,
     getRemainingBudgetUsd: () => {
       return (runner.state.budget_usd && runner.state.budget_usd > 0)
@@ -202,6 +206,7 @@ export function buildExecutorContext(runner: ExecutorContextRunner): NodeExecuto
       executeAgent,
       executeSupervisor,
       evaluateQualityExecutor,
+      extractFactsExecutor,
       loadAgent: (agentId: string) => agentFactory.loadAgent(agentId),
       getTaintRegistry,
       resolveTools: runner.toolResolver

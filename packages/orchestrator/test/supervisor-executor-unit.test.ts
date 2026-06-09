@@ -255,5 +255,108 @@ describe('SupervisorExecutor', () => {
       const result = buildSupervisorSystemPrompt('Base.', config, makeStateView(), []);
       expect(result).toContain('No data has been produced yet.');
     });
+
+    it('renders Relevant Memory section when retrievedMemory has facts', () => {
+      const result = buildSupervisorSystemPrompt('Base.', config, makeStateView(), [], {
+        retrievedMemory: {
+          facts: [{ content: 'Cite primary sources.', validFrom: new Date() }],
+          entities: [{ name: 'methodology', type: 'concept' }],
+          themes: [{ label: 'Research' }],
+        },
+      });
+      expect(result).toContain('## Relevant Memory');
+      expect(result).toContain('Cite primary sources.');
+      expect(result).toContain('Themes: Research');
+      expect(result).toContain('methodology (concept)');
+    });
+
+    it('omits Relevant Memory section when retrievedMemory is null/empty', () => {
+      const a = buildSupervisorSystemPrompt('Base.', config, makeStateView(), [], {
+        retrievedMemory: null,
+      });
+      const b = buildSupervisorSystemPrompt('Base.', config, makeStateView(), [], {
+        retrievedMemory: { facts: [], entities: [], themes: [] },
+      });
+      expect(a).not.toContain('## Relevant Memory');
+      expect(b).not.toContain('## Relevant Memory');
+    });
+  });
+
+  describe('executeSupervisor — memoryRetriever wiring', () => {
+    beforeEach(async () => {
+      const { generateText } = await import('ai');
+      (generateText as ReturnType<typeof vi.fn>).mockReset();
+      (generateText as ReturnType<typeof vi.fn>).mockResolvedValue({
+        output: { next_node: '__done__', reasoning: 'done' },
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      });
+    });
+
+    it('calls memoryRetriever with the configured tags-only query', async () => {
+      const memoryRetriever = vi.fn().mockResolvedValue({
+        facts: [{ content: 'Prior lesson.', validFrom: new Date() }],
+        entities: [],
+        themes: [],
+      });
+      const node = makeNode();
+      await executeSupervisor(node, makeStateView(), [], 1, {
+        memoryRetriever,
+        memory_query: { tags: ['supervisor-context'], maxFacts: 3 },
+      });
+
+      expect(memoryRetriever).toHaveBeenCalledTimes(1);
+      const [query, options] = memoryRetriever.mock.calls[0];
+      expect(query.tags).toEqual(['supervisor-context']);
+      expect(query.text).toBeUndefined();
+      expect(options.maxFacts).toBe(3);
+    });
+
+    it('defaults text to goal when memory_query is empty', async () => {
+      const memoryRetriever = vi.fn().mockResolvedValue(null);
+      const node = makeNode();
+      await executeSupervisor(
+        node,
+        { ...makeStateView(), goal: 'Route to the right specialist' },
+        [],
+        1,
+        { memoryRetriever, memory_query: {} },
+      );
+
+      expect(memoryRetriever).toHaveBeenCalledTimes(1);
+      expect(memoryRetriever.mock.calls[0][0].text).toBe('Route to the right specialist');
+    });
+
+    it('does not call retriever when memory_query is absent', async () => {
+      const memoryRetriever = vi.fn().mockResolvedValue(null);
+      await executeSupervisor(makeNode(), makeStateView(), [], 1, { memoryRetriever });
+      expect(memoryRetriever).not.toHaveBeenCalled();
+    });
+
+    it('absorbs retriever errors and still produces a routing decision', async () => {
+      const memoryRetriever = vi.fn().mockRejectedValue(new Error('store down'));
+      const result = await executeSupervisor(makeNode(), makeStateView(), [], 1, {
+        memoryRetriever,
+        memory_query: { tags: ['x'] },
+      });
+      expect(result.type).toBe('set_status');
+      expect(memoryRetriever).toHaveBeenCalledTimes(1);
+    });
+
+    it('flows retrieved facts into the system prompt passed to generateText', async () => {
+      const memoryRetriever = vi.fn().mockResolvedValue({
+        facts: [{ content: 'Prior lesson about routing.', validFrom: new Date() }],
+        entities: [],
+        themes: [],
+      });
+      await executeSupervisor(makeNode(), makeStateView(), [], 1, {
+        memoryRetriever,
+        memory_query: { tags: ['supervisor-context'] },
+      });
+
+      const { generateText } = await import('ai');
+      const callArgs = (generateText as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(callArgs.system).toContain('## Relevant Memory');
+      expect(callArgs.system).toContain('Prior lesson about routing.');
+    });
   });
 });

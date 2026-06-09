@@ -29,6 +29,7 @@ export const NodeTypeSchema = z.enum([
   'approval',
   'evolution',
   'verifier',
+  'reflection',
 ]);
 
 export type NodeType = z.infer<typeof NodeTypeSchema>;
@@ -438,6 +439,140 @@ export const VerificationResultSchema = z.object({
 
 export type VerificationResult = z.infer<typeof VerificationResultSchema>;
 
+// ─── Reflection ─────────────────────────────────────────────────────
+
+/**
+ * Rule-based reflection extractor: derives `SemanticFacts` from memory
+ * values using the deterministic `RuleBasedExtractor` from
+ * `@cycgraph/memory`. No LLM call — free and predictable.
+ */
+export const ReflectionRuleBasedExtractorSchema = z.object({
+  type: z.literal('rule_based'),
+  /** Minimum length (in characters) for an extracted sentence to qualify as a fact. */
+  min_sentence_length: z.number().int().min(1).default(15),
+});
+
+export type ReflectionRuleBasedExtractor = z.infer<typeof ReflectionRuleBasedExtractorSchema>;
+
+/**
+ * LLM reflection extractor: an evaluator-style agent distills lessons
+ * from the source memory values. Uses the same `evaluator-executor`
+ * primitive that powers verifier `llm_judge` and Evolution fitness.
+ */
+export const ReflectionLLMExtractorSchema = z.object({
+  type: z.literal('llm'),
+  /** Agent ID for the LLM extractor (typically an evaluator agent). */
+  agent_id: z.string(),
+  /** Custom instruction passed to the extractor (overrides the default lesson-distillation prompt). */
+  instruction: z.string().optional(),
+  /**
+   * Soft cap on the number of facts the LLM may return. The extractor
+   * trims the LLM's response to this value before persistence. Defaults
+   * to 10 — small enough that a future retrieval can include them all
+   * without blowing prompt budget.
+   */
+  max_facts: z.number().int().min(1).max(50).default(10),
+});
+
+export type ReflectionLLMExtractor = z.infer<typeof ReflectionLLMExtractorSchema>;
+
+/**
+ * Reflection node configuration.
+ *
+ * Compound-systems primitive: runs *after* productive work in a graph,
+ * distills the run's outcome into `SemanticFacts`, and writes them to
+ * the configured memory store via the injected `MemoryWriter`. Future
+ * runs retrieve these facts (filtered by tags) through `memoryRetriever`
+ * and compound knowledge over time.
+ */
+export const ReflectionConfigSchema = z.object({
+  /**
+   * Memory keys whose values feed into the extractor. The reflection
+   * node reads `state.memory[k]` for each `k` in `source_keys` (must be
+   * declared in the node's `read_keys`) and concatenates the values into
+   * the extractor input.
+   */
+  source_keys: z.array(z.string()).min(1),
+
+  /** Extraction strategy: deterministic rule-based or LLM-driven. */
+  extractor: z.discriminatedUnion('type', [
+    ReflectionRuleBasedExtractorSchema,
+    ReflectionLLMExtractorSchema,
+  ]),
+
+  /**
+   * Tags applied to every fact written by this node. Used by
+   * `memoryRetriever` queries to scope retrieval to lessons from a
+   * specific graph or domain (e.g. `['lesson', 'graph:research-v1']`).
+   */
+  tags: z.array(z.string()).default([]),
+
+  /**
+   * Memory keys whose values name entities the produced facts relate to.
+   * The reflection executor links facts to these entities via the
+   * knowledge graph so the lessons are reachable by entity-driven
+   * retrieval (`MemoryQuery.entity_ids`).
+   */
+  entity_keys: z.array(z.string()).optional(),
+
+  /**
+   * Memory key where a summary of the reflection (count of facts
+   * written, tags applied) is written for downstream nodes and tests.
+   * Defaults to `{node.id}_reflection`.
+   */
+  result_key: z.string().optional(),
+});
+
+export type ReflectionConfig = z.infer<typeof ReflectionConfigSchema>;
+
+/**
+ * Summary of a reflection node's output, written to memory at
+ * `result_key`. Phases 2/3 populate `fact_ids` with the IDs of the
+ * facts written; phase 1 writes only the structural envelope.
+ */
+export const ReflectionResultSchema = z.object({
+  /** Extractor variant that produced the facts. */
+  extractor_type: z.enum(['rule_based', 'llm']),
+  /** IDs of the facts written to the memory store. */
+  fact_ids: z.array(z.string()),
+  /** Tags applied to every written fact. */
+  tags: z.array(z.string()),
+  /** ISO timestamp at which reflection ran. */
+  reflected_at: z.string(),
+});
+
+export type ReflectionResult = z.infer<typeof ReflectionResultSchema>;
+
+// ─── Memory Query (per-node retrieval directive) ────────────────────
+
+/**
+ * Per-node memory retrieval directive.
+ *
+ * When set on a node, the runner calls the injected `memoryRetriever`
+ * with this query before building the agent's prompt, and renders the
+ * results into a `## Relevant Memory` section ahead of the regular
+ * workflow-state memory block.
+ *
+ * Routing:
+ *  - `tags` alone → tag-only retrieval (e.g. lessons from this graph)
+ *  - `entity_ids` → subgraph extraction around those entities
+ *  - `text` → semantic search (requires an embedding-capable retriever)
+ *  - If `text` and `entity_ids` are both omitted, the runtime defaults
+ *    `text` to the workflow `goal` so RAG-style use cases need zero config.
+ */
+export const MemoryQuerySchema = z.object({
+  /** Natural-language query (semantic search). Defaults to the workflow goal when omitted. */
+  text: z.string().optional(),
+  /** Seed entity IDs for knowledge-graph subgraph extraction. */
+  entity_ids: z.array(z.string()).optional(),
+  /** Restrict matches to facts carrying at least one of these tags. */
+  tags: z.array(z.string()).optional(),
+  /** Soft cap on facts injected into the prompt. */
+  max_facts: z.number().int().min(1).max(100).optional(),
+});
+
+export type MemoryQuery = z.infer<typeof MemoryQuerySchema>;
+
 // ─── Subgraph ───────────────────────────────────────────────────────
 
 /**
@@ -501,6 +636,14 @@ export const GraphNodeSchema = z.object({
   evolution_config: EvolutionConfigSchema.optional(),
   /** Verifier config (for `verifier` nodes). */
   verifier_config: VerifierConfigSchema.optional(),
+  /** Reflection config (for `reflection` nodes). */
+  reflection_config: ReflectionConfigSchema.optional(),
+  /**
+   * Memory retrieval directive. When set, the runner calls the injected
+   * `memoryRetriever` before building the agent prompt and renders the
+   * results into a `## Relevant Memory` section. See {@link MemoryQuerySchema}.
+   */
+  memory_query: MemoryQuerySchema.optional(),
 
   // ── Security ──
   /** Memory keys this node may read (`['*']` = all). */

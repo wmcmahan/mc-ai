@@ -58,6 +58,7 @@ export default defineConfig({
           items: [
             { label: 'Supervisor', slug: 'patterns/supervisor' },
             { label: 'Evolution (DGM)', slug: 'patterns/evolution' },
+            { label: 'Reflection', slug: 'patterns/reflection' },
             { label: 'Self-Annealing', slug: 'patterns/self-annealing' },
             { label: 'Swarm', slug: 'patterns/swarm' },
             { label: 'Human-in-the-Loop', slug: 'patterns/human-in-the-loop' },

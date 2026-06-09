@@ -18,6 +18,7 @@ import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { ensureSaveToMemory } from './agent.js';
 import { resolveModelForAgent } from './resolve-model.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.evolution');
 
@@ -141,7 +142,9 @@ export async function executeEvolutionNode(
     const temperature = config.initial_temperature +
       (config.final_temperature - config.initial_temperature) * progress;
 
-    // Create parallel tasks for candidate generation
+    // Create parallel tasks for candidate generation. The parent node's
+    // `memory_query` propagates so every candidate sees the same
+    // retrieved memory in its prompt.
     const tasks: ParallelTask[] = Array.from({ length: config.population_size }, (_, idx) => ({
       node: {
         id: `${node.id}_gen${gen}_candidate${idx}`,
@@ -151,6 +154,7 @@ export async function executeEvolutionNode(
         write_keys: ['*'],
         failure_policy: node.failure_policy,
         requires_compensation: false,
+        ...(node.memory_query ? { memory_query: node.memory_query } : {}),
       },
       stateView: {
         ...stateView,
@@ -180,7 +184,7 @@ export async function executeEvolutionNode(
           task.stateView,
           tools,
           attempt,
-          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}), ...(task.node.default_write_key ? { default_write_key: task.node.default_write_key } : {}) },
+          { temperature_override: temperature, node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}), ...(task.node.default_write_key ? { default_write_key: task.node.default_write_key } : {}), ...buildAgentMemoryOptions(task.node, ctx) },
         );
       },
       { max_concurrency: config.max_concurrency, error_strategy: config.error_strategy, task_timeout_ms: config.task_timeout_ms },

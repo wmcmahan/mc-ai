@@ -16,6 +16,7 @@ import { NodeConfigError } from '../errors.js';
 import { ensureSaveToMemory } from './agent.js';
 import type { NodeExecutorContext } from './context.js';
 import { resolveModelForAgent } from './resolve-model.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.swarm');
 
@@ -74,6 +75,7 @@ export async function executeSwarmAgentNode(
     drainTaintEntries: ctx.deps.drainTaintEntries,
     ...(modelOverride ? { model_override: modelOverride } : {}),
     ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
+    ...buildAgentMemoryOptions(node, ctx),
   });
 
   const updates = action.payload.updates as Record<string, unknown>;

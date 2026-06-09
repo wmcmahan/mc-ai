@@ -93,6 +93,7 @@ function makeFact(
     valid_from: validFrom,
     valid_until: validUntil,
     invalidated_by: invalidatedBy,
+    tags: [],
   };
 }
 
@@ -299,6 +300,7 @@ async function runEntityRetrievalTest(): Promise<TestCaseResults> {
 
   const result = await retrieveMemory(store, index, {
     entity_ids: ['e-alice'],
+    tags: [],
     max_hops: 1,
     limit: 20,
     min_similarity: 0,

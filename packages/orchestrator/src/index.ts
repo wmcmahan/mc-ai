@@ -30,6 +30,7 @@ export type { GraphRunnerMiddleware, MiddlewareContext, BeforeNodeResult } from 
 export { createObserverMiddleware } from './runner/observer-middleware.js';
 export type { ObserverMiddlewareOptions, ObserverFinding, ObserverSeverity, DiagnosticAgentOptions } from './runner/observer-middleware.js';
 export { BudgetExceededError, WorkflowTimeoutError, NodeConfigError, CircuitBreakerOpenError, EventLogCorruptionError, UnsupportedNodeTypeError } from './runner/errors.js';
+export { MemoryWriterMissingError } from './runner/node-executors/reflection.js';
 
 // ─── Stream Events ─────────────────────────────────────────────────
 export type { StreamEvent, TerminalStreamEvent, ModelResolvedEvent, ContextCompressedEvent, MemoryDiff } from './runner/stream-events.js';
@@ -102,10 +103,22 @@ export type {
   MemoryRetrievalResult,
 } from './agent/memory-retriever.js';
 
+// ─── Memory Writer (Reflection) ───────────────────────────────────
+export type {
+  MemoryWriter,
+  MemoryWriterFact,
+  MemoryWriterResult,
+} from './agent/memory-writer.js';
+
 // ─── Evaluator (LLM-as-Judge) ───────────────────────────────────────
 
 export { evaluateQualityExecutor as evaluateQuality } from './agent/evaluator-executor/executor.js';
 export type { EvaluationResult } from './agent/evaluator-executor/executor.js';
+
+// ─── Extractor (LLM Fact Extraction) ────────────────────────────────
+
+export { extractFactsExecutor, DEFAULT_MAX_FACTS } from './agent/extractor-executor/executor.js';
+export type { ExtractionResult as FactExtractionResult } from './agent/extractor-executor/executor.js';
 
 // ─── Supervisor (Hierarchical Pattern) ──────────────────────────────
 

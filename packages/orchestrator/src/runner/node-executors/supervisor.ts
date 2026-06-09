@@ -12,6 +12,7 @@ import type { Action, StateView } from '../../types/state.js';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
 import { resolveModelForAgent } from './resolve-model.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.supervisor');
 
@@ -58,6 +59,7 @@ export async function executeSupervisorNode(
             durationMs: metrics.totalDurationMs,
           }, node.id)
         : undefined,
+      ...buildAgentMemoryOptions(node, ctx),
     },
   );
 }

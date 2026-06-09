@@ -36,6 +36,14 @@ export const SemanticFactSchema = z.object({
   access_count: z.number().int().nonnegative().default(0).optional(),
   /** When this fact was last accessed. */
   last_accessed_at: z.coerce.date().optional(),
+  /**
+   * Free-form tags for retrieval scoping. Used by reflection nodes to
+   * mark facts as lessons from a specific graph (`graph:research-v1`),
+   * a category (`lesson`, `failure`), or any other dimension callers
+   * want to query by. Defaults to an empty array so existing fact
+   * creation paths are unaffected.
+   */
+  tags: z.array(z.string()).default([]),
 });
 
 export type SemanticFact = z.infer<typeof SemanticFactSchema>;

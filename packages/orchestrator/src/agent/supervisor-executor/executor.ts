@@ -70,6 +70,15 @@ export async function executeSupervisor(
     model_override?: string;
     contextCompressor?: import('../context-compressor.js').ContextCompressor;
     onContextCompressed?: (metrics: import('../context-compressor.js').ContextCompressionMetrics) => void;
+    /** Memory retriever for injecting relevant facts into the routing prompt. */
+    memoryRetriever?: import('../memory-retriever.js').MemoryRetriever;
+    /** Per-node retrieval directive (paired with `memoryRetriever`). */
+    memory_query?: {
+      text?: string;
+      entityIds?: string[];
+      tags?: string[];
+      maxFacts?: number;
+    };
   },
 ): Promise<Action> {
   return withSpan(tracer, 'supervisor.route', async (span) => {
@@ -122,10 +131,20 @@ export async function executeSupervisor(
       : agentConfig;
     const model = agentFactory.getModel(effectiveConfig);
 
+    // Resolve memory retrieval (best-effort — failures must never block
+    // routing; the supervisor still gets the workflow-state memory below).
+    const retrievedMemory = await retrieveForSupervisorPrompt(
+      options?.memoryRetriever,
+      options?.memory_query,
+      stateView,
+      effectiveConfig.model,
+    );
+
     const systemPrompt = buildSupervisorSystemPrompt(agentConfig.system, config, stateView, supervisorHistory, {
       contextCompressor: options?.contextCompressor,
       model: effectiveConfig.model,
       onCompressed: options?.onContextCompressed,
+      retrievedMemory,
     });
 
     logger.info('routing', {
@@ -248,4 +267,45 @@ function createCompletionAction(
       duration_ms: duration,
     },
   };
+}
+
+/**
+ * Resolve memory for the supervisor's routing prompt. Mirrors
+ * `retrieveForPrompt` in agent-executor: best-effort, default-text-to-goal
+ * only when no explicit query knob is set.
+ */
+async function retrieveForSupervisorPrompt(
+  retriever: import('../memory-retriever.js').MemoryRetriever | undefined,
+  rawQuery:
+    | { text?: string; entityIds?: string[]; tags?: string[]; maxFacts?: number }
+    | undefined,
+  stateView: StateView,
+  model: string,
+): Promise<import('../memory-retriever.js').MemoryRetrievalResult | null> {
+  if (!retriever || !rawQuery) return null;
+
+  const query: { text?: string; entityIds?: string[]; tags?: string[] } = {};
+  if (rawQuery.text) query.text = rawQuery.text;
+  if (rawQuery.entityIds && rawQuery.entityIds.length > 0) query.entityIds = rawQuery.entityIds;
+  if (rawQuery.tags && rawQuery.tags.length > 0) query.tags = rawQuery.tags;
+
+  if (
+    query.text === undefined &&
+    query.entityIds === undefined &&
+    query.tags === undefined
+  ) {
+    query.text = stateView.goal;
+  }
+
+  try {
+    return await retriever(query, {
+      ...(rawQuery.maxFacts !== undefined ? { maxFacts: rawQuery.maxFacts } : {}),
+      model,
+    });
+  } catch (err) {
+    logger.warn('memory_retriever_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }

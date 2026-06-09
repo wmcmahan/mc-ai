@@ -16,6 +16,7 @@ import { createLogger } from '../../utils/logger.js';
 import { ensureSaveToMemory } from './agent.js';
 import { NodeConfigError, UnsupportedNodeTypeError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.map');
 
@@ -52,6 +53,7 @@ export async function executeWorkerWithStateView(
         onToken,
         drainTaintEntries: ctx.deps.drainTaintEntries,
         ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
+        ...buildAgentMemoryOptions(node, ctx),
       });
     }
     case 'tool': {

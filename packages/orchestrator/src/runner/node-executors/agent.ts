@@ -16,6 +16,7 @@ import type { NodeExecutorContext } from './context.js';
 import { executeAnnealingLoop } from './annealing.js';
 import { executeSwarmAgentNode } from './swarm.js';
 import { resolveModelForAgent } from './resolve-model.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.agent');
 
@@ -104,5 +105,6 @@ export async function executeAgentNode(
           durationMs: metrics.totalDurationMs,
         }, node.id)
       : undefined,
+    ...buildAgentMemoryOptions(node, ctx),
   });
 }

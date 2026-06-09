@@ -113,6 +113,23 @@ export async function executeAgent(
     onContextCompressed?: (metrics: import('../context-compressor.js').ContextCompressionMetrics) => void;
     /** Default write key from node config for orchestrator-managed text output. */
     default_write_key?: string;
+    /**
+     * Memory retriever to call before prompt construction. Combined with
+     * `memory_query` and rendered into the system prompt's Relevant Memory section.
+     */
+    memoryRetriever?: import('../memory-retriever.js').MemoryRetriever;
+    /**
+     * Per-node retrieval directive. When set alongside `memoryRetriever`,
+     * the executor awaits a retrieval call and feeds the result into
+     * `buildSystemPrompt`. Defaults `text` to `stateView.goal` if neither
+     * `text` nor `entityIds` is set.
+     */
+    memory_query?: {
+      text?: string;
+      entityIds?: string[];
+      tags?: string[];
+      maxFacts?: number;
+    };
   }
 ): Promise<Action> {
   return withSpan(tracer, 'agent.execute', async (span) => {
@@ -147,12 +164,22 @@ export async function executeAgent(
     const tools = buildToolSet(rawTools, agent_id);
     const hasSaveToMemoryTool = 'save_to_memory' in tools;
 
+    // Resolve memory retrieval (best-effort — failures must never block
+    // execution; the agent still gets the workflow-state memory below).
+    const retrievedMemory = await retrieveForPrompt(
+      options?.memoryRetriever,
+      options?.memory_query,
+      stateView,
+      effectiveConfig.model,
+    );
+
     // Build context-aware prompt (with injection guards)
     const systemPrompt = buildSystemPrompt(config, stateView, {
       contextCompressor: options?.contextCompressor,
       model: effectiveConfig.model,
       onCompressed: options?.onContextCompressed,
       hasSaveToMemoryTool,
+      retrievedMemory,
     });
     const taskPrompt = buildTaskPrompt(stateView, attempt);
 
@@ -400,6 +427,55 @@ export async function executeAgent(
 
     return action;
   });
+}
+
+/**
+ * Resolve memory for the upcoming agent prompt via the injected
+ * `memoryRetriever`. Best-effort: any failure is logged and swallowed so
+ * a downed knowledge store never blocks the workflow. Returns `null` when
+ * no retriever or no query is provided.
+ *
+ * Defaults `text` to `stateView.goal` when neither `text` nor `entityIds`
+ * is set on the query so RAG-style use cases work with `memory_query: {}`.
+ */
+async function retrieveForPrompt(
+  retriever: import('../memory-retriever.js').MemoryRetriever | undefined,
+  rawQuery:
+    | { text?: string; entityIds?: string[]; tags?: string[]; maxFacts?: number }
+    | undefined,
+  stateView: StateView,
+  model: string,
+): Promise<import('../memory-retriever.js').MemoryRetrievalResult | null> {
+  if (!retriever || !rawQuery) return null;
+
+  const query: { text?: string; entityIds?: string[]; tags?: string[] } = {};
+  if (rawQuery.text) query.text = rawQuery.text;
+  if (rawQuery.entityIds && rawQuery.entityIds.length > 0) query.entityIds = rawQuery.entityIds;
+  if (rawQuery.tags && rawQuery.tags.length > 0) query.tags = rawQuery.tags;
+
+  // Default text to goal so RAG-style use (`memory_query: {}`) needs zero
+  // configuration. Skip the fallback when tags or entityIds are present —
+  // those queries are intentional and adding a goal-derived text would
+  // muddy the retriever's intent.
+  if (
+    query.text === undefined &&
+    query.entityIds === undefined &&
+    query.tags === undefined
+  ) {
+    query.text = stateView.goal;
+  }
+
+  try {
+    return await retriever(query, {
+      ...(rawQuery.maxFacts !== undefined ? { maxFacts: rawQuery.maxFacts } : {}),
+      model,
+    });
+  } catch (err) {
+    logger.warn('memory_retriever_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 /**

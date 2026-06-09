@@ -7,6 +7,7 @@ import { NodeConfigError } from '../errors.js';
 import type { NodeExecutorContext } from './context.js';
 import { ensureSaveToMemory } from './agent.js';
 import { resolveModelForAgent } from './resolve-model.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.voting');
 
@@ -57,7 +58,9 @@ export async function executeVotingNode(
     strategy: config.strategy,
   });
 
-  // Create synthetic agent nodes for each voter
+  // Create synthetic agent nodes for each voter. The parent node's
+  // `memory_query` propagates so every voter sees the same retrieved
+  // memory in their prompt.
   const tasks: ParallelTask[] = config.voter_agent_ids.map((agent_id, idx) => ({
     node: {
       id: `${node.id}_voter_${idx}`,
@@ -67,6 +70,7 @@ export async function executeVotingNode(
       write_keys: [config.vote_key],
       failure_policy: node.failure_policy,
       requires_compensation: false,
+      ...(node.memory_query ? { memory_query: node.memory_query } : {}),
     },
     stateView: {
       ...stateView,
@@ -87,7 +91,7 @@ export async function executeVotingNode(
       const { modelOverride } = resolveModelForAgent(agentConfig, task.node.agent_id!, task.node.id, ctx);
       const tools = await ctx.deps.resolveTools(ensureSaveToMemory(agentConfig.tools, agentConfig.write_keys), task.node.agent_id!);
       const onToken = ctx.onToken ? (t: string) => ctx.onToken!(t, task.node.id) : undefined;
-      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}), ...(task.node.default_write_key ? { default_write_key: task.node.default_write_key } : {}) });
+      return ctx.deps.executeAgent(task.node.agent_id!, task.stateView, tools, attempt, { node_id: task.node.id, abortSignal: ctx.abortSignal, onToken, drainTaintEntries: ctx.deps.drainTaintEntries, ...(modelOverride ? { model_override: modelOverride } : {}), ...(task.node.default_write_key ? { default_write_key: task.node.default_write_key } : {}), ...buildAgentMemoryOptions(task.node, ctx) });
     },
     { max_concurrency: config.voter_agent_ids.length, error_strategy: 'best_effort', task_timeout_ms: config.task_timeout_ms },
   );

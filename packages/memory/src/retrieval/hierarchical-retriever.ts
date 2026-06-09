@@ -27,7 +27,10 @@ import { filterValid } from './temporal-filter.js';
  * Strategy:
  * - If query has `entity_ids`: use subgraph extraction, then attach related facts/themes
  * - If query has `embedding`: search themes by similarity, expand to facts → episodes
- * - Both paths apply temporal filtering and respect limits
+ * - Else if query has `tags`: list facts by tag (no embedding needed). Used by
+ *   `reflection` consumers that just want "lessons from graph X" without an
+ *   embedding provider.
+ * - All paths apply tag + temporal filtering and respect limits.
  */
 export async function retrieveMemory(
   store: MemoryStore,
@@ -44,7 +47,14 @@ export async function retrieveMemory(
     return retrieveByEmbedding(store, index, query);
   }
 
-  // No embedding and no entity_ids: return empty result
+  // Tag-only path: list facts by tag. Used by reflection consumers that
+  // just want lessons from a specific graph/category, without requiring
+  // an embedding provider or pre-known entity ids.
+  if (query.tags && query.tags.length > 0) {
+    return retrieveByTags(store, query);
+  }
+
+  // No embedding, no entity_ids, no tags: empty result.
   return { themes: [], facts: [], episodes: [], entities: [], relationships: [] };
 }
 
@@ -75,7 +85,7 @@ async function retrieveByEmbedding(
   }
 
   const factsMap = await store.getFacts([...factIds]);
-  const allFacts: SemanticFact[] = [...factsMap.values()];
+  const allFacts: SemanticFact[] = filterByTags([...factsMap.values()], query.tags);
 
   // Apply temporal filters
   const filteredFacts = filterValid(allFacts, {
@@ -149,7 +159,7 @@ async function retrieveByEntities(
     }
   }
 
-  const filteredFacts = filterValid(allFacts, {
+  const filteredFacts = filterValid(filterByTags(allFacts, query.tags), {
     valid_at,
     changed_since: query.changed_since,
     include_invalidated,
@@ -182,6 +192,80 @@ async function retrieveByEntities(
     entities: subgraph.entities.slice(0, limit),
     relationships: subgraph.relationships.slice(0, limit),
   };
+}
+
+/**
+ * Tag-only retrieval. Walks the store in pages, retains only facts whose
+ * `tags` intersect `query.tags`, applies temporal filtering, then expands
+ * to themes and episodes. Stops early once `limit` qualifying facts have
+ * been collected to bound work for large stores.
+ *
+ * No entities or relationships are returned — those require entity-driven
+ * traversal. Callers that need the knowledge-graph view should query with
+ * `entity_ids` instead.
+ */
+async function retrieveByTags(
+  store: MemoryStore,
+  query: MemoryQuery,
+): Promise<MemoryResult> {
+  const { limit, include_invalidated } = query;
+  const PAGE_SIZE = Math.max(limit * 4, 100);
+
+  const matching: SemanticFact[] = [];
+  let offset = 0;
+  // Page through facts until we have `limit` matches or run out.
+  // findFacts returning fewer than PAGE_SIZE rows signals end-of-data.
+  while (matching.length < limit) {
+    const page = await store.findFacts({
+      include_invalidated,
+      limit: PAGE_SIZE,
+      offset,
+    });
+    if (page.length === 0) break;
+    const taggedPage = filterByTags(page, query.tags);
+    const validPage = filterValid(taggedPage, {
+      valid_at: query.valid_at,
+      changed_since: query.changed_since,
+      include_invalidated,
+    });
+    for (const fact of validPage) {
+      matching.push(fact);
+      if (matching.length >= limit) break;
+    }
+    if (page.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+
+  const facts = matching.slice(0, limit);
+
+  // Expand to themes and episodes
+  const themeIds = new Set<string>();
+  const episodeIds = new Set<string>();
+  for (const fact of facts) {
+    if (fact.theme_id) themeIds.add(fact.theme_id);
+    for (const epId of fact.source_episode_ids) episodeIds.add(epId);
+  }
+
+  const themesMap = await store.getThemes([...themeIds]);
+  const episodesMap = await store.getEpisodes([...episodeIds]);
+
+  return {
+    themes: [...themesMap.values()].slice(0, limit),
+    facts,
+    episodes: [...episodesMap.values()].slice(0, limit),
+    entities: [],
+    relationships: [],
+  };
+}
+
+/**
+ * Keep only facts carrying at least one of the requested tags.
+ * Empty / omitted `tags` is a no-op so existing callers are unaffected.
+ */
+function filterByTags(facts: SemanticFact[], tags: readonly string[] | undefined): SemanticFact[] {
+  if (!tags || tags.length === 0) return facts;
+  const wanted = new Set(tags);
+  return facts.filter((fact) => fact.tags.some((t) => wanted.has(t)));
 }
 
 async function getRelationshipsBetween(

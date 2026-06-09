@@ -18,6 +18,7 @@ import type { ToolSource } from '../../types/tools.js';
 import type { ModelResolver, ModelResolutionResult, ModelTier } from '../../agent/model-resolver.js';
 import type { ContextCompressor, ContextCompressionMetrics } from '../../agent/context-compressor.js';
 import type { MemoryRetriever } from '../../agent/memory-retriever.js';
+import type { MemoryWriter } from '../../agent/memory-writer.js';
 
 /**
  * Raw tool definition — description + parameters without an execute function.
@@ -93,6 +94,15 @@ export interface ExecutorDependencies {
       contextCompressor?: ContextCompressor;
       /** Callback fired when context compression runs. */
       onContextCompressed?: (metrics: ContextCompressionMetrics) => void;
+      /** Memory retriever for injecting relevant facts into prompts. */
+      memoryRetriever?: MemoryRetriever;
+      /** Per-node retrieval directive (paired with `memoryRetriever`). */
+      memory_query?: {
+        text?: string;
+        entityIds?: string[];
+        tags?: string[];
+        maxFacts?: number;
+      };
     },
   ) => Promise<Action>;
 
@@ -115,6 +125,15 @@ export interface ExecutorDependencies {
       contextCompressor?: ContextCompressor;
       /** Callback fired when context compression runs. */
       onContextCompressed?: (metrics: ContextCompressionMetrics) => void;
+      /** Memory retriever for injecting relevant facts into the routing prompt. */
+      memoryRetriever?: MemoryRetriever;
+      /** Per-node retrieval directive (paired with `memoryRetriever`). */
+      memory_query?: {
+        text?: string;
+        entityIds?: string[];
+        tags?: string[];
+        maxFacts?: number;
+      };
     },
   ) => Promise<Action>;
 
@@ -125,6 +144,17 @@ export interface ExecutorDependencies {
     data: unknown,
     instruction?: string,
   ) => Promise<{ score: number; reasoning: string; tokens_used: number }>;
+
+  /**
+   * Extract a bounded list of atomic facts from source text via an LLM.
+   * Used by the reflection node's `llm` extractor variant.
+   */
+  extractFactsExecutor: (
+    extractorAgentId: string,
+    source: unknown,
+    max_facts?: number,
+    instruction?: string,
+  ) => Promise<{ facts: string[]; reasoning?: string; tokens_used: number }>;
 
   /**
    * Resolve structured tool sources into AI SDK tool objects.
@@ -166,6 +196,8 @@ export interface NodeExecutorContext {
   contextCompressor?: ContextCompressor;
   /** Memory retriever for injecting relevant facts into prompts (from GraphRunnerOptions). */
   memoryRetriever?: MemoryRetriever;
+  /** Memory writer for persisting facts produced by reflection nodes (from GraphRunnerOptions). */
+  memoryWriter?: MemoryWriter;
   /** Callback fired when context compression runs on a prompt's memory section. */
   onContextCompressed?: (event: { tokensIn: number; tokensOut: number; reductionPercent: number; durationMs: number }, nodeId: string) => void;
   /** Remaining workflow budget in USD, or `undefined` if unlimited (static snapshot — prefer getRemainingBudgetUsd). */

@@ -88,10 +88,12 @@ async function ingestMessages(messages: Message[]): Promise<void> {
   for (const ep of episodes) {
     await memoryStore.putEpisode(ep);
 
-    // Extract atomic facts and entities from each episode
+    // Extract atomic facts and entities from each episode. Tag each
+    // fact with PRIOR_KNOWLEDGE_TAG so the agent nodes' `memory_query`
+    // can scope retrieval to this seeded corpus.
     const result = await extractor.extract(ep);
     for (const fact of result.facts) {
-      await memoryStore.putFact(fact);
+      await memoryStore.putFact({ ...fact, tags: [PRIOR_KNOWLEDGE_TAG] });
     }
     for (const entity of result.entities) {
       await memoryStore.putEntity(entity);
@@ -175,13 +177,20 @@ const contextCompressor: ContextCompressor = (sanitizedMemory, options) => {
   };
 };
 
+// Tag used to mark facts derived from the seeded prior conversation.
+// Nodes that declare `memory_query: { tags: [PRIOR_KNOWLEDGE_TAG] }` will
+// see those facts in their prompt's Relevant Memory section.
+const PRIOR_KNOWLEDGE_TAG = 'llm-knowledge';
+
 /**
  * Memory retriever: fetches relevant facts from the memory hierarchy
- * for injection into agent prompts. Uses hierarchical top-down search.
+ * for injection into agent prompts. Routes on entity IDs, tags, or a
+ * mix — whichever the node's `memory_query` declares.
  */
 const memoryRetriever: MemoryRetriever = async (query, options) => {
   const result = await retrieveMemory(memoryStore, memoryIndex, {
     entity_ids: query.entityIds,
+    tags: query.tags ?? [],
     limit: options?.maxFacts ?? 20,
     min_similarity: 0.3,
     max_hops: 2,
@@ -256,6 +265,9 @@ const graph = createGraph({
       agent_id: RESEARCHER_ID,
       read_keys: ['goal', 'constraints'],
       write_keys: ['research_notes'],
+      // Pulls facts derived from the seeded prior conversation into the
+      // researcher's prompt under a "## Relevant Memory" section.
+      memory_query: { tags: [PRIOR_KNOWLEDGE_TAG], max_facts: 10 },
       failure_policy: { max_retries: 2, backoff_strategy: 'exponential', initial_backoff_ms: 1000, max_backoff_ms: 60000 },
       requires_compensation: false,
     },
@@ -265,6 +277,7 @@ const graph = createGraph({
       agent_id: WRITER_ID,
       read_keys: ['goal', 'research_notes'],
       write_keys: ['draft'],
+      memory_query: { tags: [PRIOR_KNOWLEDGE_TAG], max_facts: 10 },
       failure_policy: { max_retries: 2, backoff_strategy: 'exponential', initial_backoff_ms: 1000, max_backoff_ms: 60000 },
       requires_compensation: false,
     },

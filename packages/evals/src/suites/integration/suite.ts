@@ -109,6 +109,7 @@ function makeFact(
     valid_from: validFrom,
     valid_until: validUntil,
     invalidated_by: invalidatedBy,
+    tags: [],
   };
 }
 
@@ -240,6 +241,7 @@ async function runMemoryRetrieval(): Promise<TestCaseResults> {
 
   const result = await retrieveMemory(store, index, {
     entity_ids: ['e-alice'],
+    tags: [],
     max_hops: 1,
     limit: 20,
     min_similarity: 0,
@@ -275,6 +277,7 @@ async function runContextCompression(): Promise<TestCaseResults> {
 
   const result = await retrieveMemory(store, index, {
     entity_ids: ['e-alice'],
+    tags: [],
     max_hops: 2,
     limit: 20,
     min_similarity: 0,
@@ -376,6 +379,7 @@ async function runMemoryRetrieverAdapter(): Promise<TestCaseResults> {
   const retriever: MemoryRetriever = async (query, _options) => {
     const result = await retrieveMemory(store, index, {
       entity_ids: query.entityIds,
+      tags: [],
       max_hops: 1,
       limit: 20,
       min_similarity: 0,
@@ -624,6 +628,7 @@ async function runEndToEnd(): Promise<TestCaseResults> {
   // Step 5: Retrieve memory for Alice
   const retrieved = await retrieveMemory(store, index, {
     entity_ids: ['e-alice'],
+    tags: [],
     max_hops: 1,
     limit: 20,
     min_similarity: 0,

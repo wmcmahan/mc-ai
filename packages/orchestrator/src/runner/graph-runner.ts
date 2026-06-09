@@ -51,6 +51,7 @@ import type { ToolResolver } from '../mcp/connection-manager.js';
 import type { ModelResolver } from '../agent/model-resolver.js';
 import type { ContextCompressor } from '../agent/context-compressor.js';
 import type { MemoryRetriever } from '../agent/memory-retriever.js';
+import type { MemoryWriter } from '../agent/memory-writer.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
 
 // Extracted modules
@@ -69,6 +70,7 @@ import {
   executeSubgraphNode,
   executeEvolutionNode,
   executeVerifierNode,
+  executeReflectionNode,
 } from './node-executors/index.js';
 
 const logger = createLogger('runner.graph');
@@ -184,6 +186,16 @@ export interface GraphRunnerOptions {
    */
   memoryRetriever?: MemoryRetriever;
   /**
+   * Optional memory writer for persisting facts produced by `reflection`
+   * nodes. Required for reflection nodes to function — without it, the
+   * reflection executor throws at runtime.
+   *
+   * Mirrors `memoryRetriever`: the orchestrator defines the type, the
+   * user provides the implementation (typically backed by an
+   * `@cycgraph/memory` store).
+   */
+  memoryWriter?: MemoryWriter;
+  /**
    * Number of events between automatic event log compactions.
    *
    * When set (and an `eventLog` is provided), the runner will
@@ -263,6 +275,9 @@ export class GraphRunner extends EventEmitter {
   // Memory retriever for injecting relevant facts into prompts (optional)
   private readonly memoryRetriever?: MemoryRetriever;
 
+  // Memory writer for persisting facts from reflection nodes (optional)
+  private readonly memoryWriter?: MemoryWriter;
+
   // Auto-compaction: compact event log every N events (0 = disabled)
   private readonly compactionInterval: number;
 
@@ -312,6 +327,7 @@ export class GraphRunner extends EventEmitter {
     this.modelResolver = options?.modelResolver;
     this.contextCompressor = options?.contextCompressor;
     this.memoryRetriever = options?.memoryRetriever;
+    this.memoryWriter = options?.memoryWriter;
     this.autoRollback = options?.auto_rollback ?? false;
     this.compactionInterval = options?.compaction_interval ?? 0;
     this.persistDeltaFn = options?.persistDeltaFn;
@@ -457,6 +473,7 @@ export class GraphRunner extends EventEmitter {
       get modelResolver() { return self.modelResolver; },
       get contextCompressor() { return self.contextCompressor; },
       get memoryRetriever() { return self.memoryRetriever; },
+      get memoryWriter() { return self.memoryWriter; },
       get toolResolver() { return self.toolResolver; },
       emit: (event, payload) => self.emit(event, payload),
       listenerCount: (event) => self.listenerCount(event),
@@ -1267,6 +1284,8 @@ export class GraphRunner extends EventEmitter {
         return await executeEvolutionNode(node, stateView, attempt, ctx);
       case 'verifier':
         return await executeVerifierNode(node, stateView, attempt, ctx);
+      case 'reflection':
+        return await executeReflectionNode(node, stateView, attempt, ctx);
       default:
         throw new UnsupportedNodeTypeError(node.type);
     }

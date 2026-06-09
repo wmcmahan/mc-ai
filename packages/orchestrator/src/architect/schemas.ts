@@ -52,7 +52,7 @@ const LLMSupervisorConfigSchema = z.object({
 /** A single node in the LLM-generated graph. */
 const LLMGraphNodeSchema = z.object({
   id: z.string().describe('Unique node identifier (e.g., "research", "writer", "supervisor")'),
-  type: z.enum(['agent', 'tool', 'subgraph', 'synthesizer', 'router', 'supervisor', 'map', 'voting', 'approval', 'evolution', 'verifier'])
+  type: z.enum(['agent', 'tool', 'subgraph', 'synthesizer', 'router', 'supervisor', 'map', 'voting', 'approval', 'evolution', 'verifier', 'reflection'])
     .describe('Node type'),
   agent_id: z.string().optional().describe('Agent config ID (required for agent nodes)'),
   tools: z.array(ToolSourceSchema).optional().describe('Tool sources for this node (overrides agent config tools when set)'),

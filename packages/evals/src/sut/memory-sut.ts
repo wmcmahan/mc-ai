@@ -205,6 +205,7 @@ function parseFacts(input: string): SemanticFact[] {
     valid_until: f.valid_until ? new Date(f.valid_until as string) : undefined,
     invalidated_by:
       typeof f.invalidated_by === 'string' ? f.invalidated_by : undefined,
+    tags: [],
   }));
 }
 
@@ -298,6 +299,7 @@ async function prepareConsolidationStore(
         provenance: { source: 'system', created_at: FIXTURE_NOW },
         valid_from: FIXTURE_PAST,
         embedding: f.embedding,
+        tags: [],
       };
       await store.putFact(fact);
     }
@@ -337,6 +339,7 @@ function parseConflictInput(input: string): SemanticFact[] {
         entity_ids: [],
         provenance: { source: 'system', created_at: FIXTURE_NOW },
         valid_from: FIXTURE_PAST,
+        tags: [],
       });
     } else if (value && typeof value === 'object') {
       const obj = value as Record<string, unknown>;
@@ -352,6 +355,7 @@ function parseConflictInput(input: string): SemanticFact[] {
         valid_until: obj.valid_until
           ? new Date(obj.valid_until as string)
           : undefined,
+        tags: [],
       });
     }
   }

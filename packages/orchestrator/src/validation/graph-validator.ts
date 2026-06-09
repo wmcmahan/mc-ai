@@ -350,7 +350,40 @@ function validateNodeByType(
       break;
     }
 
-    // router, synthesizer — no type-specific config required
+    case 'reflection': {
+      if (!node.reflection_config) {
+        errors.push(`Reflection node '${node.id}' is missing reflection_config`);
+        break;
+      }
+      const refConfig = node.reflection_config;
+      const readKeys = new Set(node.read_keys);
+      const wildcard = readKeys.has('*');
+      if (!wildcard) {
+        for (const key of refConfig.source_keys) {
+          if (!readKeys.has(key)) {
+            errors.push(
+              `Reflection node '${node.id}': source_key '${key}' not in read_keys`,
+            );
+          }
+        }
+        for (const key of refConfig.entity_keys ?? []) {
+          if (!readKeys.has(key)) {
+            errors.push(
+              `Reflection node '${node.id}': entity_key '${key}' not in read_keys`,
+            );
+          }
+        }
+      }
+      if (refConfig.tags.length === 0) {
+        warnings.push(
+          `Reflection node '${node.id}': no tags set — facts will be retrievable by anyone with the same memory store`,
+        );
+      }
+      break;
+    }
+
+    // router, synthesizer, verifier — no type-specific cross-field checks
+    // beyond what Zod enforces on the discriminated config schemas.
     default:
       break;
   }

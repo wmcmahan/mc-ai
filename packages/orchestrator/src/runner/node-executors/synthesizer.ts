@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../../utils/logger.js';
 import type { NodeExecutorContext } from './context.js';
 import { ensureSaveToMemory } from './agent.js';
+import { buildAgentMemoryOptions } from './memory-options.js';
 
 const logger = createLogger('runner.node.synthesizer');
 
@@ -45,6 +46,7 @@ export async function executeSynthesizerNode(
       onToken,
       drainTaintEntries: ctx.deps.drainTaintEntries,
       ...(node.default_write_key ? { default_write_key: node.default_write_key } : {}),
+      ...buildAgentMemoryOptions(node, ctx),
     });
   }
 

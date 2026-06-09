@@ -87,6 +87,7 @@ import { retrieveMemory } from '@cycgraph/memory';
 const memoryRetriever = async (query, options) => {
   const result = await retrieveMemory(store, index, {
     entity_ids: query.entityIds,
+    tags: query.tags ?? [],
     embedding: query.text ? await embed(query.text) : undefined,
     limit: options?.maxFacts ?? 20,
   });
@@ -100,6 +101,98 @@ const memoryRetriever = async (query, options) => {
 
 const runner = new GraphRunner(graph, state, { memoryRetriever });
 ```
+
+:::caution[memoryRetriever is opt-in per node]
+The runner only calls `memoryRetriever` when an agent or supervisor node declares a `memory_query` directive. Without that, the retriever sits dormant and the option is silently a no-op. Add `memory_query` to every node that should receive retrieved memory:
+
+```typescript
+{
+  id: 'researcher',
+  type: 'agent',
+  agent_id: RESEARCHER_ID,
+  read_keys: ['goal'],
+  write_keys: ['notes'],
+  memory_query: {
+    tags: ['lesson'],   // tag-only retrieval
+    max_facts: 10,
+  },
+}
+```
+
+Query shapes:
+
+- `memory_query: {}` — defaults `text` to `stateView.goal` (zero-config RAG).
+- `memory_query: { tags: [...] }` — tag-only filter; no goal fallback.
+- `memory_query: { entity_ids: [...] }` — knowledge-graph subgraph extraction.
+- `memory_query: { text: '...' }` — explicit semantic query.
+
+Voting and evolution nodes propagate their `memory_query` automatically to every voter / candidate sub-node.
+:::
+
+### Memory writer (reflection)
+
+To **persist** facts across runs, wire a `memoryWriter` and add a `reflection` node to your graph. The reflection node distills source memory keys into atomic facts and pushes them to your store; future runs retrieve them through `memoryRetriever`.
+
+```typescript
+import { GraphRunner } from '@cycgraph/orchestrator';
+import type { MemoryWriter } from '@cycgraph/orchestrator';
+
+const memoryWriter: MemoryWriter = async (facts) => {
+  const ids: string[] = [];
+  for (const fact of facts) {
+    const stored = {
+      id: crypto.randomUUID(),
+      content: fact.content,
+      source_episode_ids: [],
+      entity_ids: [],
+      provenance: {
+        source: fact.provenance.source,
+        created_at: new Date(),
+        run_id: fact.provenance.run_id,
+        node_id: fact.provenance.node_id,
+      },
+      valid_from: new Date(),
+      tags: fact.tags,
+    };
+    await store.putFact(stored);
+    ids.push(stored.id);
+  }
+  return { fact_ids: ids };
+};
+
+const graph = createGraph({
+  name: 'Compound-learning research',
+  description: 'Researcher writes notes, reflection extracts lessons for next run',
+  nodes: [
+    {
+      id: 'researcher',
+      type: 'agent',
+      agent_id: RESEARCHER_ID,
+      read_keys: ['goal'],
+      write_keys: ['research_notes'],
+      memory_query: { tags: ['lesson'], max_facts: 10 },
+    },
+    {
+      id: 'reflect',
+      type: 'reflection',
+      read_keys: ['research_notes'],
+      write_keys: ['research_notes_reflection'],
+      reflection_config: {
+        source_keys: ['research_notes'],
+        extractor: { type: 'rule_based', min_sentence_length: 25 },
+        tags: ['lesson', 'graph:research-v1'],
+      },
+    },
+  ],
+  edges: [{ source: 'researcher', target: 'reflect' }],
+  start_node: 'researcher',
+  end_nodes: ['reflect'],
+});
+
+const runner = new GraphRunner(graph, state, { memoryRetriever, memoryWriter });
+```
+
+See the [Reflection pattern](/patterns/reflection/) for full details and the `learning-research-agent` example for a runnable demo.
 
 ### Combined with context compression
 

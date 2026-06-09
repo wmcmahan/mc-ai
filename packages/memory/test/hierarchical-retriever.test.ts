@@ -238,4 +238,142 @@ describe('retrieveMemory', () => {
       expect(result.facts[0].id).toBe(sharedFact.id);
     });
   });
+
+  describe('tag-only retrieval', () => {
+    const seedFact = async (
+      target: InMemoryMemoryStore,
+      overrides: Partial<SemanticFact> = {},
+    ): Promise<SemanticFact> => {
+      const fact: SemanticFact = {
+        id: crypto.randomUUID(),
+        content: 'Some lesson worth keeping.',
+        source_episode_ids: [],
+        entity_ids: [],
+        provenance: prov,
+        valid_from: now,
+        tags: [],
+        ...overrides,
+      };
+      await target.putFact(fact);
+      return fact;
+    };
+
+    it('returns facts whose tags intersect query.tags', async () => {
+      const lessonA = await seedFact(store, { content: 'A', tags: ['lesson', 'graph:research-v1'] });
+      const lessonB = await seedFact(store, { content: 'B', tags: ['lesson', 'graph:research-v1'] });
+      await seedFact(store, { content: 'untagged' });
+      await seedFact(store, { content: 'wrong tag', tags: ['warning'] });
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['lesson'],
+        max_hops: 2,
+        limit: 20,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      const ids = new Set(result.facts.map((f) => f.id));
+      expect(ids).toEqual(new Set([lessonA.id, lessonB.id]));
+      expect(result.entities).toEqual([]);
+      expect(result.relationships).toEqual([]);
+    });
+
+    it('matches on any tag, not all tags', async () => {
+      const lessonA = await seedFact(store, { content: 'A', tags: ['lesson'] });
+      const lessonB = await seedFact(store, { content: 'B', tags: ['warning'] });
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['lesson', 'warning'],
+        max_hops: 2,
+        limit: 20,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      const ids = new Set(result.facts.map((f) => f.id));
+      expect(ids).toEqual(new Set([lessonA.id, lessonB.id]));
+    });
+
+    it('respects limit', async () => {
+      for (let i = 0; i < 5; i++) {
+        await seedFact(store, { content: `lesson ${i}`, tags: ['lesson'] });
+      }
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['lesson'],
+        max_hops: 2,
+        limit: 3,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      expect(result.facts).toHaveLength(3);
+    });
+
+    it('applies temporal validity — excludes invalidated facts', async () => {
+      await seedFact(store, {
+        content: 'still valid',
+        tags: ['lesson'],
+      });
+      await seedFact(store, {
+        content: 'invalidated',
+        tags: ['lesson'],
+        valid_until: new Date(now.getTime() - 1000),
+      });
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['lesson'],
+        valid_at: now,
+        max_hops: 2,
+        limit: 20,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      expect(result.facts).toHaveLength(1);
+      expect(result.facts[0].content).toBe('still valid');
+    });
+
+    it('attaches themes when present on matching facts', async () => {
+      const theme: Theme = {
+        id: crypto.randomUUID(),
+        label: 'Research Lessons',
+        description: 'distilled methodology guidance',
+        fact_ids: [],
+        provenance: prov,
+      };
+      await store.putTheme(theme);
+
+      await seedFact(store, {
+        content: 'Cite primary sources.',
+        tags: ['lesson'],
+        theme_id: theme.id,
+      });
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['lesson'],
+        max_hops: 2,
+        limit: 20,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      expect(result.themes).toHaveLength(1);
+      expect(result.themes[0].id).toBe(theme.id);
+    });
+
+    it('returns empty result for tags with no matches', async () => {
+      await seedFact(store, { content: 'A', tags: ['lesson'] });
+
+      const result = await retrieveMemory(store, index, {
+        tags: ['nonexistent'],
+        max_hops: 2,
+        limit: 20,
+        min_similarity: 0.5,
+        include_invalidated: false,
+      });
+
+      expect(result.facts).toEqual([]);
+    });
+  });
 });

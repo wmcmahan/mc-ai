@@ -23,6 +23,9 @@ A **Node** is a unit of work that is executed by the graph. It can be a single a
 | `annealing_config` | `AnnealingConfig` | Self-annealing iterative refinement (`agent` nodes). |
 | `swarm_config` | `SwarmConfig` | Swarm peer delegation (`agent` nodes). |
 | `evolution_config` | `EvolutionConfig` | Population size, fitness evaluation, and selection strategy (`evolution` nodes). |
+| `verifier_config` | `VerifierConfig` | Verification predicate — LLM judge, expression, or JSONPath assertion (`verifier` nodes). |
+| `reflection_config` | `ReflectionConfig` | Source keys, extractor variant, and tags for compound learning (`reflection` nodes). |
+| `memory_query` | `MemoryQuery` | Per-node retrieval directive. When set, the runner calls `memoryRetriever` before building the agent / supervisor prompt and renders results into a `## Relevant Memory` section. |
 | `read_keys` | `Array<string>` | The keys to read from the state. |
 | `write_keys` | `Array<string>` | The keys to write to the state. |
 | `failure_policy` | `FailurePolicy` | The failure policy for the node. |
@@ -42,6 +45,8 @@ A **Node** is a unit of work that is executed by the graph. It can be a single a
 | `voting` | Multiple agents vote on a decision to reach consensus. |
 | `subgraph` | Delegates to a nested graph with isolated state. Input/output mapping between parent and child. |
 | `evolution` | Population-based selection — runs N candidates, scores fitness, breeds next generation. |
+| `verifier` | Gates a target memory key against a verification predicate (LLM judge, filtrex expression, or JSONPath assertion). |
+| `reflection` | Distills source memory keys into atomic facts and persists them via `memoryWriter` — feeds future runs of the graph that declare a matching `memory_query`. |
 
 ## State slicing
 
@@ -195,6 +200,83 @@ Used by `evolution` nodes. Population-based optimization — generates N candida
 | `max_concurrency` | `number` | `5` | Max concurrent candidate evaluations. |
 | `error_strategy` | `'fail_fast' \| 'best_effort'` | `'best_effort'` | How to handle candidate generation errors. |
 | `evaluation_criteria` | `string` | — | Custom instruction passed to the fitness evaluator. |
+
+### `verifier_config`
+
+Used by `verifier` nodes. Gates a target memory key against a verification predicate. Three flavours via a discriminated union on `type`:
+
+#### `type: 'llm_judge'`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target_key` | `string` | *required* | Memory key whose value is evaluated. |
+| `evaluator_agent_id` | `string` | *required* | Agent ID for the LLM-as-judge evaluator. |
+| `pass_threshold` | `number` | `0.8` | Pass when the evaluator's score (0–1) is ≥ this threshold. |
+| `evaluation_criteria` | `string` | — | Custom instruction passed to the evaluator. |
+
+#### `type: 'expression'`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `expression` | `string` | *required* | Filtrex expression evaluated against `{ memory, goal }`. Passes when truthy. |
+
+#### `type: 'jsonpath'`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target_key` | `string` | *required* | Memory key whose value is queried. |
+| `path` | `string` | *required* | JSONPath expression against `memory[target_key]`. |
+| `assertion` | `JsonPathAssertion` | *required* | One of `exists`, `equals`, `matches`, `gt`, `gte`, `lt`, `lte`. |
+
+#### Common fields (all variants)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `result_key` | `string` | `{node.id}_verification` | Memory key the structured result envelope is written to. Also writes `{result_key}_passed` boolean for routing. |
+| `throw_on_fail` | `boolean` | `false` | When `true`, the node throws on failure (engages `failure_policy` retry). When `false`, downstream edges route on `{result_key}_passed`. |
+
+### `reflection_config`
+
+Used by `reflection` nodes. Distills `source_keys` from workflow memory into atomic `SemanticFacts` and persists them via the injected `memoryWriter`. Pairs with `memory_query` on downstream nodes to close the compound-learning loop.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `source_keys` | `string[]` | *required* (min 1) | Memory keys whose values feed the extractor. Must be declared in the node's `read_keys`. |
+| `extractor` | `RuleBasedExtractor \| LLMExtractor` | *required* | Extraction strategy (see below). |
+| `tags` | `string[]` | `[]` | Tags applied to every fact written. Namespace by graph (`graph:my-graph-v1`) or category (`lesson`, `failure`) so downstream retrieval can scope. |
+| `entity_keys` | `string[]` | — | Memory keys whose string values name entities the produced facts relate to. Linked into the knowledge graph for entity-driven retrieval. |
+| `result_key` | `string` | `{node.id}_reflection` | Memory key the structured `ReflectionResult` envelope is written to. |
+
+#### `extractor: { type: 'rule_based' }`
+
+Deterministic sentence-level extraction. No LLM call.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `min_sentence_length` | `number` | `15` | Minimum sentence length (chars) to qualify as a fact. |
+
+#### `extractor: { type: 'llm' }`
+
+Uses the `extractFactsExecutor` primitive to distill structured lessons via an LLM.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `agent_id` | `string` | *required* | Agent ID for the LLM extractor. |
+| `max_facts` | `number` | `10` | Soft cap on facts returned (1–50). |
+| `instruction` | `string` | — | Optional override for the default lesson-distillation prompt. |
+
+### `memory_query`
+
+Used by `agent`, `supervisor`, and any wrapper-agent node (annealing, map worker, swarm, synthesizer, voting voter, evolution candidate). When set, the runner calls `memoryRetriever` once before building the node's prompt and renders the result into a `## Relevant Memory` section.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `string` | `stateView.goal` *(only when no other field is set)* | Natural-language semantic query. |
+| `entity_ids` | `string[]` | — | Seed entity IDs for knowledge-graph subgraph extraction. |
+| `tags` | `string[]` | — | Restrict matches to facts carrying at least one of these tags. |
+| `max_facts` | `number` | — | Soft cap on facts injected into the prompt. |
+
+**Routing rule:** if `text`, `entity_ids`, or `tags` is set, retrieval uses that knob explicitly. Only when **none** of them are set does the runtime default `text` to `stateView.goal` (zero-config RAG). Voting and evolution nodes propagate `memory_query` automatically to their synthetic sub-nodes.
 
 ## Next steps
 

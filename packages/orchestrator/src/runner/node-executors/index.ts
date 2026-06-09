@@ -21,3 +21,7 @@ export { executeVotingNode } from './voting.js';
 export { executeSwarmAgentNode } from './swarm.js';
 export { executeEvolutionNode } from './evolution.js';
 export { executeVerifierNode, VerificationFailedError } from './verifier.js';
+export {
+  executeReflectionNode,
+  MemoryWriterMissingError,
+} from './reflection.js';

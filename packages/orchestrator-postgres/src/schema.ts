@@ -316,6 +316,7 @@ export const memory_facts = pgTable('memory_facts', {
   invalidated_by: text('invalidated_by'),
   access_count: integer('access_count').default(0),
   last_accessed_at: timestamp('last_accessed_at', { withTimezone: true }),
+  tags: jsonb('tags').$type<string[]>().default([]).notNull(),
 }, (table) => [
   index('idx_memory_facts_theme').on(table.theme_id),
   index('idx_memory_facts_valid').on(table.valid_from, table.valid_until),

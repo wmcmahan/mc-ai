@@ -138,8 +138,9 @@ See [examples/](./examples/) for complete, runnable versions.
 
 | Category | Highlights |
 |----------|-----------|
-| **Graph Engine** | Cyclic graphs, 10 node types, conditional routing via [filtrex](https://github.com/joewalnes/filtrex), parallel fan-out/fan-in |
-| **Node Types** | `agent` `tool` `router` `supervisor` `approval` `map` `synthesizer` `voting` `subgraph` `evolution` |
+| **Graph Engine** | Cyclic graphs, 12 node types, conditional routing via [filtrex](https://github.com/joewalnes/filtrex), parallel fan-out/fan-in |
+| **Node Types** | `agent` `tool` `router` `supervisor` `approval` `map` `synthesizer` `voting` `subgraph` `evolution` `verifier` `reflection` |
+| **Compound Learning** | `reflection` node + `memoryWriter` distill run output into atomic facts; future runs retrieve them via `memory_query` on agent nodes — agents that get smarter across runs |
 | **Resilience** | Retry with backoff (linear/exponential/fixed), circuit breakers, typed saga rollback, durable execution via event sourcing, event log auto-compaction |
 | **Security** | Zero Trust state slicing (`read_keys`/`write_keys`), taint tracking for external data, permission-enforced reducers |
 | **Streaming** | `stream()` async generator, real-time token deltas, tool call start/finish events, memory diffs on `action:applied`, typed `StreamEvent` union, `isTerminalEvent()` guard, `AbortSignal` cancellation |

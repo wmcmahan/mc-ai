@@ -276,7 +276,11 @@ const index = new DrizzleMemoryIndex();
 
 ## Orchestrator integration
 
-Inject memory retrieval into `GraphRunner` via the `memoryRetriever` option:
+Memory hooks into the runner in two places: agent nodes **read** memory through `memoryRetriever`, and `reflection` nodes **write** to memory through `memoryWriter`.
+
+### Reading: `memoryRetriever` + `memory_query`
+
+Inject memory retrieval into `GraphRunner` via the `memoryRetriever` option. **The retriever only fires when a node declares a `memory_query` directive** — without that, no agent calls happen against the memory store and the option is silently a no-op.
 
 ```typescript
 import { GraphRunner } from '@cycgraph/orchestrator';
@@ -288,6 +292,7 @@ const index = new InMemoryMemoryIndex();
 const memoryRetriever = async (query, options) => {
   const result = await retrieveMemory(store, index, {
     entity_ids: query.entityIds,
+    tags: query.tags ?? [],
     limit: options?.maxFacts ?? 20,
   });
   return {
@@ -297,12 +302,75 @@ const memoryRetriever = async (query, options) => {
   };
 };
 
+const graph = createGraph({
+  name: 'Research',
+  description: 'Research with prior knowledge',
+  nodes: [
+    {
+      id: 'researcher',
+      type: 'agent',
+      agent_id: RESEARCHER_ID,
+      read_keys: ['goal'],
+      write_keys: ['notes'],
+      // This is the directive that activates the retriever.
+      memory_query: {
+        tags: ['lesson'],   // retrieve facts tagged 'lesson'
+        max_facts: 10,
+      },
+    },
+    // ...
+  ],
+  // ...
+});
+
 const runner = new GraphRunner(graph, state, { memoryRetriever });
 ```
+
+The runner calls `memoryRetriever` once before building the agent's prompt, then renders results into a `## Relevant Memory` section ahead of the workflow-state memory block.
+
+**Query shapes:**
+
+| Shape | Behaviour |
+|---|---|
+| `memory_query: {}` | Defaults `text` to `stateView.goal` — RAG-style with zero config. |
+| `memory_query: { tags: [...] }` | Tag-only retrieval. No text fallback. |
+| `memory_query: { entity_ids: [...] }` | Knowledge-graph subgraph extraction. |
+| `memory_query: { text: '...' }` | Explicit semantic search text. |
+
+### Writing: `memoryWriter` + `reflection` nodes
+
+To **persist** facts back into the memory store across runs, attach a `reflection` node and inject a `memoryWriter`:
+
+```typescript
+import type { MemoryWriter } from '@cycgraph/orchestrator';
+
+const memoryWriter: MemoryWriter = async (facts) => {
+  const ids: string[] = [];
+  for (const fact of facts) {
+    const stored = {
+      id: crypto.randomUUID(),
+      content: fact.content,
+      source_episode_ids: [],
+      entity_ids: [],
+      provenance: { source: fact.provenance.source, created_at: new Date(), run_id: fact.provenance.run_id, node_id: fact.provenance.node_id },
+      valid_from: new Date(),
+      tags: fact.tags,
+    };
+    await store.putFact(stored);
+    ids.push(stored.id);
+  }
+  return { fact_ids: ids };
+};
+
+const runner = new GraphRunner(graph, state, { memoryRetriever, memoryWriter });
+```
+
+A `reflection` node at the end of the graph distills `research_notes` (or any source key) into facts and calls `memoryWriter`. Future runs pick those facts up through `memoryRetriever` with a matching `tags` query. See the [Reflection pattern](/patterns/reflection/) and the `learning-research-agent` example for the full loop.
 
 ## Next steps
 
 - [Workflow State](/concepts/workflow-state/) — ephemeral per-run memory vs persistent knowledge graph
 - [Context Engine](/concepts/context-engine/) — compress memory payloads before prompt injection
 - [Using Memory](/guides/memory/) — practical guide for integrating memory into workflows
+- [Reflection pattern](/patterns/reflection/) — compound learning across runs
 - [Persistence](/concepts/persistence/) — how workflow state is persisted alongside memory
