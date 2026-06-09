@@ -3,8 +3,6 @@ title: Agents
 description: How agents are defined, configured, and executed in cycgraph.
 ---
 
-## Agents
-
 cycgraph treats agents as **configuration, not code**. There are no base classes to extend, no framework to inherit from. An agent is a JSON object that the engine feeds into the runtime.
 
 ### Agent configuration

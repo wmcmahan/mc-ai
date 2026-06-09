@@ -41,37 +41,11 @@ flowchart TD
 
 Both tracks feed into a single `DriftReport` aggregated by `computeDrift()`. The gate triggers when aggregate drift exceeds the configured ceiling.
 
-### Goldens are recorded, not authored
-
-Originally the goldens were hand-authored — expected outputs the team thought the libraries *should* produce. The current generation are **recorded** from real System-Under-Test runs at tagged commits. That means drift % has an anchor: a regression is whatever differs from what the code actually did on commit X with model Y.
-
-See [Recording Goldens](/guides/recording-goldens/) for the full flow.
-
 ### Multi-sample stability
 
 LLM judges are non-deterministic. A single low-scoring run can tank the gate; a single high-scoring run can mask a real regression. The semantic track defaults to **3 samples per metric in CI**, using a majority-vote outcome and surfacing tests with inconsistent results as **flaky** — distinct from drift failure.
 
 See [Drift & Baselines](/concepts/drift-and-baselines/) for how flaky-vs-regressed is distinguished in the report.
-
-## Package layout
-
-| Path | Purpose |
-|------|---------|
-| `src/assertions/` | The four assertion families (structural, deterministic, semantic, reference-free) |
-| `src/baseline/` | Snapshot persistence + delta comparison |
-| `src/dataset/` | SQLite-backed golden dataset (loader, writer, schema, migration) |
-| `src/providers/` | Eval-provider adapters (Ollama / OpenAI) |
-| `src/runner/` | Top-level runner, drift calculator, reporter, multi-sample wrapper |
-| `src/suites/` | Per-package suites (`orchestrator`, `memory`, `context-engine`, `integration`) |
-| `src/sut/` | System-Under-Test wrappers, reference graphs, fixtures, recording planner |
-| `scripts/` | One-shot CLIs (`record-goldens.ts`, `migrate-golden.ts`, `seed-golden-v2.ts`) |
-| `golden/` | Versioned SQLite trajectories + manifest + (gitignored) baselines |
-
-## What this is not
-
-- **Not** the orchestrator's per-graph assertion framework. That lives in `@cycgraph/orchestrator/src/evals` and is documented under [Evaluations](/observability/evals/). It's for asserting that a specific graph reaches an expected final state. The eval harness operates at the package level for cross-cutting regression detection.
-- **Not** a benchmark suite. Trajectories are recorded from internal behavior, not external benchmarks. (A future `source: 'webarena'` is reserved in the schema but not yet implemented.)
-- **Not** wired into CI yet. The harness ships standalone and is runnable locally; the workflow files to gate PRs and run nightly are deferred. See the package README for the current state.
 
 ## Related
 

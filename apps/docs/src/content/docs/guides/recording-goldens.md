@@ -3,16 +3,7 @@ title: Recording Goldens
 description: Capture observable behavior from real System-Under-Test runs and commit them as the new regression anchor.
 ---
 
-Goldens are the reference points against which drift is measured. If they were authored by hand from someone's idea of what the library *should* do, drift % has no anchor — it measures distance from intent, not from behavior. Recording solves this: each golden becomes a snapshot of what the code actually produced at a tagged commit.
-
-This guide walks through the recording flow end-to-end.
-
-## When to record
-
-- After a release tag, to lock in the canonical behavior for that version
-- When a known-correct change to a library shifts observable output (e.g., a new entity type in the extractor)
-- When you've added a new trajectory and need to populate its expected output
-- When goldens have rotted and the diff against current behavior is mostly noise
+Goldens are the reference points against which drift is measured. Each golden becomes a snapshot of what the code actually produced at a tagged commit.
 
 ## The recording script
 

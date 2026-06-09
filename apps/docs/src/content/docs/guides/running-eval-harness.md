@@ -5,22 +5,6 @@ description: Practical CLI usage for @cycgraph/evals — local, CI, deterministi
 
 The eval harness has one entry point — `npm run evals` — and a handful of flags that compose. This guide walks through the modes you'll actually use.
 
-## Prerequisites
-
-```bash
-npm install
-```
-
-For the semantic track:
-
-- **Local mode**: run `ollama serve` and pull the default model:
-  ```bash
-  ollama pull llama3:8b-instruct-q4_K_M
-  ```
-- **CI mode**: set `OPENAI_API_KEY` (GPT-4o is the default judge).
-
-The deterministic-only mode has no LLM dependency.
-
 ## The four common modes
 
 ### 1. Fast local sanity check (no LLM)

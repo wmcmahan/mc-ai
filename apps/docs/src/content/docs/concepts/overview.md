@@ -3,7 +3,7 @@ title: How cycgraph Works
 description: A high-level overview of the Cyclic State Graph architecture and its core concepts.
 ---
 
-cycgraph is a **workflow engine** built around four primary concepts: Graphs, Nodes, Agents, and State. The sections below explain what each one is and how they fit together.
+cycgraph is a **workflow engine** built around four primary concepts: Graphs, Nodes, Agents, and State.
 
 ## The core concepts
 

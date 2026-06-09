@@ -1,9 +1,9 @@
 ---
 title: Custom LLM Providers
-description: Register Groq, Ollama, or any Vercel AI SDK-compatible provider.
+description: Register Groq, Ollama, or other providers.
 ---
 
-cycgraph ships with **OpenAI** and **Anthropic** pre-registered. To use a different LLM provider (Groq, Ollama, Google, Mistral, etc.), register it at startup. Any provider with a [Vercel AI SDK](https://sdk.vercel.ai/providers/ai-sdk-providers) adapter works.
+cycgraph ships with **OpenAI** and **Anthropic** pre-registered. To use a different LLM provider (Groq, Ollama, Google, Mistral, etc.), register it at startup.
 
 ## Quick start
 
@@ -109,8 +109,6 @@ const THINKING_AGENT = registry.register({
   permissions: { read_keys: ['*'], write_keys: ['*'] },
 });
 ```
-
-Provider options are passed directly to the Vercel AI SDK `generateText`/`streamText` call, so any option your provider's SDK supports can be used here.
 
 ## Provider inference
 

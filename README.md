@@ -4,7 +4,7 @@
 
 cycgraph is a production-ready workflow engine for building complex, multi-step AI agent systems. It provides robust patterns for Supervisors, Map-Reduce, Evolution (DGM), Human-in-the-Loop, and Swarms — all driven by configuration, not hardcoded chains.
 
-[📚 **Read the full documentation here** →](https://mc-ai-docs.vercel.app)
+[📚 **Read the full documentation here** →](https://flattop.io/)
 
 ---
 

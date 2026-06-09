@@ -18,8 +18,6 @@ npm install @cycgraph/orchestrator
 npm install @cycgraph/orchestrator-postgres
 ```
 
-cycgraph uses the Vercel AI SDK under the hood, so install the provider you intend to use (e.g. `@ai-sdk/anthropic` or `@ai-sdk/openai`).
-
 ## 2. API keys
 
 Set your provider key. This quick start uses Anthropic:
