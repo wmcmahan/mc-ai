@@ -13,7 +13,6 @@ concurrency:
 permissions:
   contents: write       # bot pushes the Version Packages PR + tags
   pull-requests: write  # bot opens/updates the Version Packages PR
-  id-token: write       # OIDC token for npm trusted publishing
 
 env:
   NODE_VERSION: '24'
@@ -35,6 +34,23 @@ jobs:
           cache: npm
           registry-url: 'https://registry.npmjs.org'
 
+      # Fail fast with a clear message instead of the cryptic E404 that npm
+      # returns when an npm publish runs unauthenticated.
+      - name: Verify npm authentication
+        run: |
+          echo "node $(node --version), npm $(npm --version)"
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::The NPM_TOKEN repo secret is empty or not set. Create it under Settings → Secrets and variables → Actions (exact name: NPM_TOKEN)."
+            exit 1
+          fi
+          npm whoami || {
+            echo "::error::npm rejected the token (whoami failed). The NPM_TOKEN is invalid/expired or lacks write access to the @cycgraph scope. Generate a Granular or Automation token at npmjs.com with read+write on @cycgraph and update the secret."
+            exit 1
+          }
+          echo "npm auth OK — publishing as the account above."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Install
         run: npm ci
 
@@ -54,4 +70,5 @@ jobs:
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
