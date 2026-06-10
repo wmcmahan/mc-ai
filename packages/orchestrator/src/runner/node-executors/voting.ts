@@ -114,9 +114,25 @@ export async function executeVotingNode(
     throw new NodeConfigError(node.id, 'voting', `quorum (got ${votes.length}, need ${config.quorum})`);
   }
 
-  // Aggregate votes by strategy
+  // Aggregate votes by strategy. Sum input/output tokens separately from
+  // each voter's action so the runner's cost-tracking path can derive cost.
+  // Capture the model from the first voter — every voter runs the same agent
+  // so the model is uniform.
   let consensus: unknown;
-  const totalTokens = results.reduce((sum, r) => sum + (r.tokens_used || 0), 0);
+  let totalTokens = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let observedModel: string | undefined;
+  for (const r of results) {
+    const usage = r.action?.metadata.token_usage;
+    if (!usage) continue;
+    totalInputTokens += usage.inputTokens ?? 0;
+    totalOutputTokens += usage.outputTokens ?? 0;
+    totalTokens += usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+    if (!observedModel && typeof r.action?.metadata.model === 'string') {
+      observedModel = r.action.metadata.model;
+    }
+  }
   let extraTokens = 0;
 
   switch (config.strategy) {
@@ -180,9 +196,14 @@ export async function executeVotingNode(
       );
       consensus = evalResult.reasoning;
       extraTokens = evalResult.tokens_used;
+      // Evaluator currently reports only totalTokens; attribute conservatively
+      // to output so the cost path still computes a non-zero figure.
+      totalOutputTokens += extraTokens;
       break;
     }
   }
+
+  const finalTotalTokens = totalTokens + extraTokens;
 
   return {
     id: uuidv4(),
@@ -193,8 +214,18 @@ export async function executeVotingNode(
         [`${node.id}_consensus`]: consensus,
         [`${node.id}_votes`]: votes,
       },
-      total_tokens: totalTokens + extraTokens,
+      total_tokens: finalTotalTokens,
     },
-    metadata: { node_id: node.id, timestamp: new Date(), attempt },
+    metadata: {
+      node_id: node.id,
+      timestamp: new Date(),
+      attempt,
+      ...(observedModel ? { model: observedModel } : {}),
+      token_usage: {
+        totalTokens: finalTotalTokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+      },
+    },
   };
 }

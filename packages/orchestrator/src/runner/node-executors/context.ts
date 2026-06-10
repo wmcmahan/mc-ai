@@ -20,6 +20,7 @@ import type { ContextCompressor, ContextCompressionMetrics } from '../../agent/c
 import type { MemoryRetriever } from '../../agent/memory-retriever.js';
 import type { MemoryWriter } from '../../agent/memory-writer.js';
 import type { FactSanitizer } from '../../agent/fact-sanitizer.js';
+import type { FitnessFunction } from '../../agent/fitness-function.js';
 
 /**
  * Raw tool definition — description + parameters without an execute function.
@@ -201,6 +202,8 @@ export interface NodeExecutorContext {
   memoryWriter?: MemoryWriter;
   /** Optional pre-write hook applied to reflection facts (from GraphRunnerOptions). */
   factSanitizer?: FactSanitizer;
+  /** Optional deterministic fitness evaluator for evolution nodes (from GraphRunnerOptions). */
+  fitnessFunction?: FitnessFunction;
   /** Callback fired when context compression runs on a prompt's memory section. */
   onContextCompressed?: (event: { tokensIn: number; tokensOut: number; reductionPercent: number; durationMs: number }, nodeId: string) => void;
   /** Remaining workflow budget in USD, or `undefined` if unlimited (static snapshot — prefer getRemainingBudgetUsd). */

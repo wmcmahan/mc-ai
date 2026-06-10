@@ -53,6 +53,7 @@ import type { ContextCompressor } from '../agent/context-compressor.js';
 import type { MemoryRetriever } from '../agent/memory-retriever.js';
 import type { MemoryWriter } from '../agent/memory-writer.js';
 import type { FactSanitizer } from '../agent/fact-sanitizer.js';
+import type { FitnessFunction } from '../agent/fitness-function.js';
 import { PermissionDeniedError } from '../agent/agent-executor/errors.js';
 
 // Extracted modules
@@ -204,6 +205,14 @@ export interface GraphRunnerOptions {
    */
   factSanitizer?: FactSanitizer;
   /**
+   * Optional deterministic fitness evaluator for `evolution` nodes. When
+   * provided, the evolution executor uses it instead of the LLM-as-judge
+   * `evaluator_agent_id`. Use for tasks with verifiable answers — regex,
+   * SQL, code, math — where the LLM judge's variance is larger than the
+   * discrimination required.
+   */
+  fitnessFunction?: FitnessFunction;
+  /**
    * Number of events between automatic event log compactions.
    *
    * When set (and an `eventLog` is provided), the runner will
@@ -289,6 +298,9 @@ export class GraphRunner extends EventEmitter {
   // Optional pre-write sanitizer applied to reflection facts before persistence
   private readonly factSanitizer?: FactSanitizer;
 
+  // Optional deterministic fitness evaluator for evolution nodes
+  private readonly fitnessFunction?: FitnessFunction;
+
   // Auto-compaction: compact event log every N events (0 = disabled)
   private readonly compactionInterval: number;
 
@@ -340,6 +352,7 @@ export class GraphRunner extends EventEmitter {
     this.memoryRetriever = options?.memoryRetriever;
     this.memoryWriter = options?.memoryWriter;
     this.factSanitizer = options?.factSanitizer;
+    this.fitnessFunction = options?.fitnessFunction;
     this.autoRollback = options?.auto_rollback ?? false;
     this.compactionInterval = options?.compaction_interval ?? 0;
     this.persistDeltaFn = options?.persistDeltaFn;
@@ -487,6 +500,7 @@ export class GraphRunner extends EventEmitter {
       get memoryRetriever() { return self.memoryRetriever; },
       get memoryWriter() { return self.memoryWriter; },
       get factSanitizer() { return self.factSanitizer; },
+      get fitnessFunction() { return self.fitnessFunction; },
       get toolResolver() { return self.toolResolver; },
       emit: (event, payload) => self.emit(event, payload),
       listenerCount: (event) => self.listenerCount(event),

@@ -127,6 +127,11 @@ export async function executeEvolutionNode(
   let bestCandidate: ScoredCandidate | null = null;
   let parentForNextGen: ScoredCandidate | null = null;
   let totalTokens = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  // Captured from the first successful candidate's action — every candidate
+  // runs the same agent so the model is uniform. Used to resolve pricing.
+  let observedModel: string | undefined;
   let stagnationCount = 0;
   const fitnessHistory: number[] = [];
   let finalPopulation: ScoredCandidate[] = [];
@@ -167,6 +172,11 @@ export async function executeEvolutionNode(
           ...(gen > 0 && parentForNextGen ? {
             _evolution_parent: parentForNextGen.output,
             _evolution_parent_fitness: parentForNextGen.fitness,
+            // Reasoning surfaces *why* the parent scored what it did.
+            // Critical for iteration — without it, the candidate has no
+            // signal about which specific tests the parent failed and
+            // can only blindly mutate.
+            _evolution_parent_reasoning: parentForNextGen.reasoning,
           } : {}),
         },
       },
@@ -196,23 +206,54 @@ export async function executeEvolutionNode(
       if (!result.success || !result.action) continue;
 
       const candidateOutput = result.action.payload.updates;
-      const actionTokens = result.action.metadata.token_usage?.totalTokens ?? 0;
+      const usage = result.action.metadata.token_usage;
+      const actionInputTokens = usage?.inputTokens ?? 0;
+      const actionOutputTokens = usage?.outputTokens ?? 0;
+      const actionTokens = usage?.totalTokens ?? (actionInputTokens + actionOutputTokens);
+      totalInputTokens += actionInputTokens;
+      totalOutputTokens += actionOutputTokens;
       totalTokens += actionTokens;
+      if (!observedModel && typeof result.action.metadata.model === 'string') {
+        observedModel = result.action.metadata.model;
+      }
 
-      const evalResult = await ctx.deps.evaluateQualityExecutor(
-        config.evaluator_agent_id,
-        stateView.goal,
-        candidateOutput,
-        config.evaluation_criteria,
-      );
-      totalTokens += evalResult.tokens_used;
+      // Score the candidate. Prefer the runner-injected deterministic
+      // `fitnessFunction` when present (free, exact, no judge variance).
+      // Fall back to the LLM-as-judge evaluator when `evaluator_agent_id`
+      // is configured. Throw if neither is available.
+      let score: number;
+      let reasoning: string;
+      if (ctx.fitnessFunction) {
+        const result = await ctx.fitnessFunction(candidateOutput, stateView.goal);
+        score = result.score;
+        reasoning = result.reasoning ?? '';
+      } else if (config.evaluator_agent_id) {
+        const evalResult = await ctx.deps.evaluateQualityExecutor(
+          config.evaluator_agent_id,
+          stateView.goal,
+          candidateOutput,
+          config.evaluation_criteria,
+        );
+        score = evalResult.score;
+        reasoning = evalResult.reasoning;
+        // Evaluator currently reports only totalTokens; attribute conservatively
+        // to output so the cost path still computes a non-zero figure.
+        totalTokens += evalResult.tokens_used;
+        totalOutputTokens += evalResult.tokens_used;
+      } else {
+        throw new NodeConfigError(
+          node.id,
+          'evolution',
+          'evaluator_agent_id or GraphRunnerOptions.fitnessFunction',
+        );
+      }
 
       candidates.push({
         index: result.task_index,
         output: candidateOutput,
-        fitness: evalResult.score,
-        reasoning: evalResult.reasoning,
-        tokens_used: actionTokens + evalResult.tokens_used,
+        fitness: score,
+        reasoning,
+        tokens_used: actionTokens, // evaluator tokens already folded into totals above
       });
     }
 
@@ -301,7 +342,12 @@ export async function executeEvolutionNode(
       node_id: node.id,
       timestamp: new Date(),
       attempt,
-      token_usage: { totalTokens },
+      ...(observedModel ? { model: observedModel } : {}),
+      token_usage: {
+        totalTokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+      },
     },
   };
 }

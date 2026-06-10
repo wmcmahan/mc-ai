@@ -160,8 +160,10 @@ async function main() {
     console.log('\n═══ Evolution Results ═══');
     console.log('Status:', finalState.status);
 
-    // Evolution outputs are stored with the node ID prefix
-    const winner = finalState.memory['evolve_winner'];
+    // Evolution outputs are stored with the node ID prefix. The winner
+    // is the full agent updates blob — extract the configured write_key.
+    const winnerOutput = finalState.memory['evolve_winner'] as { candidate_output?: string } | undefined;
+    const winner = winnerOutput?.candidate_output ?? '(no winner produced)';
     const winnerFitness = finalState.memory['evolve_winner_fitness'];
     const fitnessHistory = finalState.memory['evolve_fitness_history'] as number[] | undefined;
 

@@ -174,7 +174,24 @@ export async function executeMapNode(
     node_id: r.node_id,
     error: r.error,
   }));
-  const totalTokens = results.reduce((sum, r) => sum + (r.tokens_used || 0), 0);
+
+  // Sum input/output tokens separately from each worker action so the
+  // runner's cost-tracking path can derive cost. Capture the model from
+  // the first worker — every worker runs the same agent so it's uniform.
+  let totalTokens = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let observedModel: string | undefined;
+  for (const r of results) {
+    const usage = r.action?.metadata.token_usage;
+    if (!usage) continue;
+    totalInputTokens += usage.inputTokens ?? 0;
+    totalOutputTokens += usage.outputTokens ?? 0;
+    totalTokens += usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+    if (!observedModel && typeof r.action?.metadata.model === 'string') {
+      observedModel = r.action.metadata.model;
+    }
+  }
 
   return {
     id: uuidv4(),
@@ -189,6 +206,16 @@ export async function executeMapNode(
       },
       total_tokens: totalTokens,
     },
-    metadata: { node_id: node.id, timestamp: new Date(), attempt },
+    metadata: {
+      node_id: node.id,
+      timestamp: new Date(),
+      attempt,
+      ...(observedModel ? { model: observedModel } : {}),
+      token_usage: {
+        totalTokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+      },
+    },
   };
 }

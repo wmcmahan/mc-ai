@@ -606,4 +606,60 @@ describe('Evolution (DGM) Node', () => {
       }
     });
   });
+
+  // ── fitness_function callback ────────────────────────────────
+  describe('fitnessFunction (deterministic evaluator)', () => {
+    test('uses the runner-supplied fitnessFunction instead of the LLM judge', async () => {
+      const fitnessFn = vi.fn(async (output: any) => ({
+        // Score by the candidate index — gen 0 idx 2 wins, exits on threshold.
+        score: 0.5 + (output.candidate_index ?? 0) * 0.2,
+        reasoning: `scored idx=${output.candidate_index}`,
+      }));
+
+      const graph = createEvolutionGraph({
+        population_size: 3,
+        max_generations: 5,
+        fitness_threshold: 0.85,
+        // Evaluator agent intentionally omitted — fitnessFunction takes over.
+        evaluator_agent_id: undefined,
+      });
+      const state = createState();
+      const runner = new GraphRunner(graph, state, { fitnessFunction: fitnessFn });
+      const finalState = await runner.run();
+
+      // Should never call the LLM-as-judge
+      expect(mockEvaluateQuality).not.toHaveBeenCalled();
+      // fitnessFunction called once per candidate
+      expect(fitnessFn).toHaveBeenCalled();
+      // Best fitness recorded in fitness_history
+      const history = finalState.memory['evo-node_fitness_history'] as number[];
+      expect(history[0]).toBeCloseTo(0.9, 5); // 0.5 + 2*0.2 with idx 2
+    });
+
+    test('throws NodeConfigError when neither evaluator_agent_id nor fitnessFunction is provided', async () => {
+      const graph = createEvolutionGraph({
+        population_size: 2,
+        max_generations: 1,
+        evaluator_agent_id: undefined,
+      });
+      const state = createState();
+      const runner = new GraphRunner(graph, state); // no fitnessFunction
+      await expect(runner.run()).rejects.toThrow(/evaluator_agent_id or GraphRunnerOptions.fitnessFunction/);
+    });
+
+    test('fitnessFunction takes precedence over evaluator_agent_id when both are set', async () => {
+      const fitnessFn = vi.fn(async () => ({ score: 0.99, reasoning: 'deterministic' }));
+      const graph = createEvolutionGraph({
+        population_size: 2,
+        max_generations: 1,
+        fitness_threshold: 0.95,
+      });
+      const state = createState();
+      const runner = new GraphRunner(graph, state, { fitnessFunction: fitnessFn });
+      await runner.run();
+
+      expect(fitnessFn).toHaveBeenCalled();
+      expect(mockEvaluateQuality).not.toHaveBeenCalled();
+    });
+  });
 });

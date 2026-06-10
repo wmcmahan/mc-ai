@@ -283,16 +283,30 @@ export const EvolutionConfigSchema = z.object({
   population_size: z.number().min(2).default(5),
   /** Agent ID that generates candidate solutions. */
   candidate_agent_id: z.string(),
-  /** Agent ID for the fitness evaluator. */
-  evaluator_agent_id: z.string(),
+  /**
+   * Agent ID for the LLM-as-judge fitness evaluator. Optional when
+   * `GraphRunnerOptions.fitnessFunction` is supplied — that callback
+   * is used instead. One of the two must be configured; otherwise the
+   * executor throws `NodeConfigError` at runtime.
+   */
+  evaluator_agent_id: z.string().optional(),
   /** Selection strategy for choosing parents. */
   selection_strategy: z.enum(['rank', 'tournament', 'roulette']).default('rank'),
   /** Top candidates preserved unchanged across generations (elitism). */
   elite_count: z.number().min(0).default(1),
   /** Maximum number of generations. */
   max_generations: z.number().min(1).default(10),
-  /** Fitness score (0–1) for early exit. */
-  fitness_threshold: z.number().min(0).max(1).default(0.9),
+  /**
+   * Fitness score for early exit. The evolution loop terminates as soon
+   * as the best candidate's fitness meets or exceeds this value.
+   *
+   * Fitness itself is conventionally in `[0, 1]`. Set the threshold above
+   * `1.0` (e.g. `1.5`) to disable early-fitness-exit entirely — useful when
+   * you want the loop to run all `max_generations` regardless of how good
+   * any single candidate is (for instrumentation, baselining, or proof-of-
+   * iteration runs).
+   */
+  fitness_threshold: z.number().min(0).default(0.9),
   /** Stop if no improvement for this many consecutive generations. */
   stagnation_generations: z.number().min(1).default(3),
   /** Starting temperature (diversity). */

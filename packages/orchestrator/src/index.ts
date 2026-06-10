@@ -114,6 +114,9 @@ export type {
 // ─── Fact Sanitizer (Guardrail) ───────────────────────────────────
 export type { FactSanitizer } from './agent/fact-sanitizer.js';
 
+// ─── Fitness Function (Evolution) ──────────────────────────────────
+export type { FitnessFunction, FitnessResult } from './agent/fitness-function.js';
+
 // ─── Evaluator (LLM-as-Judge) ───────────────────────────────────────
 
 export { evaluateQualityExecutor as evaluateQuality } from './agent/evaluator-executor/executor.js';
