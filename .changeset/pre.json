@@ -10,9 +10,16 @@
     "@cycgraph/orchestrator-postgres": "0.1.0-beta.1"
   },
   "changesets": [
+    "api-hygiene-phase-6",
     "beta-2-runner-refactor",
+    "budget-integrity-phase-3",
+    "durability-phase-1",
     "evolution-fitness-function",
+    "fail-loud-phase-4",
     "guardrails-pair",
-    "reflection-compound-learning"
+    "perf-and-scale-phase-5",
+    "reflection-compound-learning",
+    "security-phase-2",
+    "test-ci-hardening-phase-7"
   ]
 }
