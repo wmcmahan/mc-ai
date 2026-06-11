@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" font-family="ui-sans-serif, system-ui, sans-serif">
+  <rect width="720" height="420" fill="white"/>
+  <text x="56" y="28" font-size="15" font-weight="600" fill="#222">Same model, same topics — one workflow learns, one doesn't</text>
+  <text x="56" y="44" font-size="12" fill="#777">fitness = 0.5 × deterministic rubric checks + 0.5 × LLM-judge median (3 samples)</text>
+  <line x1="56" y1="364" x2="688" y2="364" stroke="#e5e5e5"/><text x="48" y="368" text-anchor="end" font-size="11" fill="#888">0.00</text>
+  <line x1="56" y1="287" x2="688" y2="287" stroke="#e5e5e5"/><text x="48" y="291" text-anchor="end" font-size="11" fill="#888">0.25</text>
+  <line x1="56" y1="210" x2="688" y2="210" stroke="#e5e5e5"/><text x="48" y="214" text-anchor="end" font-size="11" fill="#888">0.50</text>
+  <line x1="56" y1="133" x2="688" y2="133" stroke="#e5e5e5"/><text x="48" y="137" text-anchor="end" font-size="11" fill="#888">0.75</text>
+  <line x1="56" y1="56" x2="688" y2="56" stroke="#e5e5e5"/><text x="48" y="60" text-anchor="end" font-size="11" fill="#888">1.00</text>
+  <text x="56.0" y="384" text-anchor="middle" font-size="11" fill="#888">run 1</text>
+  <text x="214.0" y="384" text-anchor="middle" font-size="11" fill="#888">run 2</text>
+  <text x="372.0" y="384" text-anchor="middle" font-size="11" fill="#888">run 3</text>
+  <text x="530.0" y="384" text-anchor="middle" font-size="11" fill="#888">run 4</text>
+  <text x="688.0" y="384" text-anchor="middle" font-size="11" fill="#888">run 5</text>
+  <polyline points="56.0,364.0 214.0,261.3 372.0,312.2 530.0,338.3 688.0,261.8" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="5,4"/>
+  <polyline points="56.0,364.0 214.0,133.5 372.0,68.3 530.0,68.3 688.0,56.0" fill="none" stroke="#059669" stroke-width="2.5"/>
+  <circle cx="56.0" cy="364.0" r="4" fill="#9ca3af"/><text x="56.0" y="354.0" text-anchor="middle" font-size="11" fill="#9ca3af">0.00</text>
+  <circle cx="214.0" cy="261.3" r="4" fill="#9ca3af"/><text x="214.0" y="251.3" text-anchor="middle" font-size="11" fill="#9ca3af">0.33</text>
+  <circle cx="372.0" cy="312.2" r="4" fill="#9ca3af"/><text x="372.0" y="302.2" text-anchor="middle" font-size="11" fill="#9ca3af">0.17</text>
+  <circle cx="530.0" cy="338.3" r="4" fill="#9ca3af"/><text x="530.0" y="328.3" text-anchor="middle" font-size="11" fill="#9ca3af">0.08</text>
+  <circle cx="688.0" cy="261.8" r="4" fill="#9ca3af"/><text x="688.0" y="251.8" text-anchor="middle" font-size="11" fill="#9ca3af">0.33</text>
+  <circle cx="56.0" cy="364.0" r="4" fill="#059669"/><text x="56.0" y="354.0" text-anchor="middle" font-size="11" fill="#059669">0.00</text>
+  <circle cx="214.0" cy="133.5" r="4" fill="#059669"/><text x="214.0" y="123.5" text-anchor="middle" font-size="11" fill="#059669">0.75</text>
+  <circle cx="372.0" cy="68.3" r="4" fill="#059669"/><text x="372.0" y="58.3" text-anchor="middle" font-size="11" fill="#059669">0.96</text>
+  <circle cx="530.0" cy="68.3" r="4" fill="#059669"/><text x="530.0" y="58.3" text-anchor="middle" font-size="11" fill="#059669">0.96</text>
+  <circle cx="688.0" cy="56.0" r="4" fill="#059669"/><text x="688.0" y="46.0" text-anchor="middle" font-size="11" fill="#059669">1.00</text>
+  <g font-size="12">
+    <line x1="490" y1="56" x2="514" y2="56" stroke="#059669" stroke-width="2.5"/>
+    <text x="520" y="60" fill="#222">with reflection + memory</text>
+    <line x1="490" y1="76" x2="514" y2="76" stroke="#9ca3af" stroke-width="2" stroke-dasharray="5,4"/>
+    <text x="520" y="80" fill="#222">no learning (control)</text>
+  </g>
+</svg>

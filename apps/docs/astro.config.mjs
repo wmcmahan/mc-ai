@@ -88,7 +88,7 @@ export default defineConfig({
             url: 'https://flattop.io/',
             offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
             sameAs: [
-              'https://github.com/wmcmahan/mc-ai',
+              'https://github.com/wmcmahan/cycgraph',
               'https://www.npmjs.com/package/@cycgraph/orchestrator',
             ],
           }),
@@ -98,10 +98,10 @@ export default defineConfig({
       description:
         'Agentic orchestration built on a Cyclic State Graph architecture.',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/wmcmahan/mc-ai' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/wmcmahan/cycgraph' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/wmcmahan/mc-ai/edit/main/apps/docs/',
+        baseUrl: 'https://github.com/wmcmahan/cycgraph/edit/main/apps/docs/',
       },
       sidebar: [
         {
@@ -109,6 +109,7 @@ export default defineConfig({
           items: [
             { label: 'Introduction', slug: 'docs/getting-started/introduction' },
             { label: 'Quick Start', slug: 'docs/getting-started/quick-start' },
+            { label: 'cycgraph vs LangGraph', slug: 'docs/getting-started/vs-langgraph' },
             { label: 'Troubleshooting', slug: 'docs/getting-started/troubleshooting' },
           ],
         },
