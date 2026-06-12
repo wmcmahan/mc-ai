@@ -115,8 +115,33 @@ export { InMemoryOutcomeLedger, RunOutcomeSchema } from './consolidation/outcome
 export type { OutcomeLedger, RunOutcome, FactStats, OutcomeBaseline } from './consolidation/outcome-ledger.js';
 
 export { evaluateRetention, RetentionPolicySchema } from './consolidation/retention-gate.js';
-export type { RetentionPolicy, RetentionReport, EvictionReason } from './consolidation/retention-gate.js';
+export type { RetentionPolicy, RetentionReport, RetentionEvidence, EvictionReason } from './consolidation/retention-gate.js';
 
 // ─── Utilities ─────────────────────────────────────────────────────
 
 export { cosineSimilarity } from './utils/similarity.js';
+
+export {
+  studentTCdf,
+  welchLift,
+  benjaminiHochberg,
+  normalQuantile,
+  requiredTrials,
+  mulberry32,
+  gaussian,
+} from './utils/statistics.js';
+export type { WelchLiftInput, WelchLiftResult, RequiredTrialsInput } from './utils/statistics.js';
+
+// ─── Validation ────────────────────────────────────────────────────
+// Measure the retention gate's realized error rates for YOUR policy
+// before trusting it — see validation/gate-simulator.ts.
+
+export { simulateGate, gateOperatingCharacteristics } from './validation/gate-simulator.js';
+export type {
+  SimulatedLesson,
+  GateSimulationConfig,
+  GateSimulationResult,
+  SimulatedLessonOutcome,
+  OperatingCharacteristicsConfig,
+  OperatingCharacteristicsRow,
+} from './validation/gate-simulator.js';

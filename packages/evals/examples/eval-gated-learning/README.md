@@ -52,18 +52,36 @@ From the committed `results.json` (your numbers will vary — this is a
 live experiment, not a fixture):
 
 ```
-clean learning runs     avg fitness: 0.813
-poison-trialled runs    avg fitness: 0.521   ← poison craters run 4 to 0.25
-post-eviction runs      avg fitness: 0.764
+clean learning runs     avg fitness: 0.958
+poison-trialled runs    avg fitness: 0.750   ← poison craters run 4 to 0.50
+post-eviction runs      avg fitness: 0.972
 poisoned lessons evicted: 3/3 (all gone after run 5, exactly min_trials later)
-lessons promoted to verified: 4
+lessons promoted to verified: 6
 ```
 
 **Known property, stated plainly:** the lift heuristic is correlational.
-A genuine lesson co-injected with poison in a disaster run can be
-co-evicted (one was, in the run above). Higher `min_trials` reduces
-this at the cost of slower verdicts, and eviction is a soft delete —
-recoverable via `findFacts({ include_invalidated: true })`.
+Genuine lessons co-injected with poison in a disaster run can be
+co-evicted (three were, in the run above). Higher `min_trials` — or the
+`inference` decision rule — reduces this at the cost of slower verdicts,
+and eviction is a soft delete — recoverable via
+`findFacts({ include_invalidated: true })`.
+
+## Margin rule vs inference rule (read this before copying the config)
+
+This demo pins `decision_rule: 'margin'` — the fast point-estimate rule —
+because its narrative fits in 11 runs with 2-trial cohorts, and the poison
+effect is enormous. The production default is `'inference'`: a Welch test
+with false-discovery and sequential (peeking) control. We re-ran this exact
+demo under the inference rule and it **held everything**: a 2-vs-2
+comparison has ~1 degree of freedom, and the gate correctly refuses to
+rule on that little evidence, no matter how big the observed lift.
+
+That's the trade in one sentence: the margin rule decides fast and is
+trigger-happy on noise; the inference rule is statistically honest and
+needs real evidence volume (≈4–5-trial cohorts and a dozen-plus baseline
+runs for large effects). For your own workloads, measure the trade before
+choosing: [`gate-operating-characteristics`](../gate-operating-characteristics/)
+runs the real pipeline against lessons of known effect in under a second.
 
 ## The foot-gun to know about
 

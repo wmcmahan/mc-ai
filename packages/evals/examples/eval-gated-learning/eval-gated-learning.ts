@@ -101,9 +101,14 @@ const CONSTRAINTS = ['Write from your own knowledge; do not invent URLs'];
 const GATE_FROM_RUN = 3;
 const POISON_AFTER_RUN = 3;
 const RETENTION_POLICY = {
-  // min_trials 2 keeps the demo inside 9 runs; production stores with
-  // more traffic should use 3+. max_trials matters doubly here: it also
-  // unblocks the in-progress-first trial queue when the gate can't rule.
+  // The demo pins the fast 'margin' rule: an 11-run narrative uses
+  // 2-trial cohorts, and a 2-vs-2 Welch test has ~1 degree of freedom —
+  // the statistically-controlled 'inference' rule (the production
+  // default) RIGHTLY refuses to decide on that little evidence. We
+  // verified this live: under 'inference' this demo holds everything.
+  // See ../gate-operating-characteristics/ for the inference rule's
+  // measured evidence requirements.
+  decision_rule: 'margin' as const,
   min_trials: 2,
   promote_margin: 0.05,
   evict_margin: 0.05,

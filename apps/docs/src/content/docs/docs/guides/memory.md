@@ -301,8 +301,8 @@ const ledger = new InMemoryOutcomeLedger();
 const facts = await retrieveGatedLessons(store, {
   tags: ['lesson', 'graph:my-graph-v1'],
   max_facts: 10,
-  candidate_slots: 2,
-  rest_after_trials: 3,  // = min_trials: bench fully-trialled candidates so their baseline can form
+  candidate_slots: 4,
+  rest_after_trials: 5,  // bench fully-trialled candidates: frees slots AND creates baseline runs
   ledger,                // in-progress-first — trial cohorts graduate instead of churning
 });
 
@@ -318,7 +318,7 @@ const gate = await evaluateRetention(store, ledger, {
   min_trials: 3,
   promote_margin: 0.05,   // → tag rewritten candidate → verified
   evict_margin: 0.05,     // → invalidated_by: 'eval-gate:harmful'
-  max_trials: 10,         // → invalidated_by: 'eval-gate:no_lift'
+  max_baseline_runs: 40,  // undecided by then → 'eval-gate:no_lift'
 });
 ```
 

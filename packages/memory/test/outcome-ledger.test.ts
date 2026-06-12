@@ -8,15 +8,21 @@ describe('InMemoryOutcomeLedger', () => {
     ledger = new InMemoryOutcomeLedger();
   });
 
-  it('accumulates per-fact trials and mean score', async () => {
+  it('accumulates per-fact trials, mean, and sample variance', async () => {
     await ledger.recordOutcome({ run_id: 'r1', score: 0.8, fact_ids: ['f1', 'f2'] });
     await ledger.recordOutcome({ run_id: 'r2', score: 0.4, fact_ids: ['f1'] });
 
     const f1 = await ledger.getFactStats('f1');
-    expect(f1).toEqual({ fact_id: 'f1', trials: 2, mean_score: (0.8 + 0.4) / 2 });
+    expect(f1?.trials).toBe(2);
+    expect(f1?.mean_score).toBeCloseTo(0.6, 10);
+    // Sample variance (n−1): (0.2² + 0.2²) / 1 = 0.08
+    expect(f1?.variance).toBeCloseTo(0.08, 10);
 
+    // A single trial has no variance — the field is absent, not 0.
     const f2 = await ledger.getFactStats('f2');
-    expect(f2).toEqual({ fact_id: 'f2', trials: 1, mean_score: 0.8 });
+    expect(f2?.trials).toBe(1);
+    expect(f2?.mean_score).toBeCloseTo(0.8, 10);
+    expect(f2?.variance).toBeUndefined();
   });
 
   it('returns null stats for facts that appeared in no run', async () => {
@@ -30,6 +36,20 @@ describe('InMemoryOutcomeLedger', () => {
 
     const stats = await ledger.getFactStats('f1');
     expect(stats).toEqual({ fact_id: 'f1', trials: 1, mean_score: 0.9 });
+  });
+
+  it('exposes baseline variance once the baseline has 2+ runs', async () => {
+    await ledger.recordOutcome({ run_id: 'r1', score: 0.4, fact_ids: [] });
+    await ledger.recordOutcome({ run_id: 'r2', score: 0.8, fact_ids: [] });
+
+    const baseline = await ledger.getBaseline();
+    expect(baseline.runs).toBe(2);
+    expect(baseline.mean_score).toBeCloseTo(0.6, 10);
+    expect(baseline.variance).toBeCloseTo(0.08, 10);
+
+    // Single-run baseline → no variance field.
+    const one = await ledger.getBaseline('f-nonexistent-but-r1-r2-lack-facts');
+    expect(one.variance).toBeCloseTo(0.08, 10); // excludes nothing — both runs lack the fact
   });
 
   it('computes a leave-one-out baseline excluding runs containing the fact', async () => {

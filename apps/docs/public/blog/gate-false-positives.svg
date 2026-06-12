@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" font-family="ui-sans-serif, system-ui, sans-serif">
+  <rect width="720" height="420" fill="white"/>
+  <text x="56" y="28" font-size="15" font-weight="600" fill="#222">False decisions on a lesson with NO effect</text>
+  <text x="56" y="44" font-size="12" fill="#777">the price of deciding fast: margin rule vs statistical inference (noise SD 0.1)</text>
+  <line x1="56" y1="364" x2="550" y2="364" stroke="#e5e5e5"/><text x="48" y="368" text-anchor="end" font-size="11" fill="#888">0%</text>
+  <line x1="56" y1="287" x2="550" y2="287" stroke="#e5e5e5"/><text x="48" y="291" text-anchor="end" font-size="11" fill="#888">25%</text>
+  <line x1="56" y1="210" x2="550" y2="210" stroke="#e5e5e5"/><text x="48" y="214" text-anchor="end" font-size="11" fill="#888">50%</text>
+  <line x1="56" y1="133" x2="550" y2="133" stroke="#e5e5e5"/><text x="48" y="137" text-anchor="end" font-size="11" fill="#888">75%</text>
+  <line x1="56" y1="56" x2="550" y2="56" stroke="#e5e5e5"/><text x="48" y="60" text-anchor="end" font-size="11" fill="#888">100%</text>
+  <text x="56.0" y="384" text-anchor="middle" font-size="11" fill="#888">10 runs</text>
+  <text x="252.6" y="384" text-anchor="middle" font-size="11" fill="#888">25 runs</text>
+  <text x="401.3" y="384" text-anchor="middle" font-size="11" fill="#888">50 runs</text>
+  <text x="550.0" y="384" text-anchor="middle" font-size="11" fill="#888">100 runs</text><polyline points="56.0,93.0 252.6,86.8 401.3,86.8 550.0,80.6" fill="none" stroke="#dc2626" stroke-width="2"/><circle cx="56.0" cy="93.0" r="3" fill="#dc2626"/><circle cx="252.6" cy="86.8" r="3" fill="#dc2626"/><circle cx="401.3" cy="86.8" r="3" fill="#dc2626"/><circle cx="550.0" cy="80.6" r="3" fill="#dc2626"/><polyline points="56.0,357.8 252.6,364.0 401.3,357.8 550.0,364.0" fill="none" stroke="#059669" stroke-width="2"/><circle cx="56.0" cy="357.8" r="3" fill="#059669"/><circle cx="252.6" cy="364.0" r="3" fill="#059669"/><circle cx="401.3" cy="357.8" r="3" fill="#059669"/><circle cx="550.0" cy="364.0" r="3" fill="#059669"/><line x1="562" y1="56" x2="586" y2="56" stroke="#dc2626" stroke-width="2"/><text x="592" y="60" font-size="11" fill="#222">margin rule</text><line x1="562" y1="74" x2="586" y2="74" stroke="#059669" stroke-width="2"/><text x="592" y="78" font-size="11" fill="#222">inference rule</text>
+</svg>

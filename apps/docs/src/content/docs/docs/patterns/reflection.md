@@ -307,8 +307,8 @@ const memoryRetriever: MemoryRetriever = async (query) => {
   const facts = await retrieveGatedLessons(store, {
     tags: query.tags ?? ['lesson'],
     max_facts: 10,
-    candidate_slots: 2,
-    rest_after_trials: 3,  // = min_trials: bench fully-trialled candidates so their baseline can form
+    candidate_slots: 4,
+    rest_after_trials: 5,  // bench fully-trialled candidates: frees slots AND creates baseline runs
     ledger,                // in-progress-first — trial cohorts graduate instead of churning
   });
   return {
@@ -333,15 +333,34 @@ await ledger.recordOutcome({
 import { evaluateRetention } from '@cycgraph/memory';
 
 const report = await evaluateRetention(store, ledger, {
-  min_trials: 3,        // evidence required before any decision
-  promote_margin: 0.05, // lift over leave-one-out baseline → verified
-  evict_margin: 0.05,   // drop below baseline → evicted as harmful
-  max_trials: 10,       // still no lift by then → evicted as useless
+  min_trials: 3,          // evidence required before any decision
+  promote_margin: 0.05,   // lift over leave-one-out baseline → verified
+  evict_margin: 0.05,     // drop below baseline → evicted as harmful
+  max_baseline_runs: 40,  // undecided by then → retired as no-lift
+  // (max_trials alone can't fire here: rest_after_trials freezes trials)
 });
-// report.promoted / report.evicted / report.held
+// report.promoted / report.evicted / report.held — each with `evidence`
 ```
 
 Eviction is a soft delete (`invalidated_by`), recoverable via `findFacts({ include_invalidated: true })`. The lift heuristic is correlational — facts are co-injected and run difficulty varies — so `min_trials` and the margins are the guardrails, not a causal proof.
+
+### How much evidence does the gate need?
+
+By default the gate uses real statistical inference (`decision_rule: 'inference'`), not a raw mean comparison: a Welch-style test on the lift against the leave-one-out baseline, with Benjamini–Hochberg control across the candidates tested in a pass and **alpha-spending across doubling baseline brackets** so that gating after every run doesn't inflate false positives (the peeking problem — our simulator measured a 25% false-decision rate without this control, 0–2% with it).
+
+The trade-off is resolution. Measured operating characteristics with 5-trial cohorts at judge-noise SD 0.1:
+
+<img src="/blog/gate-detection.svg" alt="Detection rate vs run volume per effect size" width="720" style="max-width:100%;height:auto;border:1px solid #e5e5e5;border-radius:8px;" />
+
+| True effect | What happens |
+|---|---|
+| ±0.3 | correctly decided 94–100% of the time |
+| ±0.2 | decided ~54–70%; the rest retired as `no_lift` |
+| ±0.1 and below | mostly **retired, not falsely decided** (false decisions: 0–4%) |
+
+The detectable-effect floor scales roughly with `promote_margin + 2.6 · noise_sd / √trials_per_cohort`. To resolve smaller effects: raise `rest_after_trials` (more evidence per cohort), reduce judge noise (more judge samples — `requiredTrials()` does the arithmetic), or accept that small effects get retired. **Measure your own policy before trusting it** — `gateOperatingCharacteristics()` runs the real pipeline against lessons of known effect in under a second; see `packages/evals/examples/gate-operating-characteristics/`.
+
+Tuning fields on `RetentionPolicySchema`: `decision_rule` (`'inference'` | `'margin'`), `promote_confidence` / `evict_confidence` (default 0.9), `noise_floor_sd` (set to your judge's per-run SD), `multiple_comparison` (`'bh'` | `'none'`), `sequential_control` (`'doubling'` | `'none'`), and `max_baseline_runs` (closes the decision window for candidates the bracket penalty has made undecidable — pair it with `rest_after_trials`, since frozen trials mean `max_trials` alone can never fire). Every decision in the report carries an `evidence` object (`lift`, `se`, `df`, `p_promote`, `p_evict`, `alpha_bracket`) so "why was this held?" is inspectable.
 
 **Foot-guns:**
 

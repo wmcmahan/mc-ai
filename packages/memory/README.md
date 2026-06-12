@@ -165,10 +165,10 @@ await ledger.recordOutcome({ run_id, score, fact_ids });
 
 // Periodically: promote candidates that lift outcomes, evict the rest.
 const report = await evaluateRetention(store, ledger, {
-  min_trials: 3,        // evidence required before any decision
-  promote_margin: 0.05, // lift over leave-one-out baseline → 'verified'
-  evict_margin: 0.05,   // drop below baseline → invalidated 'eval-gate:harmful'
-  max_trials: 10,       // no lift by then → invalidated 'eval-gate:no_lift'
+  min_trials: 3,          // evidence required before any decision
+  promote_margin: 0.05,   // lift over leave-one-out baseline → 'verified'
+  evict_margin: 0.05,     // drop below baseline → invalidated 'eval-gate:harmful'
+  max_baseline_runs: 40,  // undecided by then → invalidated 'eval-gate:no_lift'
 });
 
 // Retrieval that fills the budget verified-first, with a couple of
@@ -176,13 +176,15 @@ const report = await evaluateRetention(store, ledger, {
 const lessons = await retrieveGatedLessons(store, {
   tags: ['lesson', 'graph:my-graph-v1'],
   max_facts: 10,
-  candidate_slots: 2,
-  rest_after_trials: 3,  // = min_trials: bench fully-trialled candidates so their baseline can form
+  candidate_slots: 4,
+  rest_after_trials: 5,  // bench fully-trialled candidates: frees slots AND creates baseline runs
   ledger,                // in-progress-first — trial cohorts graduate instead of churning
 });
 ```
 
 Lifecycle: facts tagged `candidate` (add it via `reflection_config.tags`) → trials accumulate in the ledger → `verified` or soft-evicted (`invalidated_by`, recoverable via `include_invalidated: true`). The lift heuristic is correlational, not causal — `min_trials` and the margins are the guardrails; tune them to your run volume.
+
+The gate's default `decision_rule: 'inference'` is a Welch-style test with Benjamini–Hochberg FDR control and alpha-spending across doubling baseline brackets (so gating every run doesn't inflate false positives — the peeking problem). Every decision carries an `evidence` object. And because none of the guarantees are universal, the package ships its own validator: `gateOperatingCharacteristics()` drives the real pipeline with lessons of known effect and tells you the detection/false-positive rates for **your** policy in under a second — measured on the shipped defaults: ±0.3 effects decided 94–100%, null effects falsely decided 0–2%, sub-resolution effects retired rather than guessed.
 
 ## Standalone or as cycgraph's memory layer
 

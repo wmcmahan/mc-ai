@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" font-family="ui-sans-serif, system-ui, sans-serif">
+  <rect width="720" height="420" fill="white"/>
+  <text x="56" y="28" font-size="15" font-weight="600" fill="#222">How much evidence does the gate need?</text>
+  <text x="56" y="44" font-size="12" fill="#777">detection rate vs run volume at noise SD 0.1 — 50 seeded replicates per point, real gate pipeline</text>
+  <line x1="56" y1="364" x2="550" y2="364" stroke="#e5e5e5"/><text x="48" y="368" text-anchor="end" font-size="11" fill="#888">0%</text>
+  <line x1="56" y1="287" x2="550" y2="287" stroke="#e5e5e5"/><text x="48" y="291" text-anchor="end" font-size="11" fill="#888">25%</text>
+  <line x1="56" y1="210" x2="550" y2="210" stroke="#e5e5e5"/><text x="48" y="214" text-anchor="end" font-size="11" fill="#888">50%</text>
+  <line x1="56" y1="133" x2="550" y2="133" stroke="#e5e5e5"/><text x="48" y="137" text-anchor="end" font-size="11" fill="#888">75%</text>
+  <line x1="56" y1="56" x2="550" y2="56" stroke="#e5e5e5"/><text x="48" y="60" text-anchor="end" font-size="11" fill="#888">100%</text>
+  <text x="56.0" y="384" text-anchor="middle" font-size="11" fill="#888">10 runs</text>
+  <text x="252.6" y="384" text-anchor="middle" font-size="11" fill="#888">25 runs</text>
+  <text x="401.3" y="384" text-anchor="middle" font-size="11" fill="#888">50 runs</text>
+  <text x="550.0" y="384" text-anchor="middle" font-size="11" fill="#888">100 runs</text><polyline points="56.0,74.5 252.6,56.0 401.3,62.2 550.0,56.0" fill="none" stroke="#059669" stroke-width="2"/><circle cx="56.0" cy="74.5" r="3" fill="#059669"/><circle cx="252.6" cy="56.0" r="3" fill="#059669"/><circle cx="401.3" cy="62.2" r="3" fill="#059669"/><circle cx="550.0" cy="56.0" r="3" fill="#059669"/>
+  <polyline points="56.0,74.5 252.6,56.0 401.3,56.0 550.0,74.5" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="5,4"/><circle cx="56.0" cy="74.5" r="3" fill="#059669"/><circle cx="252.6" cy="56.0" r="3" fill="#059669"/><circle cx="401.3" cy="56.0" r="3" fill="#059669"/><circle cx="550.0" cy="74.5" r="3" fill="#059669"/>
+  <polyline points="56.0,247.0 252.6,179.2 401.3,166.9 550.0,179.2" fill="none" stroke="#0d9488" stroke-width="2"/><circle cx="56.0" cy="247.0" r="3" fill="#0d9488"/><circle cx="252.6" cy="179.2" r="3" fill="#0d9488"/><circle cx="401.3" cy="166.9" r="3" fill="#0d9488"/><circle cx="550.0" cy="179.2" r="3" fill="#0d9488"/>
+  <polyline points="56.0,179.2 252.6,197.7 401.3,185.4 550.0,148.4" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="5,4"/><circle cx="56.0" cy="179.2" r="3" fill="#0d9488"/><circle cx="252.6" cy="197.7" r="3" fill="#0d9488"/><circle cx="401.3" cy="185.4" r="3" fill="#0d9488"/><circle cx="550.0" cy="148.4" r="3" fill="#0d9488"/>
+  <polyline points="56.0,320.9 252.6,351.7 401.3,320.9 550.0,345.5" fill="none" stroke="#0891b2" stroke-width="2"/><circle cx="56.0" cy="320.9" r="3" fill="#0891b2"/><circle cx="252.6" cy="351.7" r="3" fill="#0891b2"/><circle cx="401.3" cy="320.9" r="3" fill="#0891b2"/><circle cx="550.0" cy="345.5" r="3" fill="#0891b2"/>
+  <polyline points="56.0,345.5 252.6,339.4 401.3,357.8 550.0,314.7" fill="none" stroke="#0891b2" stroke-width="2" stroke-dasharray="5,4"/><circle cx="56.0" cy="345.5" r="3" fill="#0891b2"/><circle cx="252.6" cy="339.4" r="3" fill="#0891b2"/><circle cx="401.3" cy="357.8" r="3" fill="#0891b2"/><circle cx="550.0" cy="314.7" r="3" fill="#0891b2"/>
+  <polyline points="56.0,357.8 252.6,357.8 401.3,351.7 550.0,351.7" fill="none" stroke="#6366f1" stroke-width="2"/><circle cx="56.0" cy="357.8" r="3" fill="#6366f1"/><circle cx="252.6" cy="357.8" r="3" fill="#6366f1"/><circle cx="401.3" cy="351.7" r="3" fill="#6366f1"/><circle cx="550.0" cy="351.7" r="3" fill="#6366f1"/>
+  <polyline points="56.0,351.7 252.6,357.8 401.3,357.8 550.0,357.8" fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,4"/><circle cx="56.0" cy="351.7" r="3" fill="#6366f1"/><circle cx="252.6" cy="357.8" r="3" fill="#6366f1"/><circle cx="401.3" cy="357.8" r="3" fill="#6366f1"/><circle cx="550.0" cy="357.8" r="3" fill="#6366f1"/><line x1="562" y1="56" x2="586" y2="56" stroke="#059669" stroke-width="2"/><text x="592" y="60" font-size="11" fill="#222">+0.3 promoted</text>
+  <line x1="562" y1="74" x2="586" y2="74" stroke="#059669" stroke-width="2" stroke-dasharray="5,4"/><text x="592" y="78" font-size="11" fill="#222">−0.3 evicted</text>
+  <line x1="562" y1="92" x2="586" y2="92" stroke="#0d9488" stroke-width="2"/><text x="592" y="96" font-size="11" fill="#222">+0.2 promoted</text>
+  <line x1="562" y1="110" x2="586" y2="110" stroke="#0d9488" stroke-width="2" stroke-dasharray="5,4"/><text x="592" y="114" font-size="11" fill="#222">−0.2 evicted</text>
+  <line x1="562" y1="128" x2="586" y2="128" stroke="#0891b2" stroke-width="2"/><text x="592" y="132" font-size="11" fill="#222">+0.1 promoted</text>
+  <line x1="562" y1="146" x2="586" y2="146" stroke="#0891b2" stroke-width="2" stroke-dasharray="5,4"/><text x="592" y="150" font-size="11" fill="#222">−0.1 evicted</text>
+  <line x1="562" y1="164" x2="586" y2="164" stroke="#6366f1" stroke-width="2"/><text x="592" y="168" font-size="11" fill="#222">+0.05 promoted</text>
+  <line x1="562" y1="182" x2="586" y2="182" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,4"/><text x="592" y="186" font-size="11" fill="#222">−0.05 evicted</text>
+</svg>

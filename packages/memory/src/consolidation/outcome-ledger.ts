@@ -46,6 +46,12 @@ export interface FactStats {
   trials: number;
   /** Mean outcome score of those runs. */
   mean_score: number;
+  /**
+   * Sample variance of those run scores (n−1 denominator).
+   * `undefined` when `trials < 2` — variance needs a degree of freedom.
+   * Consumed by the retention gate's `inference` decision rule.
+   */
+  variance?: number;
 }
 
 /** Aggregate over a set of runs, used as the comparison baseline. */
@@ -54,6 +60,8 @@ export interface OutcomeBaseline {
   runs: number;
   /** Mean outcome score across them (0 when `runs` is 0). */
   mean_score: number;
+  /** Sample variance (n−1 denominator); `undefined` when `runs < 2`. */
+  variance?: number;
 }
 
 /**
@@ -86,6 +94,16 @@ export interface OutcomeLedger {
   clear(): Promise<void>;
 }
 
+/** Mean + sample variance (n−1) of a score list. */
+function summarize(scores: number[]): { mean: number; variance?: number } {
+  const n = scores.length;
+  if (n === 0) return { mean: 0 };
+  const mean = scores.reduce((s, v) => s + v, 0) / n;
+  if (n < 2) return { mean };
+  const ss = scores.reduce((s, v) => s + (v - mean) ** 2, 0);
+  return { mean, variance: ss / (n - 1) };
+}
+
 /** In-memory `OutcomeLedger`. Suitable for single-process workflows and tests. */
 export class InMemoryOutcomeLedger implements OutcomeLedger {
   private readonly outcomes = new Map<string, RunOutcome>();
@@ -99,42 +117,54 @@ export class InMemoryOutcomeLedger implements OutcomeLedger {
   }
 
   async getFactStats(factId: string): Promise<FactStats | null> {
-    let trials = 0;
-    let total = 0;
+    const scores: number[] = [];
     for (const outcome of this.outcomes.values()) {
-      if (outcome.fact_ids.includes(factId)) {
-        trials++;
-        total += outcome.score;
-      }
+      if (outcome.fact_ids.includes(factId)) scores.push(outcome.score);
     }
-    if (trials === 0) return null;
-    return { fact_id: factId, trials, mean_score: total / trials };
+    if (scores.length === 0) return null;
+    const { mean, variance } = summarize(scores);
+    return {
+      fact_id: factId,
+      trials: scores.length,
+      mean_score: mean,
+      ...(variance !== undefined ? { variance } : {}),
+    };
   }
 
   async listFactStats(): Promise<FactStats[]> {
-    const totals = new Map<string, { trials: number; total: number }>();
+    const byFact = new Map<string, number[]>();
     for (const outcome of this.outcomes.values()) {
       for (const factId of new Set(outcome.fact_ids)) {
-        const entry = totals.get(factId) ?? { trials: 0, total: 0 };
-        entry.trials++;
-        entry.total += outcome.score;
-        totals.set(factId, entry);
+        const scores = byFact.get(factId) ?? [];
+        scores.push(outcome.score);
+        byFact.set(factId, scores);
       }
     }
-    return [...totals.entries()]
-      .map(([fact_id, { trials, total }]) => ({ fact_id, trials, mean_score: total / trials }))
+    return [...byFact.entries()]
+      .map(([fact_id, scores]) => {
+        const { mean, variance } = summarize(scores);
+        return {
+          fact_id,
+          trials: scores.length,
+          mean_score: mean,
+          ...(variance !== undefined ? { variance } : {}),
+        };
+      })
       .sort((a, b) => a.fact_id.localeCompare(b.fact_id));
   }
 
   async getBaseline(excludeFactId?: string): Promise<OutcomeBaseline> {
-    let runs = 0;
-    let total = 0;
+    const scores: number[] = [];
     for (const outcome of this.outcomes.values()) {
       if (excludeFactId !== undefined && outcome.fact_ids.includes(excludeFactId)) continue;
-      runs++;
-      total += outcome.score;
+      scores.push(outcome.score);
     }
-    return { runs, mean_score: runs === 0 ? 0 : total / runs };
+    const { mean, variance } = summarize(scores);
+    return {
+      runs: scores.length,
+      mean_score: mean,
+      ...(variance !== undefined ? { variance } : {}),
+    };
   }
 
   async clear(): Promise<void> {

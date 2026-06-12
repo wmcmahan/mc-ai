@@ -49,9 +49,9 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'with', 3, 0.9, [FACT_ID_A]);
     await recordRuns(ledger, 'without', 3, 0.5, []);
 
-    const report = await evaluateRetention(store, ledger, { min_trials: 3, promote_margin: 0.05 });
+    const report = await evaluateRetention(store, ledger, { decision_rule: 'margin', min_trials: 3, promote_margin: 0.05 });
 
-    expect(report.promoted).toEqual([FACT_ID_A]);
+    expect(report.promoted).toEqual([{ fact_id: FACT_ID_A }]);
     expect(report.evicted).toEqual([]);
     const fact = await store.getFact(FACT_ID_A);
     expect(fact?.tags).toContain('verified');
@@ -64,7 +64,7 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'with', 3, 0.2, [FACT_ID_A]);
     await recordRuns(ledger, 'without', 3, 0.8, []);
 
-    const report = await evaluateRetention(store, ledger, { min_trials: 3, evict_margin: 0.05 });
+    const report = await evaluateRetention(store, ledger, { decision_rule: 'margin', min_trials: 3, evict_margin: 0.05 });
 
     expect(report.evicted).toEqual([{ fact_id: FACT_ID_A, reason: 'eval-gate:harmful' }]);
     const fact = await store.getFact(FACT_ID_A);
@@ -119,6 +119,7 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'without', 6, 0.5, []);
 
     const report = await evaluateRetention(store, ledger, {
+      decision_rule: 'margin',
       min_trials: 3,
       max_trials: 5,
       promote_margin: 0.05,
@@ -134,7 +135,7 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'with', 10, 0.5, [FACT_ID_A]);
     await recordRuns(ledger, 'without', 10, 0.5, []);
 
-    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+    const report = await evaluateRetention(store, ledger, { decision_rule: 'margin', min_trials: 3 });
     expect(report.held).toEqual([{ fact_id: FACT_ID_A, trials: 10 }]);
   });
 
@@ -143,8 +144,8 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'with', 3, 0.9, [FACT_ID_A]);
     await recordRuns(ledger, 'without', 3, 0.5, []);
 
-    await evaluateRetention(store, ledger);
-    const second = await evaluateRetention(store, ledger);
+    await evaluateRetention(store, ledger, { decision_rule: 'margin' });
+    const second = await evaluateRetention(store, ledger, { decision_rule: 'margin' });
 
     expect(second).toEqual({ promoted: [], evicted: [], held: [] });
     const fact = await store.getFact(FACT_ID_A);
@@ -159,9 +160,9 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'b', 3, 0.1, [FACT_ID_B]);
     await recordRuns(ledger, 'neutral', 3, 0.5, []);
 
-    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+    const report = await evaluateRetention(store, ledger, { decision_rule: 'margin', min_trials: 3 });
 
-    expect(report.promoted).toEqual([FACT_ID_A]);
+    expect(report.promoted).toEqual([{ fact_id: FACT_ID_A }]);
     expect(report.evicted).toEqual([{ fact_id: FACT_ID_B, reason: 'eval-gate:harmful' }]);
   });
 
@@ -181,12 +182,161 @@ describe('evaluateRetention', () => {
     await recordRuns(ledger, 'without', 3, 0.5, []);
 
     const report = await evaluateRetention(store, ledger, {
+      decision_rule: 'margin',
       candidate_tag: 'on-trial',
       verified_tag: 'proven',
     });
 
-    expect(report.promoted).toEqual([FACT_ID_A]);
+    expect(report.promoted).toEqual([{ fact_id: FACT_ID_A }]);
     const fact = await store.getFact(FACT_ID_A);
     expect(fact?.tags).toEqual(['lesson', 'proven']);
+  });
+});
+
+describe('evaluateRetention — inference rule', () => {
+  let store: InMemoryMemoryStore;
+  let ledger: InMemoryOutcomeLedger;
+  const FACT_ID_A = crypto.randomUUID();
+
+  beforeEach(() => {
+    store = new InMemoryMemoryStore();
+    ledger = new InMemoryOutcomeLedger();
+  });
+
+  it('promotes with strong evidence and populates the evidence object', async () => {
+    await store.putFact(makeLesson(FACT_ID_A));
+    // Big lift, low variance, decent n: 5 runs at 0.9 vs 5 runs at 0.5.
+    await recordRuns(ledger, 'with', 5, 0.9, [FACT_ID_A]);
+    await recordRuns(ledger, 'without', 5, 0.5, []);
+
+    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+
+    expect(report.promoted).toHaveLength(1);
+    const { fact_id, evidence } = report.promoted[0];
+    expect(fact_id).toBe(FACT_ID_A);
+    expect(evidence).toBeDefined();
+    expect(evidence!.lift).toBeCloseTo(0.4, 10);
+    expect(evidence!.p_promote).toBeGreaterThan(0.99);
+    expect(evidence!.p_evict).toBeLessThan(0.01);
+    expect(evidence!.trials).toBe(5);
+    expect(evidence!.baseline_runs).toBe(5);
+    expect((await store.getFact(FACT_ID_A))?.tags).toContain('verified');
+  });
+
+  it('evicts with strong negative evidence', async () => {
+    await store.putFact(makeLesson(FACT_ID_A));
+    await recordRuns(ledger, 'with', 5, 0.2, [FACT_ID_A]);
+    await recordRuns(ledger, 'without', 5, 0.8, []);
+
+    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+
+    expect(report.evicted).toHaveLength(1);
+    expect(report.evicted[0].reason).toBe('eval-gate:harmful');
+    expect(report.evicted[0].evidence!.p_evict).toBeGreaterThan(0.99);
+  });
+
+  it('holds a borderline lift the margin rule would have promoted', async () => {
+    // lift = 0.08 ≥ promote_margin 0.05, but with only 3 noisy trials the
+    // evidence is far below 90% confidence. The margin rule acts; the
+    // inference rule (correctly) waits.
+    const setup = async (s: InMemoryMemoryStore, l: InMemoryOutcomeLedger, id: string) => {
+      await s.putFact(makeLesson(id));
+      await l.recordOutcome({ run_id: 'w1', score: 0.55, fact_ids: [id] });
+      await l.recordOutcome({ run_id: 'w2', score: 0.58, fact_ids: [id] });
+      await l.recordOutcome({ run_id: 'w3', score: 0.61, fact_ids: [id] });
+      await l.recordOutcome({ run_id: 'b1', score: 0.48, fact_ids: [] });
+      await l.recordOutcome({ run_id: 'b2', score: 0.50, fact_ids: [] });
+      await l.recordOutcome({ run_id: 'b3', score: 0.52, fact_ids: [] });
+    };
+
+    const idMargin = crypto.randomUUID();
+    const storeMargin = new InMemoryMemoryStore();
+    const ledgerMargin = new InMemoryOutcomeLedger();
+    await setup(storeMargin, ledgerMargin, idMargin);
+    const marginReport = await evaluateRetention(storeMargin, ledgerMargin, {
+      decision_rule: 'margin',
+      min_trials: 3,
+    });
+    expect(marginReport.promoted).toEqual([{ fact_id: idMargin }]);
+
+    await setup(store, ledger, FACT_ID_A);
+    const inferenceReport = await evaluateRetention(store, ledger, { min_trials: 3 });
+    expect(inferenceReport.promoted).toEqual([]);
+    expect(inferenceReport.held).toHaveLength(1);
+    expect(inferenceReport.held[0].evidence).toBeDefined();
+    expect(inferenceReport.held[0].evidence!.p_promote).toBeLessThan(0.9);
+  });
+
+  it('holds identical means regardless of trials when max_trials is unset', async () => {
+    await store.putFact(makeLesson(FACT_ID_A));
+    await recordRuns(ledger, 'with', 20, 0.5, [FACT_ID_A]);
+    await recordRuns(ledger, 'without', 20, 0.5, []);
+
+    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+    expect(report.held).toHaveLength(1);
+    expect(report.held[0].evidence!.p_promote).toBeLessThan(0.5);
+    expect(report.held[0].evidence!.p_evict).toBeLessThan(0.5);
+  });
+
+  it('holds when the baseline has fewer than 2 runs', async () => {
+    await store.putFact(makeLesson(FACT_ID_A));
+    await recordRuns(ledger, 'with', 4, 0.9, [FACT_ID_A]);
+    await ledger.recordOutcome({ run_id: 'solo-baseline', score: 0.2, fact_ids: [] });
+
+    const report = await evaluateRetention(store, ledger, { min_trials: 3 });
+    expect(report.held).toEqual([{ fact_id: FACT_ID_A, trials: 4 }]);
+  });
+
+  it('BH suppresses a borderline promotion that the per-candidate rule allows', async () => {
+    // Candidate A: borderline positive evidence (one-sided p ≈ 0.07).
+    // Candidate B: clearly null. Under 'none', A clears the 0.9 bar.
+    // Under BH with two tests, A's p must beat (1/2)·0.1 = 0.05 — it
+    // doesn't, so the gate holds it.
+    const seed = async (s: InMemoryMemoryStore, l: InMemoryOutcomeLedger) => {
+      const a = 'aaaaaaaa-0000-4000-8000-000000000001';
+      const b = 'bbbbbbbb-0000-4000-8000-000000000002';
+      await s.putFact(makeLesson(a));
+      await s.putFact(makeLesson(b));
+      // A: 4 runs at 0.65; B: 4 runs at 0.50; 4 empty runs at 0.50.
+      for (let i = 0; i < 4; i++) await l.recordOutcome({ run_id: `a-${i}`, score: 0.65, fact_ids: [a] });
+      for (let i = 0; i < 4; i++) await l.recordOutcome({ run_id: `b-${i}`, score: 0.5, fact_ids: [b] });
+      for (let i = 0; i < 4; i++) await l.recordOutcome({ run_id: `e-${i}`, score: 0.5, fact_ids: [] });
+      return { a, b };
+    };
+
+    const storeNone = new InMemoryMemoryStore();
+    const ledgerNone = new InMemoryOutcomeLedger();
+    const { a: aNone } = await seed(storeNone, ledgerNone);
+    const none = await evaluateRetention(storeNone, ledgerNone, {
+      min_trials: 3,
+      multiple_comparison: 'none',
+      sequential_control: 'none', // isolate BH — spending is tested elsewhere
+    });
+    expect(none.promoted.map((p) => p.fact_id)).toEqual([aNone]);
+
+    const storeBh = new InMemoryMemoryStore();
+    const ledgerBh = new InMemoryOutcomeLedger();
+    await seed(storeBh, ledgerBh);
+    const bh = await evaluateRetention(storeBh, ledgerBh, {
+      min_trials: 3,
+      multiple_comparison: 'bh',
+      sequential_control: 'none', // isolate BH — spending is tested elsewhere
+    });
+    expect(bh.promoted).toEqual([]);
+  });
+
+  it('applies the max_trials escape hatch to undecidable candidates', async () => {
+    await store.putFact(makeLesson(FACT_ID_A));
+    await recordRuns(ledger, 'with', 8, 0.52, [FACT_ID_A]);
+    await recordRuns(ledger, 'without', 8, 0.5, []);
+
+    const report = await evaluateRetention(store, ledger, { min_trials: 3, max_trials: 6 });
+    expect(report.evicted).toEqual([
+      {
+        fact_id: FACT_ID_A,
+        reason: 'eval-gate:no_lift',
+        evidence: expect.objectContaining({ trials: 8 }),
+      },
+    ]);
   });
 });
